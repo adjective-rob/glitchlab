@@ -368,6 +368,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "glitchlab-kernel",
+ "glitchlab-memory",
  "glitchlab-router",
  "serde",
  "serde_json",
