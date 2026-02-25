@@ -1,0 +1,249 @@
+{
+  "version": "1.0.0",
+  "initialized": "2026-02-25T21:55:59.177Z",
+  "lastUpdate": "2026-02-25T21:55:59.188Z",
+  "files": [
+    {
+      "file": "project.json",
+      "lastUpdated": "2026-02-25T21:55:59.187Z",
+      "fields": {
+        "$schema": {
+          "value": "https://adjective.us/prelude/schemas/v1/project.schema.json",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "d35229c2d410c3f6"
+        },
+        "version": {
+          "value": "1.0.0",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "39fe4a40977d0585"
+        },
+        "name": {
+          "value": "glitchlab-sandbox",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "cd36cc7be044902a"
+        },
+        "description": {
+          "value": "**The Agentic Dev Engine — Build Weird. Ship Clean.**",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "5f94a4c8c1313db9"
+        },
+        "createdAt": {
+          "value": "2026-02-25T21:55:59.180Z",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "d8248653855c0ce1"
+        },
+        "updatedAt": {
+          "value": "2026-02-25T21:55:59.184Z",
+          "source": "manual",
+          "lastModified": "2026-02-25T21:55:59.187Z"
+        }
+      }
+    },
+    {
+      "file": "stack.json",
+      "lastUpdated": "2026-02-25T21:55:59.187Z",
+      "fields": {
+        "$schema": {
+          "value": "https://adjective.us/prelude/schemas/v1/stack.schema.json",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "adef633ba50f2bc7"
+        },
+        "version": {
+          "value": "1.0.0",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "39fe4a40977d0585"
+        },
+        "language": {
+          "value": "Python",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "45f13bf50ac1fca6"
+        },
+        "packageManager": {
+          "value": "poetry",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "cb0b6267fc024fea"
+        },
+        "frameworks": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        }
+      }
+    },
+    {
+      "file": "architecture.json",
+      "lastUpdated": "2026-02-25T21:55:59.188Z",
+      "fields": {
+        "$schema": {
+          "value": "https://adjective.us/prelude/schemas/v1/architecture.schema.json",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "ca3684f77d69c5e6"
+        },
+        "version": {
+          "value": "1.0.0",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "39fe4a40977d0585"
+        },
+        "directories": {
+          "value": [
+            {
+              "path": "docs",
+              "fileCount": 1
+            },
+            {
+              "path": "docs/adr",
+              "fileCount": 1
+            },
+            {
+              "path": "glitchlab",
+              "fileCount": 15
+            },
+            {
+              "path": "glitchlab/__pycache__",
+              "fileCount": 9
+            },
+            {
+              "path": "glitchlab/agents",
+              "fileCount": 9
+            },
+            {
+              "path": "glitchlab/agents/__pycache__",
+              "fileCount": 7
+            },
+            {
+              "path": "glitchlab/auditor",
+              "fileCount": 4
+            },
+            {
+              "path": "glitchlab/auditor/__pycache__",
+              "fileCount": 3
+            },
+            {
+              "path": "glitchlab/governance",
+              "fileCount": 2
+            },
+            {
+              "path": "glitchlab/governance/__pycache__",
+              "fileCount": 1
+            },
+            {
+              "path": "glitchlab/workspace",
+              "fileCount": 3
+            },
+            {
+              "path": "glitchlab/workspace/__pycache__",
+              "fileCount": 2
+            },
+            {
+              "path": "glitchlab.egg-info",
+              "fileCount": 6
+            },
+            {
+              "path": "tests",
+              "fileCount": 1,
+              "purpose": "Tests"
+            }
+          ],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.187Z",
+          "inferredHash": "8f7034ccddb8921d"
+        },
+        "type": {
+          "value": "backend",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "74a80ba7942f3191"
+        },
+        "patterns": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "conventions": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "entryPoints": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        }
+      }
+    },
+    {
+      "file": "constraints.json",
+      "lastUpdated": "2026-02-25T21:55:59.188Z",
+      "fields": {
+        "$schema": {
+          "value": "https://adjective.us/prelude/schemas/v1/constraints.schema.json",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "9cb17803d3eb061a"
+        },
+        "version": {
+          "value": "1.0.0",
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "39fe4a40977d0585"
+        },
+        "mustUse": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "mustNotUse": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "preferences": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "fileOrganization": {
+          "value": [],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "4f53cda18c2baa0c"
+        },
+        "documentation": {
+          "value": {
+            "required": true,
+            "style": "Markdown"
+          },
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "6ccbaccd75587a3c"
+        },
+        "security": {
+          "value": [
+            "Separate .env files for different environments"
+          ],
+          "source": "inferred",
+          "lastInferred": "2026-02-25T21:55:59.188Z",
+          "inferredHash": "55d225188003302f"
+        }
+      }
+    }
+  ]
+}

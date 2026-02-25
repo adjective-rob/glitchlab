@@ -1,0 +1,14 @@
+id: resolve-todos-scanner-cli
+objective: Resolve the TODO placeholders in glitchlab/cli.py and glitchlab/auditor/scanner.py
+  by either implementing the intended small missing pieces or replacing them with
+  clear, specific comments, and remove obsolete TODO/FIXME markers.
+constraints:
+- Limit changes to glitchlab/cli.py and glitchlab/auditor/scanner.py only.
+- Do not change user-facing CLI behavior or scanner finding semantics; only address
+  the TODOs with equivalent behavior or clarifying comments.
+acceptance:
+- All listed TODO/FIXME comments at the referenced lines are removed or replaced with
+  explicit, non-TODO comments explaining the final decision.
+- Project test suite (if present) and lint/type checks (if present) run successfully
+  with no new failures.
+risk: low

@@ -77,7 +77,7 @@ class Task:
         self.acceptance_criteria = acceptance_criteria or ["Tests pass", "Clean diff"]
         self.risk_level = risk_level
         self.source = source
-        
+
         # Explicit Governance Mode
         if mode:
             self.mode = mode
@@ -163,8 +163,8 @@ def gather_file_context(working_dir: Path, files: list[str], max_lines: int = 20
 # ---------------------------------------------------------------------------
 
 def apply_changes(
-    working_dir: Path, 
-    changes: list[dict], 
+    working_dir: Path,
+    changes: list[dict],
     boundary: BoundaryEnforcer | None = None,
     allow_core: bool = False,
     allow_test_modifications: bool = False,
@@ -179,11 +179,11 @@ def apply_changes(
         filename = change.get("file", "")
         if not filename:
             continue
-            
+
         # 1. Strict Boundary Check
         if boundary:
             boundary.check([filename], allow_core)
-            
+
         # 2. Strict Test Mutation Check
         is_test = any(term in filename.lower() for term in ["tests/", "test_", "_test", ".test.ts"])
         if is_test and not allow_test_modifications:
@@ -210,18 +210,21 @@ def apply_changes(
                 success = _apply_patch(working_dir, patch)
                 if success is True:
                     applied.append(f"PATCH {filename}")
-                elif isinstance(success, str):
-                    applied.append(f"PATCH_FAILED {filename}")
-                    applied.append(f"PATCH_ERROR {success}")
                 elif file_content:
+                    # Patch failed but we have full content — use it
                     if not allow_full_rewrite and fpath.exists():
                         applied.append(f"FAIL {filename} (patch failed, full-file rewrite blocked in maintenance mode)")
                     else:
                         fpath.parent.mkdir(parents=True, exist_ok=True)
                         fpath.write_text(file_content)
                         applied.append(f"MODIFY {filename} (patch failed, used full content)")
+                    # Log the patch error for debugging
+                    if isinstance(success, str):
+                        logger.info(f"[PATCH] Fell back to content for {filename}: {success}")
                 else:
-                    applied.append(f"FAIL {filename} (patch failed, no fallback)")
+                    # Patch failed, no content fallback
+                    error_detail = f": {success}" if isinstance(success, str) else ""
+                    applied.append(f"FAIL {filename} (patch failed, no fallback{error_detail})")
             elif file_content:
                 if not allow_full_rewrite and fpath.exists():
                     applied.append(f"FAIL {filename} (full-file rewrite blocked in maintenance mode)")
@@ -242,14 +245,14 @@ def apply_changes(
 
 
 def apply_tests(
-    working_dir: Path, 
-    tests: list[dict], 
+    working_dir: Path,
+    tests: list[dict],
     allow_test_modifications: bool = False,
 ) -> list[str]:
     """Apply test file changes with explicit permission check."""
     if tests and not allow_test_modifications:
         raise BoundaryViolation("Test mutation blocked by current governance mode.")
-        
+
     applied = []
     for test in tests:
         fpath = working_dir / test["file"]
@@ -259,21 +262,34 @@ def apply_tests(
     return applied
 
 
-def _apply_patch(working_dir: Path, patch: str) -> bool:
+def _apply_patch(working_dir: Path, patch: str) -> bool | str:
     """
-    Apply a unified diff using the 'patch' CLI which is more resilient to LLM errors.
+    Apply a unified diff using the 'patch' CLI.
+    Returns True on success, or an error string on failure.
     """
-    import tempfile
     logger.debug(f"[PATCH] Raw patch content:\n{patch[:1000]}")
 
+    # Strip markdown fences — #1 cause of "garbage in patch input"
+    cleaned = patch.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        cleaned = "\n".join(lines)
+
+    # Quick sanity check: does this look like a unified diff at all?
+    if not any(line.startswith(("---", "diff ", "@@")) for line in cleaned.split("\n")):
+        msg = "Not a valid unified diff (missing ---, diff, or @@ markers)"
+        logger.warning(f"[PATCH] {msg}")
+        return msg
+
+    patch_file = None
     try:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".patch", dir=working_dir, delete=False
         ) as f:
-            f.write(patch)
+            f.write(cleaned)
             patch_file = f.name
 
-        # Use 'patch' with fuzz factor instead of strict 'git apply'
         result = subprocess.run(
             ["patch", "-p1", "--force", "--fuzz=3", "-i", patch_file],
             cwd=working_dir,
@@ -285,17 +301,19 @@ def _apply_patch(working_dir: Path, patch: str) -> bool:
         if result.returncode == 0:
             return True
 
-        logger.warning(f"[PATCH] patch failed: {result.stderr or result.stdout}")
-        return False
+        error = (result.stderr or result.stdout).strip()
+        logger.warning(f"[PATCH] patch failed: {error}")
+        return error
 
     except Exception as e:
         logger.warning(f"[PATCH] Exception applying patch: {e}")
-        return False
+        return str(e)
     finally:
-        try:
-            Path(patch_file).unlink(missing_ok=True)
-        except Exception:
-            pass
+        if patch_file:
+            try:
+                Path(patch_file).unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -575,11 +593,11 @@ class Controller:
                 if impl.get("parse_error"):
                     result["status"] = "implementation_failed"
                     return result
-                
-                # Complexity Heuristic: If large refactor, allow full rewrite to bypass unified diff fragility
+
+                # Complexity Heuristic: If large refactor, allow full rewrite
                 is_high_complexity = plan.get("estimated_complexity", "").lower() in ["high", "large"]
                 should_allow_rewrite = (not is_maintenance) or is_high_complexity
-                
+
                 if is_high_complexity:
                     console.print("  [dim]High complexity detected: allowing full-file rewrites to ensure diff stability.[/]")
 
@@ -720,38 +738,38 @@ class Controller:
                             "Maintenance mode requires explicit files_likely_affected"
                         )
 
-                # Stage changes produced by this task
-                for path in allowed:
-                    self._workspace._git("add", path, check=False)
-                
-                # Inspect ONLY staged changes
-                diff_output = self._workspace._git(
-                    "diff", "--cached", "--name-status", check=False
-                )
-                lines = diff_output.splitlines() if diff_output else []
+                    # Stage changes produced by this task
+                    for path in allowed:
+                        self._workspace._git("add", path, check=False)
 
-                created, deleted, touched = [], [], []
-                for line in lines:
-                    parts = line.split("\t", 1)
-                    if len(parts) != 2:
-                        continue
-                    status, path = parts
-
-                    if status == "A":
-                        created.append(path)
-                    elif status == "D":
-                        deleted.append(path)
-                    else:
-                        touched.append(path)
-
-                out_of_scope = [p for p in touched if p not in allowed]
-
-                if created or deleted or out_of_scope:
-                    raise RuntimeError(
-                        f"Maintenance violation. "
-                        f"created={created} deleted={deleted} "
-                        f"out_of_scope={out_of_scope}"
+                    # Inspect ONLY staged changes
+                    diff_output = self._workspace._git(
+                        "diff", "--cached", "--name-status", check=False
                     )
+                    lines = diff_output.splitlines() if diff_output else []
+
+                    created, deleted, touched = [], [], []
+                    for line in lines:
+                        parts = line.split("\t", 1)
+                        if len(parts) != 2:
+                            continue
+                        status, path = parts
+
+                        if status == "A":
+                            created.append(path)
+                        elif status == "D":
+                            deleted.append(path)
+                        else:
+                            touched.append(path)
+
+                    out_of_scope = [p for p in touched if p not in allowed]
+
+                    if created or deleted or out_of_scope:
+                        raise RuntimeError(
+                            f"Maintenance violation. "
+                            f"created={created} deleted={deleted} "
+                            f"out_of_scope={out_of_scope}"
+                        )
 
             # 8. Commit + PR
             commit_msg = impl.get("commit_message", f"glitchlab: {task.task_id}")
@@ -796,10 +814,10 @@ class Controller:
             result["error"] = str(e)
         finally:
             if self._workspace:
-                 try:
-                     self._workspace.cleanup()
-                 except Exception:
-                     pass
+                try:
+                    self._workspace.cleanup()
+                except Exception:
+                    pass
 
             # Always record to history
             self._history.record(result)
@@ -870,12 +888,32 @@ class Controller:
         if self._prelude_prefix:
             extra["prelude_context"] = self._prelude_prefix
 
+        # ── FIX 4: Inject format guidance for reliable file operations ──
+        impl_constraints = list(task.constraints)
+
+        create_files = [
+            s.get("files", []) for s in plan.get("steps", [])
+            if s.get("action") == "create"
+        ]
+        if any(create_files):
+            impl_constraints.append(
+                "For NEW files (action='create'), always provide complete file "
+                "content in the 'content' field. Never use unified diffs for new files."
+            )
+
+        impl_constraints.append(
+            "For MODIFIED files (action='modify'), prefer providing complete file "
+            "content in the 'content' field. Only use the 'patch' field if the file "
+            "is large (>200 lines) and the change is small. Never wrap patches in "
+            "markdown code fences."
+        )
+
         context = AgentContext(
             task_id=task.task_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
-            constraints=task.constraints,
+            constraints=impl_constraints,
             acceptance_criteria=task.acceptance_criteria,
             file_context=file_context,
             previous_output=plan,
@@ -900,14 +938,14 @@ class Controller:
         })
 
         return impl
-    
+
     def _retry_patch(
-        self, 
-        task: Task, 
-        plan: dict, 
-        ws_path: Path, 
-        original_impl: dict, 
-        applied_entries: list[str]
+        self,
+        task: Task,
+        plan: dict,
+        ws_path: Path,
+        original_impl: dict,
+        applied_entries: list[str],
     ) -> dict:
         console.print("[dim]Re-prompting implementer with git error context...[/]")
 
@@ -986,18 +1024,35 @@ class Controller:
                 [c["file"] for c in impl.get("changes", [])],
             )
 
+            # ── FIX 3: Detect prior patch failures and tell LLM to use content ──
+            patch_failed = any(
+                "FAIL" in str(fix.get("_apply_result", ""))
+                or "PATCH_FAILED" in str(fix.get("_apply_result", ""))
+                for fix in previous_fixes
+            )
+
+            extra = {
+                "error_output": error_output[:3000],
+                "test_command": self.test_command,
+                "attempt": attempt,
+                "previous_fixes": previous_fixes,
+            }
+
+            if patch_failed or attempt > 1:
+                extra["patch_strategy"] = (
+                    "IMPORTANT: Previous unified diff patches failed to apply. "
+                    "Do NOT output unified diffs. Instead, provide the COMPLETE "
+                    "file content in the 'content' field of each change. "
+                    "Set 'action' to 'modify' and leave 'patch' empty."
+                )
+
             context = AgentContext(
                 task_id=task.task_id,
                 objective=task.objective,
                 repo_path=str(self.repo_path),
                 working_dir=str(ws_path),
                 file_context=file_context,
-                extra={
-                    "error_output": error_output[:3000],
-                    "test_command": self.test_command,
-                    "attempt": attempt,
-                    "previous_fixes": previous_fixes,
-                },
+                extra=extra,
             )
 
             debug_result = self.debugger.run(context)
@@ -1012,7 +1067,7 @@ class Controller:
             if fix_changes:
                 is_maintenance = (task.mode == "maintenance")
                 applied = apply_changes(
-                    ws_path, 
+                    ws_path,
                     fix_changes,
                     boundary=self.boundary,
                     allow_core=self.allow_core,
@@ -1021,6 +1076,17 @@ class Controller:
                 )
                 for a in applied:
                     console.print(f"  [cyan]{a}[/]")
+
+                # ── FIX 2: Tag apply result and skip re-test if all patches failed ──
+                debug_result["_apply_result"] = applied
+
+                if all("FAIL" in a or "PATCH_FAILED" in a or "SKIP" in a for a in applied):
+                    console.print("[yellow]⚠ Debug fix failed to apply. Skipping re-test.[/]")
+                    continue
+            else:
+                console.print("[yellow]⚠ Debugger returned no fix changes.[/]")
+                continue
+
         return False
 
     def _run_security(self, task: Task, impl: dict, ws_path: Path) -> dict:

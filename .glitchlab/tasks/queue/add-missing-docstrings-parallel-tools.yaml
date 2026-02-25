@@ -1,0 +1,14 @@
+id: add-missing-docstrings-parallel-tools
+objective: Add docstrings to the public functions `run_parallel` (glitchlab/parallel.py)
+  and `success`, `execution_log`, `clear_log` (glitchlab/workspace/tools.py) describing
+  their purpose, parameters, return values, and any notable side effects.
+constraints:
+- Do not change runtime logic, control flow, function signatures, imports, or public
+  APIs; documentation-only edits.
+- Docstrings must be accurate and reflect current behavior without adding new features
+  or assumptions.
+acceptance:
+- Each flagged public function has a non-empty docstring in its defining file.
+- All existing tests (if present) and lint/type-check steps (if present) pass with
+  no functional changes.
+risk: low

@@ -1,0 +1,12 @@
+id: fix-scanner-todo-fixme-notes
+objective: Resolve the inline TODO/FIXME notes in glitchlab/auditor/scanner.py around
+  TODO/FIXME comment scanning by clarifying intent and removing placeholder TODO/FIXME
+  markers while preserving current behavior.
+constraints:
+- Modify only glitchlab/auditor/scanner.py.
+- Do not change runtime logic or output; comment-only edits are allowed.
+- Do not rename public APIs or alter regex behavior.
+acceptance:
+- No lines containing 'TODO:' or 'FIXME:' remain in glitchlab/auditor/scanner.py.
+- Existing test suite (if present) passes without modification.
+risk: low

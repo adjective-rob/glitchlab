@@ -1,0 +1,12 @@
+id: add-missing-docstrings-cli-and-smoke-test
+objective: Add concise docstrings to the identified public functions missing documentation
+  in glitchlab/cli.py and tests/test_smoke.py without changing any runtime behavior.
+constraints:
+- Do not modify function logic, signatures, return values, or side effects; only add
+  docstrings.
+- Limit changes strictly to tests/test_smoke.py and glitchlab/cli.py.
+acceptance:
+- 'Each of the following functions has a non-empty docstring: test_pytest_collects_tests,
+  run, interactive, status, init.'
+- All existing tests pass (e.g., `pytest -q`).
+risk: low

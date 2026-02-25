@@ -1,0 +1,14 @@
+id: add-docstrings-router-public-fns
+objective: Add clear Python docstrings to the public functions `tokens_remaining`,
+  `dollars_remaining`, `budget_exceeded`, `summary`, and `complete` in glitchlab/router.py
+  describing their purpose, parameters, and return values.
+constraints:
+- Modify only glitchlab/router.py.
+- Do not change any runtime behavior, function signatures, routing, or business logic;
+  documentation-only changes.
+acceptance:
+- Each of the listed public functions in glitchlab/router.py contains a non-empty
+  docstring.
+- All existing tests and linters (if present in the repo) pass with no code changes
+  beyond docstrings.
+risk: low

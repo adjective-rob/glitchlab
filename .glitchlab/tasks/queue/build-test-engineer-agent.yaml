@@ -1,0 +1,20 @@
+id: build-test-engineer-agent
+mode: evolution
+objective: |
+  Create a new agent called `TestEngineerAgent` in `glitchlab/agents/test_engineer.py`.
+  This agent must inherit from `BaseAgent`.
+  Its system prompt should instruct it to act as a strict Test-Driven Development (TDD) enforcer.
+  It receives a technical plan from the AgentContext and MUST output a JSON response containing a list of `pytest` files to be created or modified. 
+  The prompt must explicitly command the LLM to write tests that check strict JSON responses, Pydantic validation, and HTTP status codes, completely ignoring how the internal implementation is written.
+constraints:
+  - "Must inherit from glitchlab.agents.BaseAgent"
+  - "STRATEGY: Use FULL CONTENT for all file operations. Do not provide unified diff patches."
+  - "Ensure the generated file includes a dummy test (e.g., `def test_agent_exists(): assert True`) so pytest exits with code 0."
+  - "Must output valid JSON strictly defining the 'tests_added' schema: file_path, content, and description."
+  - "Do not modify controller.py, router.py, or any files outside of the glitchlab/agents/ directory."
+acceptance:
+  - "glitchlab/agents/test_engineer.py exists and contains the TestEngineerAgent class."
+  - "The role attribute is set to 'test_engineer'."
+  - "The system prompt explicitly mentions Test-Driven Development (TDD)."
+  - "The file passes a basic pytest run."
+risk: medium

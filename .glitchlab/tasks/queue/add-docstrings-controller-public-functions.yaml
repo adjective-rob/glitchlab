@@ -1,0 +1,16 @@
+id: add-docstrings-controller-public-functions
+objective: Add clear, accurate docstrings to the public functions `from_yaml`, `from_interactive`,
+  `apply_changes`, and `apply_tests` in glitchlab/controller.py describing their purpose,
+  parameters, return values, and any raised exceptions.
+constraints:
+- Modify only glitchlab/controller.py.
+- Do not change runtime logic, control flow, function signatures, or imports; documentation-only
+  changes.
+- Docstrings must reflect current behavior and not introduce new functionality or
+  claims.
+acceptance:
+- glitchlab/controller.py contains docstrings for `from_yaml`, `from_interactive`,
+  `apply_changes`, and `apply_tests`.
+- All existing tests (if present) pass with no code behavior changes.
+- The missing_doc findings for glitchlab/controller.py at the reported lines are resolved.
+risk: low

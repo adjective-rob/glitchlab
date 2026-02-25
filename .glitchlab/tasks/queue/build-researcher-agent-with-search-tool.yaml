@@ -1,0 +1,16 @@
+id: build-researcher-agent
+mode: evolution
+objective: |
+  Create a new agent called `ResearcherAgent` in `glitchlab/agents/researcher.py` and a simple tool function in `glitchlab/tools/web_scraper.py`.
+  1. The Web Scraper tool should use the `requests` and `markdownify` (or `beautifulsoup4`) libraries to fetch a URL and return a clean markdown string of the documentation.
+  2. The ResearcherAgent must inherit from `BaseAgent`. Its system prompt should instruct it to take a requested library or API name from the context, use the scraper tool (or ask for it to be used), and output a JSON summary of the latest syntax, strict typing requirements, and endpoints found in the docs.
+constraints:
+  - "Must inherit from glitchlab.agents.BaseAgent"
+  - "Ensure the web scraper handles basic HTTP timeouts gracefully (e.g., timeout=10)."
+  - "The agent's JSON output must include an 'api_summary' and 'deprecated_warnings' field."
+  - "Do not modify the core orchestration files."
+acceptance:
+  - "glitchlab/agents/researcher.py exists with ResearcherAgent."
+  - "glitchlab/tools/web_scraper.py exists with a valid fetching function."
+  - "The agent role is set to 'researcher'."
+risk: medium

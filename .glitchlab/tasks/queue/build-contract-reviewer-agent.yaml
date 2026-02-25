@@ -1,0 +1,17 @@
+id: build-contract-reviewer-agent
+mode: evolution
+objective: |
+  Create a new agent called `ContractReviewerAgent` in `glitchlab/agents/contract_reviewer.py`.
+  This agent acts as the final gatekeeper for an MCP (Model Context Protocol) server.
+  It must inherit from `BaseAgent`. 
+  Its system prompt must instruct it to review the Implementer's proposed FastAPI code and Pydantic schemas. It must strictly reject any code that uses `Any` typing, lacks field descriptions, or fails to return the required MCP 'Metrics Receipt' wrapper (compute_time, actions_performed, confidence_score).
+  It should output JSON containing an 'approved' boolean, and a 'rejection_reasons' list.
+constraints:
+  - "Must inherit from glitchlab.agents.BaseAgent"
+  - "System prompt must specifically mention Pydantic v2, FastAPI, and MCP (Model Context Protocol) standards."
+  - "Output schema must strictly separate approval status from the list of required fixes."
+acceptance:
+  - "glitchlab/agents/contract_reviewer.py exists."
+  - "The role attribute is 'contract_reviewer'."
+  - "The prompt enforces the 'Metrics Receipt' wrapper."
+risk: medium

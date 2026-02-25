@@ -1,0 +1,67 @@
+{
+  "$schema": "https://adjective.us/prelude/schemas/v1/architecture.schema.json",
+  "version": "1.0.0",
+  "directories": [
+    {
+      "path": "docs",
+      "fileCount": 1
+    },
+    {
+      "path": "docs/adr",
+      "fileCount": 1
+    },
+    {
+      "path": "glitchlab",
+      "fileCount": 15
+    },
+    {
+      "path": "glitchlab/__pycache__",
+      "fileCount": 9
+    },
+    {
+      "path": "glitchlab/agents",
+      "fileCount": 9
+    },
+    {
+      "path": "glitchlab/agents/__pycache__",
+      "fileCount": 7
+    },
+    {
+      "path": "glitchlab/auditor",
+      "fileCount": 4
+    },
+    {
+      "path": "glitchlab/auditor/__pycache__",
+      "fileCount": 3
+    },
+    {
+      "path": "glitchlab/governance",
+      "fileCount": 2
+    },
+    {
+      "path": "glitchlab/governance/__pycache__",
+      "fileCount": 1
+    },
+    {
+      "path": "glitchlab/workspace",
+      "fileCount": 3
+    },
+    {
+      "path": "glitchlab/workspace/__pycache__",
+      "fileCount": 2
+    },
+    {
+      "path": "glitchlab.egg-info",
+      "fileCount": 6
+    },
+    {
+      "path": "tests",
+      "fileCount": 1,
+      "purpose": "Tests"
+    }
+  ],
+  "type": "backend",
+  "patterns": [],
+  "conventions": [],
+  "entryPoints": []
+}

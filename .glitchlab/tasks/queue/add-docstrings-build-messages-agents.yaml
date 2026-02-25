@@ -1,0 +1,15 @@
+id: add-docstrings-build-messages-agents
+objective: Add concise, accurate docstrings to the public function `build_messages`
+  in `glitchlab/agents/test_engineer.py` and `glitchlab/agents/security.py`, describing
+  purpose, parameters, and return value at a high level.
+constraints:
+- Modify only docstrings/comments/whitespace in the two affected files; do not change
+  any runtime logic, function signatures, imports, or behavior.
+- Docstrings must reflect current behavior as implemented; do not introduce new examples
+  or claims that require code changes.
+acceptance:
+- '`build_messages` in `glitchlab/agents/test_engineer.py` has a docstring directly
+  under its `def` line.'
+- '`build_messages` in `glitchlab/agents/security.py` has a docstring directly under
+  its `def` line.'
+risk: low

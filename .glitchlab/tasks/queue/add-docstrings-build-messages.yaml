@@ -1,0 +1,13 @@
+id: add-docstrings-build-messages
+objective: Add concise, accurate docstrings to the public function `build_messages`
+  in `glitchlab/agents/planner.py` and `glitchlab/agents/debugger.py` describing purpose,
+  parameters, and return value.
+constraints:
+- Do not change any runtime behavior, function signatures, imports, or formatting
+  outside of adding docstrings.
+- Limit changes strictly to the two affected files and only around the `build_messages`
+  functions.
+acceptance:
+- '`build_messages` in `glitchlab/agents/planner.py` has a docstring.'
+- '`build_messages` in `glitchlab/agents/debugger.py` has a docstring.'
+risk: low

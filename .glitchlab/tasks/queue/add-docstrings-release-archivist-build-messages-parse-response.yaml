@@ -1,0 +1,15 @@
+id: add-docstrings-release-archivist-build-messages-parse-response
+objective: 'Add concise Python docstrings to the public functions missing documentation:
+  `build_messages` in `glitchlab/agents/archivist.py`, `build_messages` in `glitchlab/agents/release.py`,
+  and `parse_response` in `glitchlab/agents/release.py`.'
+constraints:
+- Modify only docstrings/comments; do not change function signatures, logic, imports,
+  or formatting outside the added docstrings.
+- Do not add new tests or refactor code; keep changes limited to the two affected
+  files.
+acceptance:
+- Each of the three specified public functions has a non-empty docstring describing
+  purpose, inputs, and return value at a high level.
+- All existing tests and checks pass with no behavior changes (e.g., current test
+  suite completes successfully).
+risk: low

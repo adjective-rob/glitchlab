@@ -1,0 +1,14 @@
+id: add-cli-docstrings-batch-history-audit
+objective: Add clear docstrings to the public functions `batch`, `history`, and `audit`
+  in glitchlab/cli.py describing their purpose, parameters, behavior, and any notable
+  side effects.
+constraints:
+- Modify only glitchlab/cli.py.
+- Do not change runtime behavior, control flow, function signatures, or CLI output;
+  documentation-only changes.
+acceptance:
+- Functions `batch` (around line 340), `history` (around line 389), and `audit` (around
+  line 466) in glitchlab/cli.py each have a non-empty docstring.
+- All existing tests and checks pass (e.g., running the project's standard test suite)
+  with no functional changes.
+risk: low

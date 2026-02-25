@@ -1,0 +1,13 @@
+id: add-missing-docstrings-workspace-scanner
+objective: Add concise, accurate docstrings to the public functions `path` in `glitchlab/workspace/__init__.py`
+  and `by_kind` and `summary` in `glitchlab/auditor/scanner.py`, describing purpose,
+  parameters, return values, and any notable behavior.
+constraints:
+- Do not change runtime logic, signatures, imports, or behavior; documentation-only
+  edits.
+- Keep docstrings consistent with existing project style and terminology.
+acceptance:
+- Each of the three public functions (`path`, `by_kind`, `summary`) has a non-empty
+  docstring directly under its definition.
+- Running the existing test suite (e.g., `pytest`) succeeds with no failures.
+risk: low

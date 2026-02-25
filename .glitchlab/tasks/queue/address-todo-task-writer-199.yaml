@@ -1,0 +1,13 @@
+id: address-todo-task-writer-199
+objective: Resolve the TODO comment at glitchlab/auditor/task_writer.py:199 by implementing
+  the intended behavior for the TODO/FIXME message formatting and removing the TODO
+  marker.
+constraints:
+- Modify only glitchlab/auditor/task_writer.py.
+- Preserve existing runtime behavior aside from the specific TODO-related message
+  formatting at the referenced location.
+acceptance:
+- The TODO comment at glitchlab/auditor/task_writer.py:199 is removed and replaced
+  with implemented code.
+- All existing automated tests (if present) pass without modification.
+risk: low

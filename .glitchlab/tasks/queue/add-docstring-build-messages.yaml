@@ -1,0 +1,15 @@
+id: add-docstring-build-messages
+objective: Add a complete docstring to the public function `build_messages` in `glitchlab/agents/implementer.py`
+  describing its purpose, parameters, return value, and any notable behavior.
+description: |
+  Add docstrings to build_messages. PROVIDE ONLY SURGICAL PATCHES. DO NOT return the full file content.
+constraints:
+- Do not change any runtime logic, control flow, or function signatures; documentation-only
+  change.
+- Limit modifications to `glitchlab/agents/implementer.py`.
+acceptance:
+- '`glitchlab/agents/implementer.py` contains a docstring immediately under `def build_messages(...)`
+  that documents inputs and outputs.'
+- All existing tests and checks pass with no other code changes beyond adding the
+  docstring.
+risk: low
