@@ -68,6 +68,11 @@ def _print_banner():
 # ---------------------------------------------------------------------------
 
 @app.command()
+def version():
+    """Print the GLITCHLAB version."""
+    _print_banner()
+
+@app.command()
 def run(
     repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     issue: Optional[int] = typer.Option(None, "--issue", "-i", help="GitHub issue number"),
@@ -408,7 +413,7 @@ def history(
         stats_table.add_column("Value")
 
         stats_table.add_row("Total runs", str(s["total_runs"]))
-        stats_table.add_row("Success rate", f"{s['success_rate']}%")
+        stats_table.add_row("Success rate", f"{s['success_rate']}%"
         stats_table.add_row("Total cost", f"${s['total_cost']:.4f}")
         stats_table.add_row("Total tokens", f"{s['total_tokens']:,}")
         stats_table.add_row("Avg cost/run", f"${s['avg_cost_per_run']:.4f}")
@@ -574,39 +579,3 @@ def _configure_logging(verbose: bool) -> None:
 
 if __name__ == "__main__":
     app()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
