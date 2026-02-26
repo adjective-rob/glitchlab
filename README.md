@@ -176,3 +176,11 @@ glitchlab/
 ## License
 
 MIT — Adjective LLC
+
+
+## Versioning
+
+Check your current version using:
+```bash
+glitchlab --version
+```

@@ -47,6 +47,25 @@ app = typer.Typer(
 console = Console()
 
 
+def version_callback(value: bool):
+    if value:
+        console.print(f"{__codename__} v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Banner
 # ---------------------------------------------------------------------------
