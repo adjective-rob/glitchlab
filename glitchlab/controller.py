@@ -794,6 +794,21 @@ class Controller:
             for f in dirty_files[:5]:
                 console.print(f"  [dim]{f}[/]")
             raise DirtyRepoError("Clean your repository before running GLITCHLAB.")
+
+        # Check if local branch is behind remote
+        try:
+            subprocess.run(["git", "fetch", "--quiet"], cwd=self.repo_path, timeout=10)
+            behind = subprocess.run(
+                ["git", "rev-list", "HEAD..@{u}", "--count"],
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True
+            ).stdout.strip()
+            if behind and behind.isdigit() and int(behind) > 0:
+                console.print(f"[red]🚫 Cannot run: Local branch is behind remote by {behind} commits. Please pull changes.[/]")
+                raise DirtyRepoError("Local branch is behind remote.")
+        except Exception:
+            pass
         # --------------------------------------
 
         # Initialize structured task state
