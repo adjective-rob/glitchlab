@@ -62,6 +62,14 @@ Rules:
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
+        """Build the messages for the archivist agent.
+
+        Args:
+            context (AgentContext): The context for the agent.
+
+        Returns:
+            list[dict[str, str]]: The list of messages.
+        """
         # v2: previous_output is TaskState.to_agent_summary("archivist")
         # Contains: task_id, objective, mode, risk_level,
         #           plan_steps, files_modified, implementation_summary, version_bump

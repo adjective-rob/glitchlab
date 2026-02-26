@@ -90,12 +90,28 @@ Rules:
 """
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
-        """Override run to enforce JSON mode at the API level."""
+        """Override run to enforce JSON mode at the API level.
+
+        Args:
+            context (AgentContext): The context for the agent.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            dict[str, Any]: The execution plan.
+        """
         # This prevents the LLM from surrounding the response with conversational filler
         kwargs["response_format"] = {"type": "json_object"}
         return super().run(context, **kwargs)
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
+        """Build the messages for the planner agent.
+
+        Args:
+            context (AgentContext): The context for the agent.
+
+        Returns:
+            list[dict[str, str]]: The list of messages.
+        """
         file_context = ""
         if context.file_context:
             file_context = "\n\nRelevant file contents:\n"
@@ -119,7 +135,15 @@ Produce your execution plan as JSON."""
         return [self._system_msg(), self._user_msg(user_content)]
 
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        """Parse and rigorously validate the JSON plan from Professor Zap."""
+        """Parse and rigorously validate the JSON plan from Professor Zap.
+
+        Args:
+            response (RouterResponse): The response from the router.
+            context (AgentContext): The context for the agent.
+
+        Returns:
+            dict[str, Any]: The parsed and validated execution plan.
+        """
         content = response.content.strip()
 
         # Strip markdown code fences if present (fallback in case LLM ignores json_object instructions)
