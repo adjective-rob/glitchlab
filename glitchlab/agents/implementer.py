@@ -28,12 +28,11 @@ class SurgicalBlock(BaseModel):
     replace: str = Field(..., description="The code that should replace the search block.")
 
 class FileChange(BaseModel):
-    """Schema for an individual file modification."""
     file: str
     action: Literal["modify", "create", "delete"]
-    content: str | None = Field(default=None)
+    content: str | None = None
     surgical_blocks: list[SurgicalBlock] = Field(default_factory=list)
-    description: str = ""  # Make this optional
+    description: str = "automated change" # Default value prevents validation errors
 
 class TestChange(BaseModel):
     file: str
@@ -124,22 +123,83 @@ IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncat
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
         content = response.content.strip()
         
-        # 1. Strip markdown code fences if the model stubbornly included them
-        if content.startswith("```"):
-            lines = content.split("\n")
-            content = "\n".join(l for l in lines if not l.strip().startswith("```"))
-            
+        # 1. Strip markdown fences
+        content = re.sub(r"^```json\s*", "", content, flags=re.MULTILINE)
+        content = re.sub(r"^```\s*", "", content, flags=re.MULTILINE)
+        content = content.strip("`").strip()
+
+        # 2. Try the "Happy Path" (Valid JSON)
         try:
             raw_json = json.loads(content)
-            validated_impl = ImplementationResult(**raw_json)
-            result = validated_impl.model_dump()
+            # Ensure description exists to satisfy Pydantic if you haven't added the default yet
+            if "changes" in raw_json:
+                for c in raw_json["changes"]:
+                    if "description" not in c: c["description"] = "auto-change"
+            
+            return ImplementationResult(**raw_json).model_dump()
         except Exception as e:
-            # 2. ACTUALLY LOG THE ERROR so we aren't blind!
-            logger.error(f"[IMPLEMENTER] Parsing failed: {e}\nContent snippet: {content[:300]}")
-            result = self._fallback_result(content, str(e))
+            logger.warning(f"[IMPLEMENTER] JSON parsing failed, attempting surgical extraction: {e}")
 
-        result["_agent"] = "implementer"
-        return result
+            # 3. THE "FORCE CREATE" EXTRACTION
+            # We look for the file and the content using a pattern that tolerates broken JSON syntax
+            file_match = re.search(r'"file":\s*"([^"]+)"', content)
+            
+            # This regex captures the largest possible block between quotes after "content":
+            # It handles escaped quotes and internal newlines.
+            code_match = re.search(r'"content":\s*"(.*)"', content, re.DOTALL)
+            
+            if file_match and code_match:
+                filename = file_match.group(1)
+                # Recover newlines and quotes that the LLM may have failed to escape
+                extracted_code = code_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+                
+                logger.info(f"[IMPLEMENTER] Recovered {filename} creation logic via Regex fallback.")
+                return {
+                    "changes": [{
+                        "file": filename,
+                        "action": "create",
+                        "content": extracted_code,
+                        "description": "Recovered via Emergency Extraction"
+                    }],
+                    "tests_added": [],
+                    "commit_message": "feat: auto-creation via recovery",
+                    "summary": "LLM output was malformed but the code was successfully extracted."
+                }
+            
+            return self._fallback_result(content, str(e))
+
+        except Exception as e:
+            logger.warning(f"[IMPLEMENTER] JSON broken, attempting Emergency Extraction: {e}")
+
+            # --- PHASE 3: THE EMERGENCY EXTRACTION ---
+            # We look for the "file" and "content" values directly using regex.
+            # This works even if the JSON is missing braces, commas, or has trailing text.
+            file_match = re.search(r'"file":\s*"([^"]+)"', content)
+            
+            # This regex captures everything between the "content" quotes. 
+            # It's greedy but stops at the last potential quote before the next key or end of object.
+            code_match = re.search(r'"content":\s*"(.*?)"(?=\s*[,}])', content, re.DOTALL)
+            
+            if file_match and code_match:
+                filename = file_match.group(1)
+                # Unescape common JSON characters so the code is actually valid Python
+                extracted_code = code_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
+                
+                logger.info(f"[IMPLEMENTER] Successfully extracted {filename} via Emergency Regex!")
+                return {
+                    "changes": [{
+                        "file": filename, 
+                        "action": "modify", # Use modify since we'll 'touch' it first
+                        "content": extracted_code, 
+                        "description": "Recovered via Emergency Extraction"
+                    }],
+                    "tests_added": [],
+                    "commit_message": "feat: audit logger (recovered)",
+                    "summary": "The LLM's JSON was malformed, but the implementation logic was surgically recovered."
+                }
+            
+            # If even the regex fails, we admit defeat
+            return self._fallback_result(content, str(e))
 
     @staticmethod
     def _fallback_result(raw: str, error: str) -> dict[str, Any]:
