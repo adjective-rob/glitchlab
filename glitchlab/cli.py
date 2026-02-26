@@ -265,12 +265,12 @@ def status(
 
 @app.command()
 def init(
-    repo: Path = typer.Argument(..., help="Path to repository"),
+    repo: Optional[Path] = typer.Argument(None, help="Path to repository"),
 ):
     """Initialize .glitchlab directory in a repository."""
     _print_banner()
 
-    repo = repo.resolve()
+    repo = (repo or Path.cwd()).resolve()
     gl_dir = repo / ".glitchlab"
     gl_dir.mkdir(exist_ok=True)
     (gl_dir / "tasks").mkdir(exist_ok=True)

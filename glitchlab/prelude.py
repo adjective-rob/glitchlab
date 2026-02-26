@@ -192,7 +192,7 @@ class PreludeContext:
             self._cached_export = None  # invalidate cache
             return True
         else:
-            logger.warning(f"[PRELUDE] Update failed: {result.stderr}")
+            logger.warning(f"[PRELUDE] Engine memory update skipped: {result.stderr.strip() or 'No changes detected'}")
             return False
 
     def refresh(self) -> bool:

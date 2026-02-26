@@ -1,14 +1,24 @@
 {
-  "task_id": "infra-007-fix-prelude",
-  "objective": "Fix the [PRELUDE] Update failed error to ensure the Planner can load recent failure patterns.",
+  "task_id": "infra-008-engine-polish",
+  "objective": "Restore engine memory (Prelude) and streamline the onboarding flow (Universal Init).",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Fix the prelude update logic to correctly load recent failure patterns while preserving the fallback mechanism.",
+      "description": "Restore engine memory functionality in the Prelude module.",
       "files": [
         "glitchlab/prelude.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 2,
+      "description": "Streamline the onboarding flow (Universal Init) in the CLI, ensuring backward compatibility for explicit paths and replacing 'Update failed' with meaningful logging.",
+      "files": [
+        "glitchlab/cli.py"
       ],
       "action": "modify",
       "status": "pending",
@@ -17,24 +27,27 @@
   ],
   "files_in_scope": [
     "glitchlab/prelude.py",
-    "glitchlab/prelude.py"
+    "glitchlab/cli.py",
+    "glitchlab/prelude.py",
+    "glitchlab/cli.py"
   ],
-  "estimated_complexity": "small",
+  "estimated_complexity": "medium",
   "requires_core_change": true,
   "files_modified": [
-    "glitchlab/prelude.py"
+    "glitchlab/prelude.py",
+    "glitchlab/cli.py"
   ],
   "files_created": [],
   "tests_added": [],
-  "commit_message": "Fix prelude update logic to preserve fallback mechanism if update fails",
-  "implementation_summary": "Modified `refresh` to return `True` even if `update` fails, ensuring existing context is still loaded.",
+  "commit_message": "Restore engine memory and streamline onboarding flow",
+  "implementation_summary": "Updated Prelude to provide meaningful logging when engine memory updates are skipped, and streamlined the CLI init command to default to the current working directory while maintaining backward compatibility.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "warn",
-  "version_bump": "patch",
-  "changelog_entry": "### Fixed\n- Resolved `[PRELUDE] Update failed` error by ensuring `refresh` operations return successfully even if background updates fail, allowing the Planner to utilize cached failure patterns.",
+  "security_verdict": "pass",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- **CLI:** `init` command now defaults to the current working directory for a faster onboarding experience.\n- **Engine:** Enhanced logging in `Prelude` to provide clarity when engine memory updates are skipped.",
   "completed_phases": [
     "plan",
     "implement",
@@ -46,16 +59,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T05:17:19.934301+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:28:58.680090+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-007-fix-prelude"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-008-engine-polish"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T05:17:19.938199+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:28:58.683047+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
         "total_files": 29,
         "languages": {
@@ -65,61 +78,61 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T05:17:20.000925+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:28:58.746355+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T05:17:26.624542+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:09.163311+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
-        "steps": 1,
+        "steps": 2,
         "risk": "medium"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T05:17:45.052017+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:32.904348+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
-        "changes": 1,
+        "changes": 2,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T05:17:45.234299+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:33.074245+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T05:17:47.966503+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:35.057211+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
-        "verdict": "warn"
+        "verdict": "pass"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T05:17:50.054453+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:37.101206+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
-        "bump": "patch"
+        "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T05:17:53.434412+00:00",
-      "task_id": "infra-007-fix-prelude",
+      "timestamp": "2026-02-26T05:29:41.209318+00:00",
+      "task_id": "infra-008-engine-polish",
       "data": {
         "wrote_adr": true,
-        "doc_updates": 1
+        "doc_updates": 2
       }
     }
   ]
