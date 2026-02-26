@@ -27,6 +27,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from glitchlab import __codename__, __tagline__, __version__
+from glitchlab.identity import print_banner
 from glitchlab.config_loader import load_config, validate_api_keys
 from glitchlab.controller import Controller, Task
 from glitchlab.history import TaskHistory
@@ -51,19 +52,8 @@ console = Console()
 # Banner
 # ---------------------------------------------------------------------------
 
-BANNER = r"""
-   ▄████  ██▓     ██▓▄▄▄█████▓ ▄████▄   ██░ ██  ██▓    ▄▄▄       ▄▄▄▄
-  ██▒ ▀█▒▓██▒    ▓██▒▓  ██▒ ▓▒▒██▀ ▀█  ▓██░ ██▒▓██▒   ▒████▄    ▓█████▄
- ▒██░▄▄▄░▒██░    ▒██▒▒ ▓██░ ▒░▒▓█    ▄ ▒██▀▀██░▒██░   ▒██  ▀█▄  ▒██▒ ▄██
- ░▓█  ██▓▒██░    ░██░░ ▓██▓ ░ ▒▓▓▄ ▄██▒░▓█ ░██ ▒██░   ░██▄▄▄▄██ ▒██░█▀
- ░▒▓███▀▒░██████▒░██░  ▒██▒ ░ ▒ ▓███▀ ░░▓█▒░██▓░██████▒▓█   ▓██▒░▓█  ▀█▓
-  ░▒   ▒ ░ ▒░▓  ░░▓    ▒ ░░   ░ ░▒ ▒  ░ ▒ ░░▒░▒░ ▒░▓  ░▒▒   ▓▒█░░▒▓███▀▒
-"""
-
-
 def _print_banner():
-    console.print(f"[bright_green]{BANNER}[/]")
-    console.print(f"  [dim]v{__version__} — {__tagline__}[/]\n")
+    print_banner(console)
 
 
 # ---------------------------------------------------------------------------
