@@ -266,7 +266,17 @@ class Router:
 
         kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format)
 
-        response = litellm.completion(**kwargs)
+        try:
+            response = litellm.completion(**kwargs)
+        except Exception as e:
+            if "503" in str(e) and "gemini" in model.lower():
+                logger.warning(f"⚠️ [ROUTER] Gemini 503 ServiceUnavailable. Falling back to OpenAI (gpt-4o).")
+                model = "openai/gpt-4o"
+                kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format)
+                response = litellm.completion(**kwargs)
+            else:
+                raise
+
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         self.budget.record(response)
