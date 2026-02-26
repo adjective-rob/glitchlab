@@ -44,7 +44,13 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
-console = Console()
+class GlitchlabConsole(Console):
+    def print(self, *args, **kwargs):
+        if args and isinstance(args[0], str):
+            args = (f"[GLITCHLAB] {args[0]}",) + args[1:]
+        super().print(*args, **kwargs)
+
+console = GlitchlabConsole()
 
 
 # ---------------------------------------------------------------------------
