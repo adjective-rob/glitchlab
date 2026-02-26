@@ -28,7 +28,7 @@ except ImportError:
 @dataclass
 class Finding:
     """A single actionable finding in the codebase."""
-    kind: str                    # "missing_doc", "todo", "complex_function", "untested_public"
+    kind: str                    # "missing_doc", "todo", "complex_function", "untested_public", "secret_detected"
     file: str                    # relative path from repo root
     line: int                    # 1-indexed line number
     symbol: str                  # function/struct name or relevant identifier
@@ -142,6 +142,7 @@ class Scanner:
             result.findings.extend(self._check_missing_docs(file_path, rel, source, lang))
             result.findings.extend(self._check_todos(file_path, rel, source))
             result.findings.extend(self._check_complex_functions(file_path, rel, source, lang))
+            result.findings.extend(self._check_secrets(file_path, rel, source))
 
         return result
 
@@ -329,5 +330,30 @@ class Scanner:
                         ))
                     fn_start = None
                     fn_name = None
+
+        return findings
+
+    # -----------------------------------------------------------------------
+    # Check: Hardcoded Secrets
+    # -----------------------------------------------------------------------
+
+    def _check_secrets(self, file_path: Path, rel: str, source: str) -> list[Finding]:
+        """Find hardcoded secrets or API keys."""
+        findings = []
+        lines = source.splitlines()
+        pattern = re.compile(r"(?i)(?:api_key|secret|token|password)\s*[:=]\s*['\"]([a-zA-Z0-9_\-]{16,})['\"]")
+
+        for i, line in enumerate(lines):
+            match = pattern.search(line)
+            if match:
+                findings.append(Finding(
+                    kind="secret_detected",
+                    file=rel,
+                    line=i + 1,
+                    symbol="secret",
+                    description="Potential hardcoded secret or API key detected",
+                    severity="high",
+                    context=line.strip(),
+                ))
 
         return findings
