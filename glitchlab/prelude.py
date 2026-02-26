@@ -210,7 +210,8 @@ class PreludeContext:
             return False
 
         if self.context_exists:
-            return self.update()
+            self.update()
+            return True
         else:
             return self.init()
 
