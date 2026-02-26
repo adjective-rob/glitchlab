@@ -1272,10 +1272,11 @@ class Controller:
             s.get("files", []) for s in plan.get("steps", [])
             if s.get("action") == "create"
         ]
-        if any(create_files):
+        if create_files:
             impl_constraints.append(
-                "For NEW files (action='create'), always provide complete file "
-                "content in the 'content' field. Never use unified diffs for new files."
+                "CRITICAL SCHEMA ENFORCEMENT: For NEW files (action='create'), you MUST strictly adhere to the JSON response format. "
+                "Do NOT output raw python code or markdown text. You must output a JSON object containing a 'changes' array. "
+                "Inside that array, include an object with 'action': 'create', 'file': '<filepath>', and 'content': '<YOUR FULL CODE>'."
             )
 
         impl_constraints.append(
