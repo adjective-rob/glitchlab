@@ -1,24 +1,14 @@
 {
-  "task_id": "infra-001-versioning",
-  "objective": "Centralize the version string and expose it to the CLI.",
+  "task_id": "infra-006-auto-archive",
+  "objective": "Update the Controller to automatically move completed task files from 'queue/' to 'archive/'.",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Define the __version__ string centrally in the package initialization file.",
+      "description": "Update the Controller to move completed task files from the 'queue/' directory to the 'archive/' directory.",
       "files": [
-        "glitchlab/__init__.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": ""
-    },
-    {
-      "step_number": 2,
-      "description": "Import the version string and implement a Typer callback with a --version flag to print the version and exit.",
-      "files": [
-        "glitchlab/cli.py"
+        "glitchlab/controller.py"
       ],
       "action": "modify",
       "status": "pending",
@@ -26,27 +16,25 @@
     }
   ],
   "files_in_scope": [
-    "glitchlab/__init__.py",
-    "glitchlab/cli.py",
-    "glitchlab/__init__.py",
-    "glitchlab/cli.py"
+    "glitchlab/controller.py",
+    "glitchlab/controller.py"
   ],
   "estimated_complexity": "small",
-  "requires_core_change": false,
+  "requires_core_change": true,
   "files_modified": [
-    "glitchlab/cli.py"
+    "glitchlab/controller.py"
   ],
   "files_created": [],
   "tests_added": [],
-  "commit_message": "feat(cli): add --version flag to expose centralized version string",
-  "implementation_summary": "Implemented a Typer callback to expose the centralized `__version__` string via a `--version` CLI flag.",
+  "commit_message": "feat: automatically move completed task files from queue to archive",
+  "implementation_summary": "Added `file_path` to `Task` model and updated `Controller.run` to move the task file to an `archive/` directory if it was successfully completed and originated from a `queue/` directory.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "pass",
+  "security_verdict": "warn",
   "version_bump": "minor",
-  "changelog_entry": "### Added\n- Introduced `--version` flag to the CLI to display the current application version.",
+  "changelog_entry": "### Added\n- **Automated Task Archiving**: Tasks originating from the `queue/` directory are now automatically moved to the `archive/` directory upon successful completion.\n- **Task Model Extension**: Added `file_path` attribute to the `Task` model to track source file locations.",
   "completed_phases": [
     "plan",
     "implement",
@@ -58,44 +46,44 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T04:44:16.937045+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:13:55.029032+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-001-versioning"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-006-auto-archive"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T04:44:16.941374+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:13:55.032878+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
-        "total_files": 28,
+        "total_files": 29,
         "languages": {
-          ".py": 26
+          ".py": 27
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T04:44:17.004377+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:13:55.095819+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T04:44:27.647897+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:02.110957+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
-        "steps": 2,
-        "risk": "low"
+        "steps": 1,
+        "risk": "medium"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T04:44:42.255658+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:42.437971+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
         "changes": 1,
         "tests": 0
@@ -103,32 +91,32 @@
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T04:44:42.420469+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:42.702023+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T04:44:43.924430+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:46.073754+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
-        "verdict": "pass"
+        "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T04:44:45.897599+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:48.214172+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
         "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T04:44:49.391905+00:00",
-      "task_id": "infra-001-versioning",
+      "timestamp": "2026-02-26T05:14:52.458847+00:00",
+      "task_id": "infra-006-auto-archive",
       "data": {
         "wrote_adr": true,
         "doc_updates": 2

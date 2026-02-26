@@ -388,6 +388,7 @@ class Task(BaseModel):
     risk_level: Literal["low", "medium", "high"] = Field(default="low", alias="risk")
     source: str = Field(default="local")
     mode: Literal["maintenance", "evolution"] | None = Field(default=None)
+    file_path: Path | None = Field(default=None, exclude=True)
 
     @model_validator(mode='after')
     def determine_mode(self) -> "Task":
@@ -407,6 +408,7 @@ class Task(BaseModel):
             data = yaml.safe_load(f)
         data["task_id"] = data.get("id", path.stem)
         data["source"] = "local-file"
+        data["file_path"] = path
         return cls(**data)
 
     @classmethod
@@ -1178,6 +1180,12 @@ class Controller:
             self._print_budget_summary()
             result["events"] = self._state.events
             result["budget"] = self.router.budget.summary()
+
+            if getattr(task, "file_path", None) and task.file_path.exists() and task.file_path.parent.name == "queue":
+                archive_dir = task.file_path.parent.with_name("archive")
+                archive_dir.mkdir(parents=True, exist_ok=True)
+                task.file_path.rename(archive_dir / task.file_path.name)
+                console.print(f"[dim]Moved task file to {archive_dir / task.file_path.name}[/]")
 
         except BudgetExceededError as e:
             console.print(f"[red]💸 Budget exceeded: {e}[/]")
