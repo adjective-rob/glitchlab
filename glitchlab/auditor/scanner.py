@@ -114,9 +114,9 @@ class Scanner:
     def __init__(self, repo_path: Path, exclude_dirs: list[str] | None = None):
         self.repo_path = repo_path.resolve()
         self.exclude_dirs = set(exclude_dirs or [
-    ".git", "target", "node_modules", ".glitchlab",
-    ".context", "dist", "build", "__pycache__", "venv",
-    "mcp", ".venv", "site-packages",
+            ".git", "target", "node_modules", ".glitchlab",
+            ".context", "dist", "build", "__pycache__", "venv",
+            "mcp", ".venv", "site-packages",
         ])
 
     def scan(self) -> ScanResult:
