@@ -1,0 +1,12 @@
+id: infra-011-failover-router
+objective: "Implement an automatic failover mechanism in the Router to switch to OpenAI if Gemini returns a 503 error."
+steps:
+  - "Modify 'glitchlab/router.py' to wrap the 'litellm.completion' call in a try/except block."
+  - "Catch 'litellm.exceptions.ServiceUnavailableError' (503) specifically."
+  - "If caught, log a warning and retry the completion using the 'fallback' models defined in the config."
+  - "Ensure the Router can distinguish between 'high_tier' (Pro) and 'low_tier' (Flash) fallbacks based on the primary model name."
+constraints:
+  - "Do not break existing 'tenacity' retry logic in the Controller."
+  - "The fallback must only trigger on 503/high-demand errors, not on 400-level syntax errors."
+mode: evolution
+risk: medium
