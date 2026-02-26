@@ -1,0 +1,141 @@
+{
+  "task_id": "infra-005-cli-repair",
+  "objective": "Restore CLI functionality by creating the identity file and implementing missing helper functions.",
+  "mode": "evolution",
+  "risk_level": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Create the identity file to store the banner and identity information.",
+      "files": [
+        "glitchlab/identity.py"
+      ],
+      "action": "create",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 2,
+      "description": "Modify cli.py to implement missing helper functions, import the new identity file, and ensure imports match __init__.py without removing the existing command structure.",
+      "files": [
+        "glitchlab/cli.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/cli.py",
+    "glitchlab/identity.py",
+    "glitchlab/identity.py",
+    "glitchlab/cli.py"
+  ],
+  "estimated_complexity": "small",
+  "requires_core_change": false,
+  "files_modified": [
+    "glitchlab/identity.py",
+    "glitchlab/cli.py"
+  ],
+  "files_created": [
+    "glitchlab/identity.py"
+  ],
+  "tests_added": [],
+  "commit_message": "Restore CLI functionality by creating identity file and updating imports",
+  "implementation_summary": "Created `glitchlab/identity.py` to store the banner and identity information, and updated `glitchlab/cli.py` to import from it.",
+  "test_passing": true,
+  "debug_attempts": 0,
+  "last_error": "",
+  "previous_fixes": [],
+  "security_verdict": "pass",
+  "version_bump": "patch",
+  "changelog_entry": "### Fixed\n- Restored CLI functionality by repairing missing identity references.\n- Refactored identity metadata into a dedicated `identity.py` module.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T04:46:08.204006+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-005-cli-repair"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T04:46:08.207427+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "total_files": 28,
+        "languages": {
+          ".py": 26
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T04:46:08.269133+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T04:46:17.274355+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "steps": 2,
+        "risk": "medium"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T04:46:44.096934+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "changes": 2,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_passed",
+      "timestamp": "2026-02-26T04:46:44.266509+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T04:46:46.169185+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T04:46:47.793915+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "bump": "patch"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T04:46:51.430394+00:00",
+      "task_id": "infra-005-cli-repair",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 1
+      }
+    }
+  ]
+}
