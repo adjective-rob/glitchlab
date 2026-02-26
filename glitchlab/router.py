@@ -1,9 +1,9 @@
 """
-GLITCHLAB Router — Vendor-Agnostic Model Abstraction
+GLITCHLAB Router — Vendor-Agnostic Model Abstraction (v2.1)
 
 Routes agent calls through LiteLLM so agents never know
 which vendor is backing them. Handles budget tracking,
-retries, and structured logging.
+retries, structured logging, and Proactive Context Headroom.
 """
 
 from __future__ import annotations
@@ -76,6 +76,65 @@ class BudgetTracker:
             "tokens_remaining": self.tokens_remaining,
             "dollars_remaining": round(self.dollars_remaining, 4),
         }
+
+
+# ---------------------------------------------------------------------------
+# Context Monitor (v2)
+# ---------------------------------------------------------------------------
+
+class ContextMonitor:
+    """
+    Protects the LLM's output headroom by proactively snipping 
+    input context before the call if it gets too large.
+    """
+    def __init__(self, safe_headroom_tokens: int = 8192):
+        # Always reserve this many tokens strictly for the model's response
+        self.safe_headroom = safe_headroom_tokens
+
+    def enforce_headroom(self, messages: list[dict[str, str]], model: str, max_tokens: int) -> list[dict[str, str]]:
+        # 1. Determine model context window
+        try:
+            model_info = litellm.get_model_info(model)
+            max_window = model_info.get("max_input_tokens") or model_info.get("max_tokens") or 128000
+        except Exception:
+            max_window = 128000 # Fallback to a safe default (e.g., standard GPT-4o window)
+            
+        # 2. Calculate our hard limit for the input prompt
+        target_output = max_tokens or self.safe_headroom
+        input_limit = max_window - target_output - (self.safe_headroom // 2)
+        
+        # 3. Count current tokens (fallback to fast character approximation if tokenizer fails)
+        try:
+            current_tokens = litellm.token_counter(model=model, messages=messages)
+        except Exception:
+            current_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 4
+            
+        if current_tokens <= input_limit:
+            return messages
+            
+        logger.warning(
+            f"⚠️ [CONTEXT] Token pressure high ({current_tokens} > {input_limit}). "
+            "Snipping oldest context to prevent JSON truncation..."
+        )
+        
+        # 4. Snip logic: Reduce the length of non-system messages to fit
+        snip_ratio = input_limit / current_tokens
+        snip_ratio = max(0.15, snip_ratio) # Never truncate beyond 15% of original to retain some context
+        
+        new_messages = []
+        for msg in messages:
+            if msg.get("role") == "system":
+                # Never truncate system instructions
+                new_messages.append(msg)
+            else:
+                content = msg.get("content", "")
+                if isinstance(content, str) and len(content) > 500:
+                    target_len = int(len(content) * snip_ratio)
+                    # Keep the end of the message (usually contains the most recent errors/instructions)
+                    content = "\n...[TRUNCATED BY CONTEXT MONITOR]...\n" + content[-target_len:]
+                new_messages.append({"role": msg.get("role"), "content": content})
+                
+        return new_messages
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +211,8 @@ class Router:
             max_tokens=config.limits.max_tokens_per_task,
             max_dollars=config.limits.max_dollars_per_task,
         )
+        self.context_monitor = ContextMonitor(safe_headroom_tokens=8192)
+        
         self._role_model_map = {
             "planner": config.routing.planner,
             "implementer": config.routing.implementer,
@@ -195,11 +256,15 @@ class Router:
             )
 
         model = self.resolve_model(role)
+        
+        # V2: Enforce proactive context headroom
+        safe_messages = self.context_monitor.enforce_headroom(messages, model, max_tokens)
+        
         start = time.monotonic()
 
-        logger.debug(f"[ROUTER] {role} → {model} ({len(messages)} messages)")
+        logger.debug(f"[ROUTER] {role} → {model} ({len(safe_messages)} messages)")
 
-        kwargs = _build_kwargs(model, messages, temperature, max_tokens, response_format)
+        kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format)
 
         response = litellm.completion(**kwargs)
         elapsed_ms = int((time.monotonic() - start) * 1000)

@@ -60,6 +60,16 @@ class Workspace:
 
         return self.worktree_path
 
+    def diff_full(self) -> str:
+        """Get the full unified diff of all changes in the worktree."""
+        self._worktree_git("add", "-A", check=False)
+        return self._worktree_git("diff", "--cached", capture=True, check=False)
+
+    def diff_stat(self) -> str:
+        """Get the diff stat of all changes in the worktree."""
+        self._worktree_git("add", "-A", check=False)
+        return self._worktree_git("diff", "--cached", "--stat", capture=True, check=False)
+
     def commit(self, message: str, add_all: bool = True) -> str | None:
         """Stage and commit changes inside the worktree."""
         if add_all:
