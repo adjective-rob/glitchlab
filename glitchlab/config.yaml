@@ -7,7 +7,7 @@
 # Names here map to LiteLLM model aliases.
 routing:
   planner: "gemini/gemini-3.1-pro-preview"
-  implementer: "openai/gpt-5.2"
+  implementer: "gemini/gemini-3.1-pro-preview"
   debugger: "gemini/gemini-3.1-pro-preview"
   security: "gemini/gemini-3-flash-preview"
   release: "gemini/gemini-3-flash-preview"
