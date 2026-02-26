@@ -991,20 +991,17 @@ class Controller:
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
 
-            # ── Patch & Surgical failure retry (one attempt) ──
+            # ── Patch & Surgical failure retry (up to 3 attempts) ──
             # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
-            patch_failures = [a for a in applied if "FAIL" in a or "PATCH_FAILED" in a]
+            for retry_attempt in range(3):
+                patch_failures = [a for a in applied if "FAIL" in a or "PATCH_FAILED" in a]
+                if not patch_failures:
+                    break
 
-            if patch_failures:
-                console.print("[yellow]⚠ Edit failed to apply (likely a whitespace mismatch). Attempting one auto-repair...[/]")
+                console.print(f"[yellow]⚠ Edit failed to apply (likely a whitespace mismatch). Attempting auto-repair {retry_attempt + 1}/3...[/]")
 
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
-
-                if any("FAIL" in a or "PATCH_FAILED" in a for a in applied):
-                    console.print("[red]❌ Auto-repair failed. Aborting to prevent corrupted PR.[/]")
-                    result["status"] = "implementation_failed"
-                    return result
 
                 retry_impl = self._retry_patch(task, plan, ws_path, impl, applied)
 
@@ -1024,10 +1021,10 @@ class Controller:
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
 
-                if any(a.startswith("PATCH_FAILED") for a in applied):
-                    console.print("[red]❌ Patch retry failed. Aborting.[/]")
-                    result["status"] = "implementation_failed"
-                    return result
+            if any("FAIL" in a or "PATCH_FAILED" in a for a in applied):
+                console.print("[red]❌ Patch retry failed after 3 attempts. Aborting.[/]")
+                result["status"] = "implementation_failed"
+                return result
 
             # ── Phase routing: doc-only skips test/security/release ──
             if is_doc_only:

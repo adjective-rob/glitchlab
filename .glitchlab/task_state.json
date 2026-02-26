@@ -1,0 +1,126 @@
+{
+  "task_id": "agent-self-heal-001",
+  "objective": "Update the Controller's test execution logic to support a recursive retry loop on failure.",
+  "mode": "evolution",
+  "risk_level": "high",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Update the main execution loop in the Controller to catch test failures and retry the fix process up to 3 times using surgical_blocks.",
+      "files": [
+        "glitchlab/controller.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/controller.py",
+    "glitchlab/controller.py"
+  ],
+  "estimated_complexity": "medium",
+  "requires_core_change": true,
+  "files_modified": [
+    "glitchlab/controller.py"
+  ],
+  "files_created": [],
+  "tests_added": [],
+  "commit_message": "feat: support recursive retry loop on failure in Controller",
+  "implementation_summary": "Updated the main execution loop in the Controller to catch test failures and retry the fix process up to 3 times.",
+  "test_passing": true,
+  "debug_attempts": 0,
+  "last_error": "",
+  "previous_fixes": [],
+  "security_verdict": "pass",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- **Self-Healing Logic**: The Controller now supports a recursive retry loop, allowing it to automatically attempt fixes up to 3 times upon test failure.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T04:06:48.904493+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/agent-self-heal-001"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T04:06:48.908460+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "total_files": 26,
+        "languages": {
+          ".py": 24
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T04:06:48.973656+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T04:06:58.053879+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "steps": 1,
+        "risk": "medium"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T04:07:59.167747+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "changes": 1,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_passed",
+      "timestamp": "2026-02-26T04:07:59.332639+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T04:08:29.949352+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T04:08:31.833800+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "bump": "minor"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T04:08:36.027197+00:00",
+      "task_id": "agent-self-heal-001",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 2
+      }
+    }
+  ]
+}
