@@ -991,16 +991,20 @@ class Controller:
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
 
-                if any("FAIL" in a for a in applied):
-                    console.print("[red]❌ Patches failed to apply. Aborting to prevent empty PR.[/]")
-                    result["status"] = "patch_failed"
-                    return result
-
-            # ── Patch failure retry (one attempt) ──
-            patch_failures = [a for a in applied if a.startswith("PATCH_FAILED")]
+            # ── Patch & Surgical failure retry (one attempt) ──
+            # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
+            patch_failures = [a for a in applied if "FAIL" in a or "PATCH_FAILED" in a]
 
             if patch_failures:
-                console.print("[yellow]⚠ Patch failed. Attempting one auto-repair...[/]")
+                console.print("[yellow]⚠ Edit failed to apply (likely a whitespace mismatch). Attempting one auto-repair...[/]")
+
+                for entry in applied:
+                    console.print(f"  [cyan]{entry}[/]")
+
+                if any("FAIL" in a or "PATCH_FAILED" in a for a in applied):
+                    console.print("[red]❌ Auto-repair failed. Aborting to prevent corrupted PR.[/]")
+                    result["status"] = "implementation_failed"
+                    return result
 
                 retry_impl = self._retry_patch(task, plan, ws_path, impl, applied)
 

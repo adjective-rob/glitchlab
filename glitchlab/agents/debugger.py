@@ -1,8 +1,8 @@
 """
-🐛 Reroute — The Debugger
+🐛 Reroute — The Debugger (v2.2)
 
-Only appears when things break.
-Laser-focused. No feature creep.
+Only appears when things break. Laser-focused.
+Hardened against truncated / malformed LLM JSON responses.
 
 Energy: quiet gremlin that only appears when things break.
 """
@@ -22,163 +22,220 @@ from glitchlab.router import RouterResponse
 class DebuggerAgent(BaseAgent):
     role = "debugger"
 
-    # Layer 0: Immutable system contract
+    # Immutable system contract
     system_prompt = """You are Reroute, the debug engine inside GLITCHLAB.
 
 You are invoked ONLY when tests fail or builds break.
-Your job is to produce a MINIMAL fix. Nothing more.
+Your job is to produce a MINIMAL, surgically precise fix.
 
 You MUST respond with valid JSON only. No markdown wrapping.
 
 Output schema:
 {
-  "diagnosis": "What went wrong and why",
-  "root_cause": "The specific root cause",
+  "diagnosis": "Short summary of what failed",
+  "root_cause": "The specific line or logic error",
   "fix": {
     "changes": [
       {
         "file": "path/to/file",
-        "action": "modify|create",
-        "content": "The COMPLETE updated file content. ALWAYS provide this field.",
-        "description": "what this fixes"
+        "action": "modify",
+        "surgical_blocks": [
+          {
+            "search": "The EXACT lines to find in the original file, including 2-3 lines of unchanged context above and below to ensure uniqueness.",
+            "replace": "The new lines that will replace the search block."
+          }
+        ],
+        "description": "Fixes the specific error"
       }
     ]
   },
   "confidence": "high|medium|low",
-  "should_retry": true,
-  "notes": "Any additional context"
+  "should_retry": true
 }
 
 CRITICAL RULES:
-- Fix the EXACT failure. Nothing else.
-- Do not refactor. Do not improve. Do not add features.
-- If you cannot fix it with confidence, set should_retry=false.
-- ALWAYS provide the COMPLETE file content in the 'content' field.
-- Do NOT use unified diffs or patches. Provide full file content only.
-- Do NOT wrap your JSON response in markdown code fences.
-- Analyze the error output carefully before proposing changes.
-- If the error is an import error or missing class, check that all referenced modules exist.
-- If the error is a syntax error, provide the corrected full file.
+1. Fix the EXACT failure. Do not refactor unrelated code.
+2. YOU MUST USE `surgical_blocks` FOR MODIFICATIONS. NEVER output the full file content.
+3. The `search` string must EXACTLY match the original file character-for-character, including whitespace and indentation.
+4. If tokens run out, prioritize completing the JSON structure.
+5. Do NOT wrap output in markdown.
+6. If Exit Code 5 (No tests collected), check for missing __init__.py.
 """
 
-    def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        # v2: structured state from TaskState.to_agent_summary("debugger")
-        # Contains: task_id, objective, mode, risk_level,
-        #           files_modified, files_created, last_error,
-        #           debug_attempts, previous_fixes
-        state = context.previous_output
+    # ------------------------------------------------------------------ #
+    # Prompt Construction
+    # ------------------------------------------------------------------ #
 
-        # Runtime context from extra (set by controller per-iteration)
-        error_output = context.extra.get("error_output", "No error output provided")
+    def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
+        """Construct prompt with capped error context to preserve token headroom."""
+
+        state = context.previous_output or {}
+
+        raw_error = context.extra.get("error_output", "") or ""
+        error_output = raw_error[:1000]  # Hard cap for token safety
+
         test_command = context.extra.get("test_command", "unknown")
         attempt = state.get("debug_attempts", 1)
         patch_strategy = context.extra.get("patch_strategy", "")
 
-        # Previous fixes from structured state (not extra)
+        # Previous attempts (limit to last 2)
         previous_fixes = state.get("previous_fixes", [])
         prev_fixes_text = ""
         if previous_fixes:
-            prev_fixes_text = "\n\nPrevious fix attempts that did NOT work:\n"
-            for i, fix in enumerate(previous_fixes, 1):
+            prev_fixes_text = "\n\nFAILED PREVIOUS ATTEMPTS:\n"
+            for i, fix in enumerate(previous_fixes[-2:], 1):
                 diag = fix.get("diagnosis", "unknown")
-                apply_result = fix.get("_apply_result", [])
-                prev_fixes_text += f"\nAttempt {i}: {diag}\n"
-                if apply_result:
-                    prev_fixes_text += f"  Apply result: {apply_result}\n"
+                prev_fixes_text += f"Attempt {i}: {diag}\n"
 
-        # File context from ScopeResolver (includes dep signatures)
+        # File context
         file_context = ""
         if context.file_context:
-            file_context = "\n\nCurrent file contents (use these as the base for your fix):\n"
+            file_context = "\n\nFILES FOR CONTEXT (Use as base for fix):\n"
             for fname, content in context.file_context.items():
-                label = fname
                 if fname.startswith("[dep] "):
-                    label = f"{fname} (dependency signatures — read only)"
-                file_context += f"\n--- {label} ---\n{content}\n"
+                    file_context += f"\n[SIGNATURES] {fname[6:]}:\n{content}\n"
+                else:
+                    file_context += f"\n--- {fname} ---\n{content}\n"
 
-        strategy_note = ""
-        if patch_strategy:
-            strategy_note = f"\n\n⚠️ {patch_strategy}\n"
+        user_content = f"""FAILURE DETECTED (Attempt {attempt})
 
-        user_content = f"""Test/build failure detected.
-
-Task: {context.objective}
-Task ID: {context.task_id}
+Objective: {context.objective}
 Mode: {state.get('mode', 'evolution')}
-Fix attempt: {attempt}
-Files modified so far: {state.get('files_modified', [])}
+Modified files: {state.get('files_modified', [])}
 
-Command that failed: {test_command}
+FAILED COMMAND: {test_command}
 
-Error output:
-```
+ERROR LOG (TRUNCATED):
 {error_output}
-```
-{strategy_note}
+
+{f"⚠️ STRATEGY: {patch_strategy}" if patch_strategy else ""}
 {prev_fixes_text}
 {file_context}
 
-Diagnose the failure and produce a minimal fix as JSON.
-Remember: provide COMPLETE file content in the 'content' field. Do NOT use patches."""
+Produce the minimal JSON fix using strict surgical_blocks."""
 
         return [self._system_msg(), self._user_msg(user_content)]
 
-    def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        """Parse debug output from Reroute."""
+    # ------------------------------------------------------------------ #
+    # Response Parsing
+    # ------------------------------------------------------------------ #
+
+    def parse_response(
+        self,
+        response: RouterResponse,
+        context: AgentContext
+    ) -> dict[str, Any]:
+        """Parse debug output with resilient JSON extraction + repair."""
+
         content = response.content.strip()
 
-        logger.debug(f"[REROUTE] Raw response ({len(content)} chars):\n{content[:2000]}")
+        # Remove markdown fences if model violated rules
+        content = self._strip_markdown(content)
 
-        if content.startswith("```"):
-            lines = content.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            content = "\n".join(lines)
-
+        # Attempt direct parse
         try:
             result = json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"[REROUTE] Failed to parse debug JSON: {e}")
-            logger.debug(f"[REROUTE] Content that failed to parse:\n{content[:1000]}")
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                try:
-                    result = json.loads(json_match.group())
-                except json.JSONDecodeError:
-                    result = {
-                        "diagnosis": "Failed to parse debugger output",
-                        "root_cause": str(e),
-                        "fix": {"changes": []},
-                        "confidence": "low",
-                        "should_retry": False,
-                        "parse_error": True,
-                    }
-            else:
-                result = {
-                    "diagnosis": "Failed to parse debugger output",
-                    "root_cause": str(e),
-                    "fix": {"changes": []},
-                    "confidence": "low",
-                    "should_retry": False,
-                    "parse_error": True,
-                }
+        except json.JSONDecodeError:
+            logger.warning("[REROUTE] Malformed JSON detected. Attempting recovery...")
+            result = self._recover_json(content)
 
-        # Post-process: warn if patch without content
-        for change in result.get("fix", {}).get("changes", []):
-            if change.get("patch") and not change.get("content"):
-                logger.warning(
-                    f"[REROUTE] Change for {change.get('file', '?')} has patch but no content. "
-                    "This will likely fail to apply."
-                )
-
+        # Attach metadata
         result["_agent"] = "debugger"
         result["_model"] = response.model
         result["_tokens"] = response.tokens_used
-        result["_cost"] = response.cost
 
         logger.info(
-            f"[REROUTE] Diagnosis: {result.get('diagnosis', '?')[:80]} — "
-            f"confidence={result.get('confidence', '?')}, "
-            f"retry={result.get('should_retry', False)}"
+            f"[REROUTE] Diagnosis: {result.get('diagnosis', 'Unknown')[:60]}... "
+            f"Confidence: {result.get('confidence', 'low')}"
         )
 
         return result
+
+    # ------------------------------------------------------------------ #
+    # JSON Recovery Logic
+    # ------------------------------------------------------------------ #
+
+    def _strip_markdown(self, content: str) -> str:
+        """Remove ``` or ```json wrappers safely."""
+        if content.startswith("```"):
+            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+        return content.strip()
+
+    def _recover_json(self, content: str) -> dict[str, Any]:
+        """
+        Recover largest valid JSON object from truncated response.
+        Strategy:
+        1. Extract first full JSON object if embedded in noise.
+        2. Attempt structural balancing.
+        3. Fallback to regex extraction.
+        """
+
+        # 1. Try extracting largest {...} block
+        extracted = self._extract_outer_json(content)
+        if extracted:
+            try:
+                return json.loads(extracted)
+            except Exception:
+                pass
+
+        # 2. Structural balancing
+        balanced = self._balance_json(content)
+        if balanced:
+            try:
+                return json.loads(balanced)
+            except Exception:
+                pass
+
+        # 3. Regex fallback
+        logger.error("[REROUTE] JSON recovery failed. Using minimal fallback.")
+        diag_match = re.search(r'"diagnosis"\s*:\s*"([^"]+)"', content)
+
+        return {
+            "diagnosis": diag_match.group(1) if diag_match else "Truncated response",
+            "root_cause": "JSON_TRUNCATION",
+            "fix": {"changes": []},
+            "confidence": "low",
+            "should_retry": False,
+            "parse_error": True,
+        }
+
+    def _extract_outer_json(self, text: str) -> str | None:
+        """Extract first top-level JSON object using brace tracking."""
+        start = text.find("{")
+        if start == -1:
+            return None
+
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+
+        return None
+
+    def _balance_json(self, text: str) -> str | None:
+        """Attempt to balance braces and brackets in truncated JSON."""
+
+        open_braces = text.count("{")
+        close_braces = text.count("}")
+        open_brackets = text.count("[")
+        close_brackets = text.count("]")
+
+        repaired = text
+
+        # Close unterminated string if odd quotes
+        if repaired.count('"') % 2 != 0:
+            repaired += '"'
+
+        # Close brackets first
+        if open_brackets > close_brackets:
+            repaired += "]" * (open_brackets - close_brackets)
+
+        # Then braces
+        if open_braces > close_braces:
+            repaired += "}" * (open_braces - close_braces)
+
+        return repaired if repaired != text else None
