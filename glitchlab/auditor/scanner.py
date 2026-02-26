@@ -124,26 +124,29 @@ class Scanner:
         result = ScanResult(repo_path=self.repo_path)
 
         for file_path in self._iter_source_files():
-            rel = str(file_path.relative_to(self.repo_path))
-            ext = file_path.suffix
-            lang = LANGUAGE_MAP.get(ext)
-
-            if lang:
-                result.languages_found.add(lang)
-
-            try:
-                source = file_path.read_text(encoding="utf-8", errors="ignore")
-            except Exception:
-                continue
-
-            result.files_scanned += 1
-
-            # Run all checks
-            result.findings.extend(self._check_missing_docs(file_path, rel, source, lang))
-            result.findings.extend(self._check_todos(file_path, rel, source))
-            result.findings.extend(self._check_complex_functions(file_path, rel, source, lang))
+            self._scan_file(file_path, result)
 
         return result
+
+    def _scan_file(self, file_path: Path, result: ScanResult) -> None:
+        rel = str(file_path.relative_to(self.repo_path))
+        ext = file_path.suffix
+        lang = LANGUAGE_MAP.get(ext)
+
+        if lang:
+            result.languages_found.add(lang)
+
+        try:
+            source = file_path.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            return
+
+        result.files_scanned += 1
+
+        # Run all checks
+        result.findings.extend(self._detect_missing_docs(file_path, rel, source, lang))
+        result.findings.extend(self._detect_todos(file_path, rel, source))
+        result.findings.extend(self._detect_complex_functions(file_path, rel, source, lang))
 
     def _iter_source_files(self) -> Iterator[Path]:
         """Yield all source files, respecting exclusions."""
@@ -159,19 +162,19 @@ class Scanner:
     # Check: Missing Doc Comments
     # -----------------------------------------------------------------------
 
-    def _check_missing_docs(
+    def _detect_missing_docs(
         self, file_path: Path, rel: str, source: str, lang: str | None
     ) -> list[Finding]:
         findings = []
 
         if lang == "rust":
-            findings.extend(self._check_missing_docs_rust(rel, source))
+            findings.extend(self._detect_missing_docs_rust(rel, source))
         elif lang == "python":
-            findings.extend(self._check_missing_docs_python(rel, source))
+            findings.extend(self._detect_missing_docs_python(rel, source))
 
         return findings
 
-    def _check_missing_docs_rust(self, rel: str, source: str) -> list[Finding]:
+    def _detect_missing_docs_rust(self, rel: str, source: str) -> list[Finding]:
         """Find pub fn declarations without a preceding /// doc comment."""
         findings = []
         lines = source.splitlines()
@@ -211,7 +214,7 @@ class Scanner:
 
         return findings
 
-    def _check_missing_docs_python(self, rel: str, source: str) -> list[Finding]:
+    def _detect_missing_docs_python(self, rel: str, source: str) -> list[Finding]:
         """Find public Python functions without docstrings."""
         findings = []
         lines = source.splitlines()
@@ -256,7 +259,7 @@ class Scanner:
     # Check: TODO / FIXME Comments
     # -----------------------------------------------------------------------
 
-    def _check_todos(self, file_path: Path, rel: str, source: str) -> list[Finding]:
+    def _detect_todos(self, file_path: Path, rel: str, source: str) -> list[Finding]:
         """Find TODO and FIXME comments."""
         findings = []
         lines = source.splitlines()
@@ -283,7 +286,7 @@ class Scanner:
     # Check: Complex Functions
     # -----------------------------------------------------------------------
 
-    def _check_complex_functions(
+    def _detect_complex_functions(
         self, file_path: Path, rel: str, source: str, lang: str | None
     ) -> list[Finding]:
         """Find functions that are suspiciously long (>60 lines)."""

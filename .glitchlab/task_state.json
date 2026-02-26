@@ -1,0 +1,141 @@
+{
+  "task_id": "refactor-scanner-001",
+  "objective": "Break down the _scan_file method in scanner.py into smaller, private helper methods to reduce cognitive complexity.",
+  "mode": "maintenance",
+  "risk_level": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Refactor `_scan_file` in scanner.py by extracting specific detection logic (e.g., TODOs, missing docs) into private helper methods like `_detect_todos` and `_detect_missing_docs`.",
+      "files": [
+        "glitchlab/auditor/scanner.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/auditor/scanner.py",
+    "glitchlab/auditor/scanner.py"
+  ],
+  "estimated_complexity": "small",
+  "requires_core_change": false,
+  "files_modified": [
+    "glitchlab/auditor/scanner.py"
+  ],
+  "files_created": [],
+  "tests_added": [],
+  "commit_message": "refactor(scanner): extract _scan_file and rename detection methods",
+  "implementation_summary": "Refactored the scanner to extract the file scanning loop body into a private `_scan_file` method and renamed the check methods to `_detect_*` to reduce cognitive complexity.",
+  "test_passing": false,
+  "debug_attempts": 1,
+  "last_error": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0\nrootdir: /home/adjective-dev/Desktop/glitchlab-soapbox\nconfigfile: pyproject.toml\nplugins: anyio-4.12.1\ncollected 0 items\n\n============================ no tests ran in 0.01s =============================\n",
+  "previous_fixes": [
+    {
+      "diagnosis": "Failed to parse debugger output",
+      "root_cause": "Unterminated string starting at: line 9 column 20 (char 388)",
+      "fix": {
+        "changes": []
+      },
+      "confidence": "low",
+      "should_retry": false,
+      "parse_error": true,
+      "_agent": "debugger",
+      "_model": "gemini/gemini-3.1-pro-preview",
+      "_tokens": 7590,
+      "_cost": 0.12709600000000001
+    }
+  ],
+  "security_verdict": "pass",
+  "version_bump": "patch",
+  "changelog_entry": "### Fixed\n- Internal refactoring of the `scanner.py` logic to improve maintainability and reduce cognitive complexity.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T02:23:29.074964+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-scanner-001"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T02:23:29.079479+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "total_files": 24,
+        "languages": {
+          ".py": 22
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T02:23:29.142590+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T02:23:36.940681+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "steps": 1,
+        "risk": "medium"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T02:24:19.496343+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "changes": 1,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_failed",
+      "timestamp": "2026-02-26T02:24:19.669515+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T02:24:59.726004+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T02:25:01.459499+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "bump": "patch"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T02:25:04.820446+00:00",
+      "task_id": "refactor-scanner-001",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 1
+      }
+    }
+  ]
+}
