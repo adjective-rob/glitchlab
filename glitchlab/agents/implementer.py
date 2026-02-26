@@ -123,47 +123,46 @@ IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncat
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
         content = response.content.strip()
         
-        # 1. Strip markdown fences
+        # Phase 1: Markdown Cleaning
         content = re.sub(r"^```json\s*", "", content, flags=re.MULTILINE)
         content = re.sub(r"^```\s*", "", content, flags=re.MULTILINE)
         content = content.strip("`").strip()
 
-        # 2. Try the "Happy Path" (Valid JSON)
+        # Phase 2: Standard Parse
         try:
             raw_json = json.loads(content)
-            # Ensure description exists to satisfy Pydantic if you haven't added the default yet
+            # Default missing descriptions to prevent Pydantic heart-attacks
             if "changes" in raw_json:
                 for c in raw_json["changes"]:
-                    if "description" not in c: c["description"] = "auto-change"
-            
+                    if not c.get("description"): c["description"] = "automatic update"
             return ImplementationResult(**raw_json).model_dump()
+            
         except Exception as e:
-            logger.warning(f"[IMPLEMENTER] JSON parsing failed, attempting surgical extraction: {e}")
+            logger.warning(f"[IMPLEMENTER] JSON parse failed ({e}). Running Emergency Extraction...")
 
-            # 3. THE "FORCE CREATE" EXTRACTION
-            # We look for the file and the content using a pattern that tolerates broken JSON syntax
-            file_match = re.search(r'"file":\s*"([^"]+)"', content)
+            # Phase 3: The "Fucking Create The File" Regex
+            # We look for filename and content even if the JSON is a total wreck
+            f_match = re.search(r'"file":\s*"([^"]+)"', content)
+            # This captures everything between the first "content": " and the final " 
+            # while handling escaped newlines.
+            c_match = re.search(r'"content":\s*"(.*)"', content, re.DOTALL)
             
-            # This regex captures the largest possible block between quotes after "content":
-            # It handles escaped quotes and internal newlines.
-            code_match = re.search(r'"content":\s*"(.*)"', content, re.DOTALL)
-            
-            if file_match and code_match:
-                filename = file_match.group(1)
-                # Recover newlines and quotes that the LLM may have failed to escape
-                extracted_code = code_match.group(1).replace("\\n", "\n").replace('\\"', '"')
+            if f_match and c_match:
+                filename = f_match.group(1)
+                # Repair common LLM encoding fails
+                code = c_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
                 
-                logger.info(f"[IMPLEMENTER] Recovered {filename} creation logic via Regex fallback.")
+                logger.info(f"[IMPLEMENTER] SURGERY SUCCESS: Extracted {filename} from broken JSON.")
                 return {
                     "changes": [{
                         "file": filename,
-                        "action": "create",
-                        "content": extracted_code,
+                        "action": "create", # Force CREATE so Controller runs mkdir
+                        "content": code,
                         "description": "Recovered via Emergency Extraction"
                     }],
                     "tests_added": [],
-                    "commit_message": "feat: auto-creation via recovery",
-                    "summary": "LLM output was malformed but the code was successfully extracted."
+                    "commit_message": "feat: auto-creation of audit logger",
+                    "summary": "Recovered file content from malformed LLM response."
                 }
             
             return self._fallback_result(content, str(e))
