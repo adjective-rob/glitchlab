@@ -1,0 +1,126 @@
+{
+  "task_id": "infra-002-plan-validation",
+  "objective": "Implement a self-review step in the PlannerAgent to validate plans against user constraints.",
+  "mode": "evolution",
+  "risk_level": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Modify PlannerAgent to include a self-review step that validates the generated plan against user constraints and logs the verification.",
+      "files": [
+        "glitchlab/agents/planner.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/agents/planner.py",
+    "glitchlab/agents/planner.py"
+  ],
+  "estimated_complexity": "small",
+  "requires_core_change": false,
+  "files_modified": [
+    "glitchlab/agents/planner.py"
+  ],
+  "files_created": [],
+  "tests_added": [],
+  "commit_message": "feat(planner): add self-review step to validate plans against user constraints",
+  "implementation_summary": "Updated the PlannerAgent to include a self-review step by adding a `self_review_notes` field to the `ExecutionPlan` schema and prompt, ensuring the LLM validates its plan against user constraints and logs the verification.",
+  "test_passing": true,
+  "debug_attempts": 0,
+  "last_error": "",
+  "previous_fixes": [],
+  "security_verdict": "pass",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- **PlannerAgent**: Integrated a self-review validation step. The agent now generates `self_review_notes` to verify plans against user-provided constraints before execution.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T04:44:51.556431+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-002-plan-validation"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T04:44:51.560246+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "total_files": 28,
+        "languages": {
+          ".py": 26
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T04:44:51.625159+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T04:44:58.150599+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "steps": 1,
+        "risk": "low"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T04:45:20.971796+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "changes": 1,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_passed",
+      "timestamp": "2026-02-26T04:45:21.140567+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T04:45:23.108829+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T04:45:25.619843+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "bump": "minor"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T04:45:28.872770+00:00",
+      "task_id": "infra-002-plan-validation",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 1
+      }
+    }
+  ]
+}
