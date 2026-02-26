@@ -67,6 +67,11 @@ Rules:
 - block = must fix before PR. warn = should fix. pass = clean.
 """
 
+    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+        """Override run to enforce JSON mode at the API level."""
+        kwargs["response_format"] = {"type": "json_object"}
+        return super().run(context, **kwargs)
+
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         # v2: previous_output is TaskState.to_agent_summary("security")
         # Contains: task_id, objective, mode, risk_level,
