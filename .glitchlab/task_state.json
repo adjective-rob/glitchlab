@@ -1,42 +1,55 @@
 {
-  "task_id": "infra-013-audit-logger",
-  "objective": "Implement an Audit Logger that subscribes to the Event Bus and writes events to an append-only JSONL file.",
+  "task_id": "infra-014-performance-auditor",
+  "objective": "Implement a Performance Auditor agent that checks for I/O inefficiencies and resource leaks.",
   "mode": "evolution",
-  "risk_level": "low",
+  "risk_level": "medium",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Create AuditLogger class that subscribes to EventBus and appends to a JSONL file.",
+      "description": "Create the PerformanceAuditorAgent class inheriting from BaseAgent, configured to use gemini-3.5-flash for checking I/O inefficiencies and resource leaks.",
       "files": [
-        "glitchlab/auditor/logger.py"
+        "glitchlab/agents/performance_auditor.py"
       ],
       "action": "create",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 2,
+      "description": "Export the new PerformanceAuditorAgent in the agents module initialization file.",
+      "files": [
+        "glitchlab/agents/__init__.py"
+      ],
+      "action": "modify",
       "status": "pending",
       "outcome": ""
     }
   ],
   "files_in_scope": [
-    "glitchlab/auditor/logger.py",
-    "glitchlab/auditor/logger.py"
+    "glitchlab/agents/performance_auditor.py",
+    "glitchlab/agents/__init__.py",
+    "glitchlab/agents/performance_auditor.py",
+    "glitchlab/agents/__init__.py"
   ],
   "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "audit_logger.py"
+    "glitchlab/agents/performance_auditor.py",
+    "glitchlab/agents/__init__.py"
   ],
   "files_created": [
-    "audit_logger.py"
+    "glitchlab/agents/performance_auditor.py"
   ],
   "tests_added": [],
-  "commit_message": "feat: implement AuditLogger for append-only JSONL event logging",
-  "implementation_summary": "Created AuditLogger class that subscribes to an EventBus and appends events to a JSONL file.",
+  "commit_message": "Add PerformanceAuditorAgent to check for I/O inefficiencies and resource leaks",
+  "implementation_summary": "Implemented PerformanceAuditorAgent and exported it in the agents module.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "warn",
+  "security_verdict": "pass",
   "version_bump": "minor",
-  "changelog_entry": "### Added\n- **Infrastructure**: Introduced `AuditLogger` to automatically capture and persist system events to an append-only JSONL file for security and compliance tracking.",
+  "changelog_entry": "### Added\n- Introduced `PerformanceAuditorAgent` to monitor and identify I/O inefficiencies and resource leaks within the system.",
   "completed_phases": [
     "plan",
     "implement",
@@ -48,80 +61,80 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T23:18:54.404832+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:38:30.990168+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-013-audit-logger"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-014-performance-auditor"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T23:18:54.411286+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:38:30.994861+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "total_files": 31,
+        "total_files": 32,
         "languages": {
-          ".py": 29
+          ".py": 30
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T23:18:54.476646+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:38:31.059372+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T23:19:04.323241+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:38:42.655314+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "steps": 1,
+        "steps": 2,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T23:19:17.285910+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:39:04.487024+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "changes": 1,
+        "changes": 2,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T23:19:17.509904+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:39:04.716323+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T23:19:21.081467+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:39:07.829967+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "verdict": "warn"
+        "verdict": "pass"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T23:19:23.225328+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:39:23.315155+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
         "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T23:19:37.853193+00:00",
-      "task_id": "infra-013-audit-logger",
+      "timestamp": "2026-02-26T23:39:27.595655+00:00",
+      "task_id": "infra-014-performance-auditor",
       "data": {
-        "wrote_adr": false,
-        "doc_updates": 1
+        "wrote_adr": true,
+        "doc_updates": 2
       }
     }
   ]
