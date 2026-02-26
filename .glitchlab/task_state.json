@@ -1,0 +1,159 @@
+{
+  "task_id": "cli-version-001",
+  "objective": "Add a --version flag to the main Typer app that prints the current version from glitchlab.__version__",
+  "mode": "evolution",
+  "risk_level": "low",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Import __version__ from glitchlab, create a version_callback function that prints the version and exits, and add a --version option to the main Typer app callback.",
+      "files": [
+        "glitchlab/cli.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/cli.py",
+    "glitchlab/cli.py"
+  ],
+  "estimated_complexity": "trivial",
+  "requires_core_change": false,
+  "files_modified": [
+    "glitchlab/cli.py"
+  ],
+  "files_created": [],
+  "tests_added": [],
+  "commit_message": "feat(cli): add --version flag to main Typer app",
+  "implementation_summary": "Added a --version flag to the main Typer app that prints the current version from glitchlab.__version__.",
+  "test_passing": true,
+  "debug_attempts": 1,
+  "last_error": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0\nrootdir: /home/adjective-dev/Desktop/glitchlab-soapbox\nconfigfile: pyproject.toml\nplugins: anyio-4.12.1\ncollected 0 items\n\n============================ no tests ran in 0.01s =============================\n",
+  "previous_fixes": [
+    {
+      "diagnosis": "pytest fails with exit code 5 when no tests are collected. The --version flag is already implemented in glitchlab/cli.py, but there are no tests to verify it, causing the CI to fail.",
+      "root_cause": "Missing test file for the CLI, resulting in pytest collecting 0 items and exiting with an error code.",
+      "fix": {
+        "changes": [
+          {
+            "file": "tests/test_cli.py",
+            "action": "create",
+            "content": "from typer.testing import CliRunner\nfrom glitchlab.cli import app\nfrom glitchlab import __version__\n\nrunner = CliRunner()\n\ndef test_version():\n    result = runner.invoke(app, [\"--version\"])\n    assert result.exit_code == 0\n    assert f\"GLITCHLAB v{__version__}\" in result.stdout\n",
+            "description": "Add test for the --version flag to ensure pytest collects at least one test and passes."
+          }
+        ]
+      },
+      "confidence": "high",
+      "should_retry": true,
+      "notes": "Created tests/test_cli.py to test the existing --version flag and satisfy pytest.",
+      "_agent": "debugger",
+      "_model": "gemini/gemini-3.1-pro-preview",
+      "_tokens": 9386,
+      "_cost": 0.147874,
+      "_apply_result": [
+        "CREATE tests/test_cli.py"
+      ]
+    }
+  ],
+  "security_verdict": "pass",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- Introduced `--version` flag to the CLI to display the current version of GLITCHLAB.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T02:09:03.595102+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/cli-version-001"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T02:09:03.599673+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "total_files": 24,
+        "languages": {
+          ".py": 22
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T02:09:03.665180+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T02:09:10.991469+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "steps": 1,
+        "risk": "low"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T02:10:20.055622+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "changes": 1,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_failed",
+      "timestamp": "2026-02-26T02:10:20.227843+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "tests_passed",
+      "timestamp": "2026-02-26T02:10:39.586504+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "attempt": 2
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T02:10:40.861421+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T02:10:42.480981+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "bump": "minor"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T02:10:45.209789+00:00",
+      "task_id": "cli-version-001",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 1
+      }
+    }
+  ]
+}

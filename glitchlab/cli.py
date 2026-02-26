@@ -44,6 +44,26 @@ app = typer.Typer(
 console = Console()
 
 
+def version_callback(value: bool):
+    if value:
+        console.print(f"GLITCHLAB v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    """GLITCHLAB — The Agentic Dev Engine."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Banner
 # ---------------------------------------------------------------------------
@@ -574,39 +594,3 @@ def _configure_logging(verbose: bool) -> None:
 
 if __name__ == "__main__":
     app()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
