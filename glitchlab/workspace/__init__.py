@@ -66,9 +66,15 @@ class Workspace:
         return self._worktree_git("diff", "--cached", capture=True, check=False)
 
     def diff_stat(self) -> str:
-        """Get the diff stat of all changes in the worktree."""
+        """Get the diff stat of changes (staged or latest commit)."""
         self._worktree_git("add", "-A", check=False)
-        return self._worktree_git("diff", "--cached", "--stat", capture=True, check=False)
+        diff = self._worktree_git("diff", "--cached", "--stat", capture=True, check=False)
+        
+        if not diff.strip():
+            # If already committed, show the stats for the commit we just made
+            diff = self._worktree_git("show", "--stat", "--format=", "HEAD", capture=True, check=False)
+            
+        return diff.strip()
 
     def commit(self, message: str, add_all: bool = True) -> str | None:
         """Stage and commit changes inside the worktree."""
