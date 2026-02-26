@@ -131,37 +131,36 @@ IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncat
         # Phase 2: Standard Parse
         try:
             raw_json = json.loads(content)
-            # Default missing descriptions to prevent Pydantic heart-attacks
+            # Fix schema quirks on the fly
             if "changes" in raw_json:
                 for c in raw_json["changes"]:
                     if not c.get("description"): c["description"] = "automatic update"
+            if "tests_added" in raw_json and isinstance(raw_json["tests_added"], list):
+                raw_json["tests_added"] = [t for t in raw_json["tests_added"] if isinstance(t, dict)]
+                
             return ImplementationResult(**raw_json).model_dump()
             
         except Exception as e:
             logger.warning(f"[IMPLEMENTER] JSON parse failed ({e}). Running Emergency Extraction...")
 
-            # Phase 3: The "Fucking Create The File" Regex
-            # We look for filename and content even if the JSON is a total wreck
+            # Phase 3: The Surgical Extraction
             f_match = re.search(r'"file":\s*"([^"]+)"', content)
-            # This captures everything between the first "content": " and the final " 
-            # while handling escaped newlines.
             c_match = re.search(r'"content":\s*"(.*?)"(?=\s*[,}\n])', content, re.DOTALL)
             
             if f_match and c_match:
                 filename = f_match.group(1)
-                # Repair common LLM encoding fails
                 code = c_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
                 
                 logger.info(f"[IMPLEMENTER] SURGERY SUCCESS: Extracted {filename} from broken JSON.")
                 return {
                     "changes": [{
                         "file": filename,
-                        "action": "create", # Force CREATE so Controller runs mkdir
+                        "action": "create", 
                         "content": code,
                         "description": "Recovered via Emergency Extraction"
                     }],
                     "tests_added": [],
-                    "commit_message": "feat: auto-creation of audit logger",
+                    "commit_message": "feat: auto-creation via recovery",
                     "summary": "Recovered file content from malformed LLM response."
                 }
             
