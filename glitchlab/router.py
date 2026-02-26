@@ -42,18 +42,42 @@ class BudgetTracker:
 
     @property
     def tokens_remaining(self) -> int:
+        """Calculate the number of tokens remaining in the budget.
+
+        Returns:
+            int: The number of tokens remaining.
+        """
         return max(0, self.max_tokens - self.usage.total_tokens)
 
     @property
     def dollars_remaining(self) -> float:
+        """Calculate the number of dollars remaining in the budget.
+
+        Returns:
+            float: The number of dollars remaining.
+        """
         return max(0.0, self.max_dollars - self.usage.estimated_cost)
 
     @property
     def budget_exceeded(self) -> bool:
+        """Check if the budget has been exceeded.
+
+        Returns:
+            bool: True if the budget is exceeded, False otherwise.
+        """
         return self.usage.total_tokens >= self.max_tokens or self.usage.estimated_cost >= self.max_dollars
 
     def record(self, response: Any) -> None:
-        """Record usage from a LiteLLM response."""
+        """Record usage from a LiteLLM response.
+
+        Extracts token usage from the response object and updates the internal
+        counters for prompt, completion, and total tokens. It also calculates
+        the estimated cost using LiteLLM's cost calculator and adds it to the
+        total estimated cost.
+
+        Args:
+            response (Any): The response object returned by LiteLLM.
+        """
         usage = getattr(response, "usage", None)
         if usage:
             self.usage.prompt_tokens += getattr(usage, "prompt_tokens", 0)
@@ -69,6 +93,12 @@ class BudgetTracker:
         self.usage.call_count += 1
 
     def summary(self) -> dict:
+        """Generate a summary of current budget usage.
+
+        Returns:
+            dict: A dictionary containing total tokens used, estimated cost,
+                call count, tokens remaining, and dollars remaining.
+        """
         return {
             "total_tokens": self.usage.total_tokens,
             "estimated_cost": round(self.usage.estimated_cost, 4),
@@ -164,7 +194,17 @@ class Router:
         litellm.suppress_debug_info = True
 
     def resolve_model(self, role: str) -> str:
-        """Resolve agent role → model string."""
+        """Resolve agent role to a specific model string.
+
+        Args:
+            role (str): The agent role name (e.g., 'planner', 'implementer').
+
+        Returns:
+            str: The model string associated with the given role.
+
+        Raises:
+            ValueError: If the provided role is not found in the role-to-model mapping.
+        """
         model = self._role_model_map.get(role)
         if not model:
             raise ValueError(f"Unknown agent role: {role}. Known: {list(self._role_model_map)}")
@@ -179,15 +219,26 @@ class Router:
         max_tokens: int = 4096,
         response_format: dict | None = None,
     ) -> RouterResponse:
-        """
-        Send a completion request through LiteLLM.
+        """Send a completion request through LiteLLM.
+
+        Routes the request to the appropriate model based on the agent role.
+        It enforces budget constraints before making the call. After the call,
+        it records the token usage and calculates the cost using the BudgetTracker.
 
         Args:
-            role: Agent role name (planner, implementer, etc.)
-            messages: Standard chat messages [{"role": ..., "content": ...}]
-            temperature: Sampling temperature (dropped automatically for models that don't support it)
-            max_tokens: Max response tokens
-            response_format: Optional JSON schema for structured output
+            role (str): Agent role name (planner, implementer, etc.).
+            messages (list[dict[str, str]]): Standard chat messages [{"role": ..., "content": ...}].
+            temperature (float, optional): Sampling temperature. Defaults to 0.2.
+                Dropped automatically for models that don't support it.
+            max_tokens (int, optional): Max response tokens. Defaults to 4096.
+            response_format (dict | None, optional): Optional JSON schema for structured output. Defaults to None.
+
+        Returns:
+            RouterResponse: A structured response containing the content, model used,
+                tokens used, estimated cost, and latency.
+
+        Raises:
+            BudgetExceededError: If the budget limits for tokens or dollars are exceeded.
         """
         if self.budget.budget_exceeded:
             raise BudgetExceededError(

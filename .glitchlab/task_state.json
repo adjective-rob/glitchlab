@@ -1,0 +1,173 @@
+{
+  "task_id": "doc-repair-001",
+  "objective": "Add Google-style docstrings to all public methods in glitchlab/router.py.",
+  "mode": "maintenance",
+  "risk_level": "low",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Add Google-style docstrings to all public methods in glitchlab/router.py, including Args, Returns, and Raises sections, and specifically detailing token counting and cost calculation logic.",
+      "files": [
+        "glitchlab/router.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    }
+  ],
+  "files_in_scope": [
+    "glitchlab/router.py",
+    "glitchlab/router.py"
+  ],
+  "estimated_complexity": "small",
+  "requires_core_change": false,
+  "files_modified": [
+    "glitchlab/router.py"
+  ],
+  "files_created": [],
+  "tests_added": [],
+  "commit_message": "docs(router): add Google-style docstrings to public methods",
+  "implementation_summary": "Added Google-style docstrings to public methods in glitchlab/router.py, detailing token counting and cost calculation logic.",
+  "test_passing": false,
+  "debug_attempts": 2,
+  "last_error": "============================= test session starts ==============================\nplatform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0\nrootdir: /home/adjective-dev/Desktop/glitchlab-soapbox\nconfigfile: pyproject.toml\nplugins: anyio-4.12.1\ncollected 0 items\n\n============================ no tests ran in 0.01s =============================\n",
+  "previous_fixes": [
+    {
+      "diagnosis": "The docstrings added previously included non-standard Google style elements like 'Args: None', 'Returns: None', and 'Raises: None'. Additionally, public properties (which are methods) were missing docstrings.",
+      "root_cause": "Incomplete and incorrectly formatted Google-style docstrings on public methods and properties.",
+      "fix": {
+        "changes": [
+          {
+            "file": "glitchlab/router.py",
+            "action": "modify",
+            "content": "\"\"\"\nGLITCHLAB Router — Vendor-Agnostic Model Abstraction\n\nRoutes agent calls through LiteLLM so agents never know\nwhich vendor is backing them. Handles budget tracking,\nretries, and structured logging.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport time\nfrom dataclasses import dataclass, field\nfrom typing import Any\n\nimport litellm\nfrom loguru import logger\nfrom pydantic import BaseModel\nfrom tenacity import retry, stop_after_attempt, wait_exponential\n\nfrom glitchlab.config_loader import GlitchLabConfig\n\n\n# ---------------------------------------------------------------------------\n# Usage Tracking\n# ---------------------------------------------------------------------------\n\n@dataclass\nclass UsageRecord:\n    prompt_tokens: int = 0\n    completion_tokens: int = 0\n    total_tokens: int = 0\n    estimated_cost: float = 0.0\n    call_count: int = 0\n\n\n@dataclass\nclass BudgetTracker:\n    \"\"\"Tracks token + dollar spend per task.\"\"\"\n    max_tokens: int = 150_000\n    max_dollars: float = 10.0\n    usage: UsageRecord = field(default_factory=UsageRecord)\n\n    @property\n    def tokens_remaining(self) -> int:\n        \"\"\"Calculate the number of tokens remaining in the budget.\n\n        Returns:\n            int: The number of tokens remaining.\n        \"\"\"\n        return max(0, self.max_tokens - self.usage.total_tokens)\n\n    @property\n    def dollars_remaining(self) -> float:\n        \"\"\"Calculate the number of dollars remaining in the budget.\n\n        Returns:\n            float: The number of dollars remaining.\n        \"\"\"\n        return max(0.0, self.max_dollars - self.usage.estimated_cost)\n\n    @property\n    def budget_exceeded(self) -> bool:\n        \"\"\"Check if the budget has been exceeded.\n\n        Returns:\n            bool: True if the budget is exceeded, False otherwise.\n        \"\"\"\n        return self.usage.total_tokens >= self.max_tokens or self.usage.estimated_cost >= self.max_dollars\n\n    def record(self, response: Any) -> None:\n        \"\"\"Record usage from a LiteLLM response.\n\n        Extracts token usage from the response object and updates the internal\n        counters for prompt, completion, and total tokens. It also calculates\n        the estimated cost using LiteLLM's cost calculator and adds it to the\n        total estimated cost.\n\n        Args:\n            response (Any): The response object returned by LiteLLM.\n        \"\"\"\n        usage = getattr(response, \"usage\", None)\n        if usage:\n            self.usage.prompt_tokens += getattr(usage, \"prompt_tokens\", 0)\n            self.usage.completion_tokens += getattr(usage, \"completion_tokens\", 0)\n            self.usage.total_tokens += getattr(usage, \"total_tokens\", 0)\n\n        try:\n            cost = litellm.completion_cost(completion_response=response)\n            self.usage.estimated_cost += cost\n        except Exception:\n            pass\n\n        self.usage.call_count += 1\n\n    def summary(self) -> dict:\n        \"\"\"Generate a summary of current budget usage.\n\n        Returns:\n            dict: A dictionary containing total tokens used, estimated cost,\n                call count, tokens remaining, and dollars remaining.\n        \"\"\"\n        return {\n            \"total_tokens\": self.usage.total_tokens,\n            \"estimated_cost\": round(self.usage.estimated_cost, 4),\n            \"call_count\": self.usage.call_count,\n            \"tokens_remaining\": self.tokens_remaining,\n            \"dollars_remaining\": round(self.dollars_remaining, 4),\n        }\n\n\n# ---------------------------------------------------------------------------\n# Model capability helpers\n# ---------------------------------------------------------------------------\n\ndef _is_gpt5_model(model: str) -> bool:\n    \"\"\"GPT-5 family models have restricted parameter support.\"\"\"\n    normalized = model.lower().replace(\"openai/\", \"\")\n    return normalized.startswith(\"gpt-5\")\n\n\ndef _is_o_series_model(model: str) -> bool:\n    \"\"\"OpenAI o-series reasoning models don't support temperature.\"\"\"\n    normalized = model.lower().replace(\"openai/\", \"\")\n    return normalized.startswith(\"o1\") or normalized.startswith(\"o3\") or normalized.startswith(\"o4\")\n\n\ndef _build_kwargs(\n    model: str,\n    messages: list[dict[str, str]],\n    temperature: float,\n    max_tokens: int,\n    response_format: dict | None,\n) -> dict[str, Any]:\n    \"\"\"\n    Build LiteLLM kwargs with per-model param filtering.\n    Different model families support different parameters.\n    \"\"\"\n    kwargs: dict[str, Any] = {\n        \"model\": model,\n        \"messages\": messages,\n        \"max_tokens\": max_tokens,\n    }\n\n    # GPT-5 and o-series models don't support arbitrary temperature\n    if not _is_gpt5_model(model) and not _is_o_series_model(model):\n        kwargs[\"temperature\"] = temperature\n\n    if response_format:\n        kwargs[\"response_format\"] = response_format\n\n    return kwargs\n\n\n# ---------------------------------------------------------------------------\n# Router\n# ---------------------------------------------------------------------------\n\nclass AgentMessage(BaseModel):\n    role: str  # \"system\" | \"user\" | \"assistant\"\n    content: str\n\n\nclass RouterResponse(BaseModel):\n    content: str\n    model: str\n    tokens_used: int = 0\n    cost: float = 0.0\n    latency_ms: int = 0\n\n\nclass Router:\n    \"\"\"\n    Vendor-agnostic model router.\n\n    Agents call `router.complete(role, messages)`.\n    The router resolves the model, enforces budget, and returns structured output.\n    \"\"\"\n\n    def __init__(self, config: GlitchLabConfig):\n        self.config = config\n        self.budget = BudgetTracker(\n            max_tokens=config.limits.max_tokens_per_task,\n            max_dollars=config.limits.max_dollars_per_task,\n        )\n        self._role_model_map = {\n            \"planner\": config.routing.planner,\n            \"implementer\": config.routing.implementer,\n            \"debugger\": config.routing.debugger,\n            \"security\": config.routing.security,\n            \"release\": config.routing.release,\n            \"archivist\": config.routing.archivist,\n        }\n\n        litellm.suppress_debug_info = True\n\n    def resolve_model(self, role: str) -> str:\n        \"\"\"Resolve agent role to a specific model string.\n\n        Args:\n            role (str): The agent role name (e.g., 'planner', 'implementer').\n\n        Returns:\n            str: The model string associated with the given role.\n\n        Raises:\n            ValueError: If the provided role is not found in the role-to-model mapping.\n        \"\"\"\n        model = self._role_model_map.get(role)\n        if not model:\n            raise ValueError(f\"Unknown agent role: {role}. Known: {list(self._role_model_map)}\")\n        return model\n\n    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))\n    def complete(\n        self,\n        role: str,\n        messages: list[dict[str, str]],\n        temperature: float = 0.2,\n        max_tokens: int = 4096,\n        response_format: dict | None = None,\n    ) -> RouterResponse:\n        \"\"\"Send a completion request through LiteLLM.\n\n        Routes the request to the appropriate model based on the agent role.\n        It enforces budget constraints before making the call. After the call,\n        it records the token usage and calculates the cost using the BudgetTracker.\n\n        Args:\n            role (str): Agent role name (planner, implementer, etc.).\n            messages (list[dict[str, str]]): Standard chat messages [{\"role\": ..., \"content\": ...}].\n            temperature (float, optional): Sampling temperature. Defaults to 0.2.\n                Dropped automatically for models that don't support it.\n            max_tokens (int, optional): Max response tokens. Defaults to 4096.\n            response_format (dict | None, optional): Optional JSON schema for structured output. Defaults to None.\n\n        Returns:\n            RouterResponse: A structured response containing the content, model used,\n                tokens used, estimated cost, and latency.\n\n        Raises:\n            BudgetExceededError: If the budget limits for tokens or dollars are exceeded.\n        \"\"\"\n        if self.budget.budget_exceeded:\n            raise BudgetExceededError(\n                f\"Budget exceeded: {self.budget.summary()}\"\n            )\n\n        model = self.resolve_model(role)\n        start = time.monotonic()\n\n        logger.debug(f\"[ROUTER] {role} → {model} ({len(messages)} messages)\")\n\n        kwargs = _build_kwargs(model, messages, temperature, max_tokens, response_format)\n\n        response = litellm.completion(**kwargs)\n        elapsed_ms = int((time.monotonic() - start) * 1000)\n\n        self.budget.record(response)\n\n        content = response.choices[0].message.content or \"\"\n\n        logger.debug(\n            f\"[ROUTER] {role} complete — \"\n            f\"{self.budget.usage.total_tokens} tokens, \"\n            f\"${self.budget.usage.estimated_cost:.4f}, \"\n            f\"{elapsed_ms}ms\"\n        )\n\n        return RouterResponse(\n            content=content,\n            model=model,\n            tokens_used=getattr(response.usage, \"total_tokens\", 0),\n            cost=self.budget.usage.estimated_cost,\n            latency_ms=elapsed_ms,\n        )\n\n\nclass BudgetExceededError(Exception):\n    pass\n",
+            "description": "Add missing Google-style docstrings to public properties and remove non-standard 'Args: None' and 'Raises: None' from existing docstrings."
+          }
+        ]
+      },
+      "confidence": "high",
+      "should_retry": true,
+      "notes": "Added docstrings to properties and cleaned up non-standard Google style elements.",
+      "_agent": "debugger",
+      "_model": "gemini/gemini-3.1-pro-preview",
+      "_tokens": 6904,
+      "_cost": 0.109462,
+      "_apply_result": [
+        "MODIFY glitchlab/router.py"
+      ]
+    },
+    {
+      "diagnosis": "Failed to parse debugger output",
+      "root_cause": "Unterminated string starting at: line 9 column 20 (char 377)",
+      "fix": {
+        "changes": []
+      },
+      "confidence": "low",
+      "should_retry": false,
+      "parse_error": true,
+      "_agent": "debugger",
+      "_model": "gemini/gemini-3.1-pro-preview",
+      "_tokens": 7241,
+      "_cost": 0.164864
+    }
+  ],
+  "security_verdict": "pass",
+  "version_bump": "none",
+  "changelog_entry": "### Documentation\n- Added comprehensive Google-style docstrings to public methods in `glitchlab/router.py` covering token counting and cost calculation logic.",
+  "completed_phases": [
+    "plan",
+    "implement",
+    "test",
+    "security",
+    "release",
+    "commit"
+  ],
+  "events": [
+    {
+      "type": "workspace_created",
+      "timestamp": "2026-02-26T02:23:24.827529+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/doc-repair-001"
+      }
+    },
+    {
+      "type": "repo_indexed",
+      "timestamp": "2026-02-26T02:23:24.831063+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "total_files": 24,
+        "languages": {
+          ".py": 22
+        }
+      }
+    },
+    {
+      "type": "prelude_constraints_loaded",
+      "timestamp": "2026-02-26T02:23:24.892950+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "count": 0
+      }
+    },
+    {
+      "type": "plan_created",
+      "timestamp": "2026-02-26T02:23:32.499416+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "steps": 1,
+        "risk": "low"
+      }
+    },
+    {
+      "type": "implementation_created",
+      "timestamp": "2026-02-26T02:24:06.083494+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "changes": 1,
+        "tests": 0
+      }
+    },
+    {
+      "type": "tests_failed",
+      "timestamp": "2026-02-26T02:24:06.256303+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "attempt": 1
+      }
+    },
+    {
+      "type": "tests_failed",
+      "timestamp": "2026-02-26T02:24:37.432170+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "attempt": 2
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-02-26T02:25:19.809547+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "verdict": "pass"
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-02-26T02:25:21.219494+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "bump": "none"
+      }
+    },
+    {
+      "type": "archivist_completed",
+      "timestamp": "2026-02-26T02:25:24.057574+00:00",
+      "task_id": "doc-repair-001",
+      "data": {
+        "wrote_adr": true,
+        "doc_updates": 1
+      }
+    }
+  ]
+}
