@@ -1,0 +1,10 @@
+id: infra-007-fix-prelude
+objective: "Fix the [PRELUDE] Update failed error to ensure the Planner can load recent failure patterns."
+steps:
+  - "Identify why the Prelude update is failing in 'glitchlab/controller.py' or the relevant agent module."
+  - "Verify the path and permissions for the failure pattern storage."
+  - "Ensure the 'Update failed' message provides an actual error trace for better debugging."
+constraints:
+  - "Do not break the fallback mechanism that allows the task to continue even if Prelude fails."
+mode: evolution
+risk: low

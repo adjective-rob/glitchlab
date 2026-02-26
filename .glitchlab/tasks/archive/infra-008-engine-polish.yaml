@@ -1,0 +1,12 @@
+id: infra-008-engine-polish
+objective: "Restore engine memory (Prelude) and streamline the onboarding flow (Universal Init)."
+steps:
+  - "Fix 'glitchlab/controller.py' to ensure Prelude updates succeed without path/permission errors."
+  - "Update 'glitchlab/cli.py' to make the 'repo' argument in 'init' default to the current directory ('.')."
+  - "Add a safety check to 'init' that prevents accidental overwriting if '.glitchlab' already exists."
+  - "Ensure the top-level CLI help docstring matches the actual command definitions."
+constraints:
+  - "Maintain backward compatibility for users who provide an explicit path to 'init'."
+  - "Ensure the 'Update failed' error is replaced with meaningful logging if it fails again."
+mode: evolution
+risk: low

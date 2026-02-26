@@ -415,7 +415,7 @@ class Task(BaseModel):
     def from_interactive(cls, objective: str) -> "Task":
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         return cls(
-            task_id=f"interactive-{ts}",
+            id=f"interactive-{ts}", # Changed from task_id to id
             objective=objective,
             source="interactive",
         )
