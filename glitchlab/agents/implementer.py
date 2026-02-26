@@ -145,7 +145,7 @@ IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncat
             f_match = re.search(r'"file":\s*"([^"]+)"', content)
             # This captures everything between the first "content": " and the final " 
             # while handling escaped newlines.
-            c_match = re.search(r'"content":\s*"(.*)"', content, re.DOTALL)
+            c_match = re.search(r'"content":\s*"(.*?)"(?=\s*[,}\n])', content, re.DOTALL)
             
             if f_match and c_match:
                 filename = f_match.group(1)
