@@ -1,14 +1,24 @@
 {
-  "task_id": "infra-003-sync-guard",
-  "objective": "Add a remote-sync check to the Execution Guard.",
+  "task_id": "infra-001-versioning",
+  "objective": "Centralize the version string and expose it to the CLI.",
   "mode": "evolution",
-  "risk_level": "high",
+  "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Add a remote-sync check function to the controller that verifies if the local branch is behind the remote branch using git commands, and raises an alert/exception if it is out of sync.",
+      "description": "Define the __version__ string centrally in the package initialization file.",
       "files": [
-        "glitchlab/controller.py"
+        "glitchlab/__init__.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 2,
+      "description": "Import the version string and implement a Typer callback with a --version flag to print the version and exit.",
+      "files": [
+        "glitchlab/cli.py"
       ],
       "action": "modify",
       "status": "pending",
@@ -16,25 +26,27 @@
     }
   ],
   "files_in_scope": [
-    "glitchlab/controller.py",
-    "glitchlab/controller.py"
+    "glitchlab/__init__.py",
+    "glitchlab/cli.py",
+    "glitchlab/__init__.py",
+    "glitchlab/cli.py"
   ],
   "estimated_complexity": "small",
-  "requires_core_change": true,
+  "requires_core_change": false,
   "files_modified": [
-    "glitchlab/controller.py"
+    "glitchlab/cli.py"
   ],
   "files_created": [],
   "tests_added": [],
-  "commit_message": "feat: add remote-sync check to Execution Guard",
-  "implementation_summary": "Added a check to ensure the local branch is not behind the remote branch before executing tasks.",
+  "commit_message": "feat(cli): add --version flag to expose centralized version string",
+  "implementation_summary": "Implemented a Typer callback to expose the centralized `__version__` string via a `--version` CLI flag.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "warn",
+  "security_verdict": "pass",
   "version_bump": "minor",
-  "changelog_entry": "### Added\n- **Execution Guard**: Implemented a remote-sync validation check to prevent task execution when the local branch is behind the remote origin.",
+  "changelog_entry": "### Added\n- Introduced `--version` flag to the CLI to display the current application version.",
   "completed_phases": [
     "plan",
     "implement",
@@ -46,16 +58,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T04:45:30.668461+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:16.937045+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-003-sync-guard"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-001-versioning"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T04:45:30.672291+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:16.941374+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "total_files": 28,
         "languages": {
@@ -65,25 +77,25 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T04:45:30.733170+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:17.004377+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T04:45:39.255211+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:27.647897+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
-        "steps": 1,
-        "risk": "medium"
+        "steps": 2,
+        "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T04:45:56.979918+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:42.255658+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "changes": 1,
         "tests": 0
@@ -91,35 +103,35 @@
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T04:45:57.146351+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:42.420469+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T04:46:00.154034+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:43.924430+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
-        "verdict": "warn"
+        "verdict": "pass"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T04:46:02.438298+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:45.897599+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T04:46:06.120752+00:00",
-      "task_id": "infra-003-sync-guard",
+      "timestamp": "2026-02-26T04:44:49.391905+00:00",
+      "task_id": "infra-001-versioning",
       "data": {
         "wrote_adr": true,
-        "doc_updates": 1
+        "doc_updates": 2
       }
     }
   ]

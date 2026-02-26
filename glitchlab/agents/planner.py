@@ -42,6 +42,7 @@ class ExecutionPlan(BaseModel):
     estimated_complexity: Literal["trivial", "small", "medium", "large"]
     dependencies_affected: bool
     public_api_changed: bool
+    self_review_notes: str
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +75,8 @@ Output schema:
   "test_strategy": ["What tests to add or run"],
   "estimated_complexity": "trivial|small|medium|large",
   "dependencies_affected": false,
-  "public_api_changed": false
+  "public_api_changed": false,
+  "self_review_notes": "Verification of plan against user constraints"
 }
 
 Rules:
@@ -161,5 +163,7 @@ Produce your execution plan as JSON."""
             f"risk={plan.get('risk_level', '?')}, "
             f"core_change={plan.get('requires_core_change', False)}"
         )
+        if "self_review_notes" in plan:
+            logger.info(f"[ZAP] Self-review: {plan['self_review_notes']}")
 
         return plan
