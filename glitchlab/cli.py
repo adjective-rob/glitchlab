@@ -26,7 +26,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from glitchlab import __codename__, __tagline__, __version__
+from glitchlab.identity import __codename__, __tagline__, __version__, BANNER
 from glitchlab.config_loader import load_config, validate_api_keys
 from glitchlab.controller import Controller, Task
 from glitchlab.history import TaskHistory
@@ -47,18 +47,28 @@ app = typer.Typer(
 console = Console()
 
 
+def version_callback(value: bool):
+    if value:
+        console.print(f"{__codename__} v{__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Banner
 # ---------------------------------------------------------------------------
-
-BANNER = r"""
-   ▄████  ██▓     ██▓▄▄▄█████▓ ▄████▄   ██░ ██  ██▓    ▄▄▄       ▄▄▄▄
-  ██▒ ▀█▒▓██▒    ▓██▒▓  ██▒ ▓▒▒██▀ ▀█  ▓██░ ██▒▓██▒   ▒████▄    ▓█████▄
- ▒██░▄▄▄░▒██░    ▒██▒▒ ▓██░ ▒░▒▓█    ▄ ▒██▀▀██░▒██░   ▒██  ▀█▄  ▒██▒ ▄██
- ░▓█  ██▓▒██░    ░██░░ ▓██▓ ░ ▒▓▓▄ ▄██▒░▓█ ░██ ▒██░   ░██▄▄▄▄██ ▒██░█▀
- ░▒▓███▀▒░██████▒░██░  ▒██▒ ░ ▒ ▓███▀ ░░▓█▒░██▓░██████▒▓█   ▓██▒░▓█  ▀█▓
-  ░▒   ▒ ░ ▒░▓  ░░▓    ▒ ░░   ░ ░▒ ▒  ░ ▒ ░░▒░▒░ ▒░▓  ░▒▒   ▓▒█░░▒▓███▀▒
-"""
 
 
 def _print_banner():
