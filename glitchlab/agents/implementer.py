@@ -31,29 +31,20 @@ class FileChange(BaseModel):
     """Schema for an individual file modification."""
     file: str
     action: Literal["modify", "create", "delete"]
-    # v2.1: Content is now optional if surgical_blocks are provided
-    content: str | None = Field(
-        default=None,
-        description="FULL file content. Required for 'create'. Optional for 'modify'."
-    )
-    surgical_blocks: list[SurgicalBlock] = Field(
-        default_factory=list,
-        description="List of Search & Replace blocks for surgical edits to large files."
-    )
-    description: str
-
+    content: str | None = Field(default=None)
+    surgical_blocks: list[SurgicalBlock] = Field(default_factory=list)
+    description: str = ""  # Make this optional
 
 class TestChange(BaseModel):
     file: str
     content: str
-    description: str
-
+    description: str = ""  # Make this optional
 
 class ImplementationResult(BaseModel):
     changes: list[FileChange] = Field(default_factory=list)
     tests_added: list[TestChange] = Field(default_factory=list)
-    commit_message: str
-    summary: str
+    commit_message: str = "chore: implementation update"  # Give a safe default
+    summary: str = "Implementation completed."
 
 
 # ---------------------------------------------------------------------------
@@ -132,11 +123,19 @@ IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncat
 
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
         content = response.content.strip()
+        
+        # 1. Strip markdown code fences if the model stubbornly included them
+        if content.startswith("```"):
+            lines = content.split("\n")
+            content = "\n".join(l for l in lines if not l.strip().startswith("```"))
+            
         try:
             raw_json = json.loads(content)
             validated_impl = ImplementationResult(**raw_json)
             result = validated_impl.model_dump()
         except Exception as e:
+            # 2. ACTUALLY LOG THE ERROR so we aren't blind!
+            logger.error(f"[IMPLEMENTER] Parsing failed: {e}\nContent snippet: {content[:300]}")
             result = self._fallback_result(content, str(e))
 
         result["_agent"] = "implementer"
