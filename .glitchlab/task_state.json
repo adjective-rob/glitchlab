@@ -1,50 +1,42 @@
 {
-  "task_id": "infra-012-event-bus",
-  "objective": "Implement a lightweight, agnostic Event Bus to decouple core system actions from external logging/cryptography.",
+  "task_id": "infra-013-audit-logger",
+  "objective": "Implement an Audit Logger that subscribes to the Event Bus and writes events to an append-only JSONL file.",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Implement a lightweight, agnostic Event Bus with publish and subscribe capabilities.",
+      "description": "Create AuditLogger class that subscribes to EventBus and appends to a JSONL file.",
       "files": [
-        "glitchlab/event_bus.py"
+        "glitchlab/auditor/logger.py"
       ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": ""
-    },
-    {
-      "step_number": 2,
-      "description": "Add unit tests to verify event publishing and subscriber callback execution.",
-      "files": [
-        "tests/test_event_bus.py"
-      ],
-      "action": "modify",
+      "action": "create",
       "status": "pending",
       "outcome": ""
     }
   ],
   "files_in_scope": [
-    "glitchlab/event_bus.py",
-    "tests/test_event_bus.py",
-    "glitchlab/event_bus.py",
-    "tests/test_event_bus.py"
+    "glitchlab/auditor/logger.py",
+    "glitchlab/auditor/logger.py"
   ],
   "estimated_complexity": "small",
   "requires_core_change": false,
-  "files_modified": [],
-  "files_created": [],
+  "files_modified": [
+    "audit_logger.py"
+  ],
+  "files_created": [
+    "audit_logger.py"
+  ],
   "tests_added": [],
-  "commit_message": "Event Bus already implemented",
-  "implementation_summary": "The Event Bus and its tests are already present in the codebase.",
+  "commit_message": "feat: implement AuditLogger for append-only JSONL event logging",
+  "implementation_summary": "Created AuditLogger class that subscribes to an EventBus and appends events to a JSONL file.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "pass",
-  "version_bump": "none",
-  "changelog_entry": "### Internal\n- Updated task state tracking for the Event Bus infrastructure implementation.",
+  "security_verdict": "warn",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- **Infrastructure**: Introduced `AuditLogger` to automatically capture and persist system events to an append-only JSONL file for security and compliance tracking.",
   "completed_phases": [
     "plan",
     "implement",
@@ -56,16 +48,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T22:54:33.136120+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:18:54.404832+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-012-event-bus"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-013-audit-logger"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T22:54:33.141235+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:18:54.411286+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
         "total_files": 31,
         "languages": {
@@ -75,60 +67,60 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T22:54:33.207371+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:18:54.476646+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T22:54:42.743339+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:04.323241+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "steps": 2,
+        "steps": 1,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T22:54:49.295884+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:17.285910+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "changes": 0,
+        "changes": 1,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T22:54:49.519697+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:17.509904+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T22:55:09.575424+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:21.081467+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "verdict": "pass"
+        "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T22:55:11.253401+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:23.225328+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "bump": "none"
+        "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T22:55:15.414212+00:00",
-      "task_id": "infra-012-event-bus",
+      "timestamp": "2026-02-26T23:19:37.853193+00:00",
+      "task_id": "infra-013-audit-logger",
       "data": {
-        "wrote_adr": true,
+        "wrote_adr": false,
         "doc_updates": 1
       }
     }
