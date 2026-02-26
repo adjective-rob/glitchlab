@@ -1,0 +1,10 @@
+id: ctrl-safety-001
+objective: "Update Controller.run() to check if the main repository has uncommitted changes before creating a workspace. If dirty, raise a 'DirtyRepoError'."
+constraints:
+  - "Use self._workspace._git('status', '--porcelain') to check state."
+  - "Ensure it only blocks if files outside .glitchlab/ are modified."
+acceptance:
+  - "The engine exits gracefully if I have uncommitted code changes."
+  - "It still runs if only logs or task files are changed."
+risk: low
+mode: evolution

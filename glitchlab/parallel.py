@@ -1,17 +1,18 @@
 """
-GLITCHLAB Parallel Runner
+GLITCHLAB Parallel Runner (v2.1)
 
-Executes multiple tasks concurrently, each in its own
-isolated worktree with its own budget tracker.
+Transactional parallel execution. Each worker:
+  1. Creates a dedicated Git worktree from a fresh 'main'.
+  2. Runs the controller loop in total isolation.
+  3. Commits and pushes to its own unique task branch.
 
-Usage:
-    from glitchlab.parallel import run_parallel
-    results = run_parallel(repo_path, task_files, max_workers=3)
+This prevents race conditions and stale index planning.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -29,28 +30,32 @@ def _run_single_task(
     test_command: str | None
 ) -> dict[str, Any]:
     """
-    Top-level function for ProcessPoolExecutor to pickle correctly.
-    Runs a single task in a completely isolated process.
+    Transactional Task Worker. 
+    Enforces isolation through sandboxed git worktrees.
     """
     try:
-        # Imports are handled locally to ensure a fresh state in the spawned process
-        # and prevent any cross-process pickling issues with complex objects.
         from glitchlab.config_loader import load_config
         from glitchlab.controller import Controller, Task
         
+        # v2.1: Each worker loads its own fresh config and task
         config = load_config(repo_path)
         task = Task.from_yaml(task_file)
         
+        # The Controller's internal Workspace will now handle 
+        # the 'git worktree add' to ensure branch isolation.
         controller = Controller(
             repo_path=repo_path,
             config=config,
             allow_core=allow_core,
-            auto_approve=True,
+            auto_approve=True,  # Mandatory for batch/parallel
             test_command=test_command,
         )
+        
+        # Controller.run() manages the isolated worktree lifecycle
         return controller.run(task)
+        
     except Exception as e:
-        logger.error(f"[PARALLEL] Task failed: {task_file.name} — {e}")
+        logger.error(f"[PARALLEL] Transaction failed: {task_file.name} — {e}")
         return {
             "task_id": task_file.stem,
             "status": "error",
@@ -63,34 +68,24 @@ def run_parallel(
     task_files: list[Path],
     max_workers: int = 3,
     allow_core: bool = False,
-    auto_approve: bool = True,  # parallel mode requires auto-approve
+    auto_approve: bool = True,
     test_command: str | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Run multiple tasks in parallel using Process Isolation.
-
-    Each task gets its own process, Controller, Workspace, and budget.
-    Results are collected and returned together.
-
-    Args:
-        repo_path: Path to the target repository
-        task_files: List of paths to task YAML files
-        max_workers: Maximum concurrent tasks
-        allow_core: Allow core path modifications
-        auto_approve: Must be True for parallel (no human gates)
-        test_command: Override test command
+    Orchestrate sandboxed task execution.
     """
     repo_path = repo_path.resolve()
 
-    console.print(f"\n[bold]⚡ GLITCHLAB Parallel Mode — {len(task_files)} tasks, {max_workers} workers[/]\n")
+    _print_parallel_header(len(task_files), max_workers)
 
+    # Policy Override: Parallel mode MUST be transactional
     if not auto_approve:
-        console.print("[yellow]⚠ Parallel mode requires --auto-approve. Enabling.[/]")
         auto_approve = True
 
     results: list[dict[str, Any]] = []
 
-    # Using ProcessPoolExecutor to prevent Git/subprocess race conditions
+    # Use ProcessPool to ensure that file system locks and 
+    # Git environment variables don't bleed between tasks.
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         future_to_file = {
             executor.submit(_run_single_task, tf, repo_path, allow_core, test_command): tf
@@ -102,9 +97,7 @@ def run_parallel(
             try:
                 result = future.result()
                 results.append(result)
-                status = result.get("status", "unknown")
-                task_id = result.get("task_id", task_file.stem)
-                console.print(f"  [{'green' if status == 'pr_created' else 'red'}]{task_id}: {status}[/]")
+                _log_task_completion(result, task_file)
             except Exception as e:
                 results.append({
                     "task_id": task_file.stem,
@@ -112,14 +105,23 @@ def run_parallel(
                     "error": str(e),
                 })
 
-    # Summary table
     _print_parallel_summary(results)
-
     return results
 
+# --- Helpers ---
+
+def _print_parallel_header(count: int, workers: int):
+    console.print(f"\n[bold]⚡ GLITCHLAB Transactional Mode — {count} tasks, {workers} workers[/]")
+    console.print("[dim]Each task is isolated in a unique Git worktree sandbox.[/]\n")
+
+def _log_task_completion(result: dict, task_file: Path):
+    status = result.get("status", "unknown")
+    task_id = result.get("task_id", task_file.stem)
+    color = "green" if status in ("pr_created", "committed") else "red"
+    console.print(f"  [{color}]{task_id}: {status}[/]")
 
 def _print_parallel_summary(results: list[dict]) -> None:
-    """Print a summary table of parallel run results."""
+    """Consolidated report of the transactional batch."""
     table = Table(title="Parallel Run Results", border_style="bright_green")
     table.add_column("Task")
     table.add_column("Status")
@@ -129,26 +131,14 @@ def _print_parallel_summary(results: list[dict]) -> None:
     for r in results:
         status = r.get("status", "unknown")
         color = {"pr_created": "green", "committed": "yellow"}.get(status, "red")
-
         pr = r.get("pr_url", r.get("branch", "—"))
         budget = r.get("budget", {})
         cost = f"${budget.get('estimated_cost', 0):.4f}"
 
-        table.add_row(
-            r.get("task_id", "?"),
-            f"[{color}]{status}[/]",
-            str(pr)[:60],
-            cost,
-        )
+        table.add_row(r.get("task_id", "?"), f"[{color}]{status}[/]", str(pr)[:60], cost)
 
     console.print(table)
-
-    # Totals
-    total_cost = sum(
-        r.get("budget", {}).get("estimated_cost", 0) for r in results
-    )
-    successes = sum(1 for r in results if r.get("status") == "pr_created")
-    console.print(
-        f"\n[bold]{successes}/{len(results)} succeeded | "
-        f"Total cost: ${total_cost:.4f}[/]"
-    )
+    
+    total_cost = sum(r.get("budget", {}).get("estimated_cost", 0) for r in results)
+    successes = sum(1 for r in results if r.get("status") in ("pr_created", "committed"))
+    console.print(f"\n[bold]{successes}/{len(results)} completed | Total cost: ${total_cost:.4f}[/]")

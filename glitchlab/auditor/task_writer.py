@@ -17,8 +17,10 @@ from typing import Any
 
 import yaml
 from loguru import logger
+from pydantic import ValidationError
 
 from glitchlab.router import Router
+from glitchlab.controller import Task  # Import the strict Pydantic schema
 from .scanner import Finding, ScanResult
 
 
@@ -89,7 +91,8 @@ def group_findings_into_tasks(result: ScanResult) -> list[list[Finding]]:
 class TaskWriter:
     """
     Generates GLITCHLAB task YAML files from scanner findings.
-    Uses the router to call the model for task description generation.
+    Uses the router to call the model for task description generation
+    and validates them against the Pydantic Task schema.
     """
 
     def __init__(self, router: Router, output_dir: Path):
@@ -116,7 +119,7 @@ class TaskWriter:
         return written
 
     def _generate_task(self, findings: list[Finding], index: int) -> dict[str, Any]:
-        """Ask the model to generate a well-scoped task YAML from findings."""
+        """Ask the model to generate a well-scoped task, strictly validating as JSON."""
         findings_text = "\n".join(
             f"- [{f.kind}] {f.file}:{f.line} — {f.description}"
             for f in findings
@@ -124,21 +127,18 @@ class TaskWriter:
 
         files = list({f.file for f in findings})
         kind = findings[0].kind
+        default_id = f"audit-{kind}-{index:03d}"
 
-        prompt = f"""You are generating a GLITCHLAB task YAML for a software project.
+        prompt = f"""You are generating a GLITCHLAB task definition.
 
-GLITCHLAB task YAML format:
-```yaml
-id: <short-kebab-case-id>
-objective: "<clear, specific, actionable objective in one or two sentences>"
-constraints:
-  - "<constraint 1>"
-  - "<constraint 2>"
-acceptance:
-  - "<acceptance criterion 1>"
-  - "<acceptance criterion 2>"
-risk: low|medium|high
-```
+You MUST return ONLY a valid JSON object matching this exact schema:
+{{
+  "id": "{default_id}",
+  "objective": "Clear, specific, actionable objective in one or two sentences",
+  "constraints": ["constraint 1", "constraint 2"],
+  "acceptance": ["criterion 1", "criterion 2"],
+  "risk": "low"
+}}
 
 The following findings were detected in the codebase:
 {findings_text}
@@ -147,52 +147,59 @@ Files affected: {', '.join(files)}
 Finding type: {kind}
 
 Rules for writing the task:
-- The objective must be specific and actionable — tell the agent exactly what to do
-- Do not ask for more than what the findings show
-- Constraints must protect existing behavior (no logic changes for doc tasks, etc.)
-- Acceptance criteria must be verifiable (cargo test passes, etc.)
-- Risk should be "low" for doc/comment tasks, "medium" for refactors, "high" for core logic
-- Keep scope EXTREMELY tight — maximum 2 files per task to ensure patch determinism
-
-Return ONLY the YAML, no explanation, no markdown fences.
+- The objective must be specific and actionable — tell the agent exactly what to do.
+- Do not ask for more than what the findings show.
+- Constraints must protect existing behavior (no logic changes for doc tasks, etc.).
+- Acceptance criteria must be verifiable (e.g., "cargo test passes").
+- Risk MUST BE exactly one of: "low", "medium", or "high". 
+  Use "low" for doc/comment tasks, "medium" for refactors, "high" for core logic.
+- Keep scope EXTREMELY tight — maximum {MAX_FILES_PER_TASK} files per task.
 """
-        response = self.router.complete(
-            role="planner",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
-        )
-
-        content = response.content.strip()
-
-        # Strip markdown fences if present
-        if content.startswith("```"):
-            content = "\n".join(
-                l for l in content.split("\n")
-                if not l.strip().startswith("```")
+        try:
+            # Force the LLM to output a JSON object to eliminate YAML formatting hallucinations
+            response = self.router.complete(
+                role="planner",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=1024,
+                response_format={"type": "json_object"}
             )
 
-        try:
-            task_data = yaml.safe_load(content)
-        except yaml.YAMLError as e:
-            logger.warning(f"[AUDITOR] YAML parse failed, using fallback: {e}")
-            task_data = self._fallback_task(findings, index)
+            content = response.content.strip()
 
-        # Ensure required fields
-        if not isinstance(task_data, dict):
-            task_data = self._fallback_task(findings, index)
+            # Strip markdown fences if the LLM leaked them despite json_object mode
+            if content.startswith("```"):
+                lines = content.split("\n")
+                lines = [l for l in lines if not l.strip().startswith("```") and not l.strip().lower() == "json"]
+                content = "\n".join(lines)
 
-        task_data.setdefault("id", f"audit-{kind}-{index:03d}")
-        task_data.setdefault("risk", "low")
-        task_data.setdefault("constraints", [])
-        task_data.setdefault("acceptance", ["cargo test passes"])
+            raw_data = json.loads(content)
+            
+            # Ensure the ID matches our required pattern if the LLM strayed
+            if "id" not in raw_data or not raw_data["id"].startswith("audit-"):
+                raw_data["id"] = default_id
+                
+            raw_data["source"] = "auditor"
+
+            # STRICT VALIDATION: This passes the raw JSON through the Pydantic model.
+            # If the LLM hallucinates an invalid risk level or misses a field, it throws a ValidationError.
+            task_obj = Task(**raw_data)
+            
+            # Dump the validated object back to a dict using aliases (e.g. 'acceptance' instead of 'acceptance_criteria')
+            task_data = task_obj.model_dump(by_alias=True, exclude_none=True)
+
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.warning(f"[AUDITOR] JSON/Validation parse failed, using safe fallback: {e}")
+            task_data = self._fallback_task(findings, index)
+        except Exception as e:
+            logger.warning(f"[AUDITOR] Unexpected error generating task, using fallback: {e}")
+            task_data = self._fallback_task(findings, index)
 
         return task_data
 
     def _fallback_task(self, findings: list[Finding], index: int) -> dict[str, Any]:
-        """Generate a safe fallback task if model output fails to parse."""
+        """Generate a safe fallback task if model output fails strict Pydantic validation."""
         files = list({f.file for f in findings})
         kind = findings[0].kind
-        symbols = [f.symbol for f in findings[:5]]
 
         objectives = {
             "missing_doc": f"Add /// doc comments to public functions missing them in: {', '.join(files)}",
@@ -200,6 +207,7 @@ Return ONLY the YAML, no explanation, no markdown fences.
             "complex_function": f"Refactor complex functions in: {', '.join(files)}",
         }
 
+        # This dictionary is guaranteed to pass `Task` validation
         return {
             "id": f"audit-{kind}-{index:03d}",
             "objective": objectives.get(kind, f"Fix {kind} issues in {', '.join(files)}"),
@@ -207,18 +215,27 @@ Return ONLY the YAML, no explanation, no markdown fences.
                 "Do not modify function signatures",
                 "Do not modify any logic unless explicitly required",
             ],
-            "acceptance": ["cargo test passes"],
+            "acceptance": ["cargo test passes", "Clean diff"],
             "risk": "low" if kind == "missing_doc" else "medium",
+            "source": "auditor",
         }
 
     def _write_task_yaml(self, task_data: dict[str, Any], index: int) -> Path:
-        """Write task data to a YAML file in the output directory."""
+        """Write validated task data to a YAML file in the output directory."""
         task_id = task_data.get("id", f"audit-{index:03d}")
-        # Sanitize filename
+        
+        # Sanitize filename to prevent path traversal or weird characters
         safe_id = re.sub(r"[^\w\-]", "-", task_id)
         path = self.output_dir / f"{safe_id}.yaml"
 
+        # Write to disk as YAML for easy human review/editing
         with open(path, "w") as f:
-            yaml.dump(task_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+            yaml.dump(
+                task_data, 
+                f, 
+                default_flow_style=False, 
+                allow_unicode=True, 
+                sort_keys=False
+            )
 
         return path

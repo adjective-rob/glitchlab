@@ -1,9 +1,9 @@
 """
-GLITCHLAB Workspace Isolation
+GLITCHLAB Workspace Isolation (v2.1)
 
-Creates ephemeral git worktrees per task so agents
-never touch the main branch directly. All work happens
-in isolation and only merges via PR.
+Transactional sandboxing. Uses 'git worktree' to ensure that
+each agent has a completely isolated view of the filesystem,
+preventing parallel state bleed.
 """
 
 from __future__ import annotations
@@ -22,12 +22,6 @@ class WorkspaceError(Exception):
 class Workspace:
     """
     Manages an isolated git worktree for a single task.
-
-    Lifecycle:
-        ws = Workspace(repo, task_id)
-        ws.create(base_branch="main")
-        # ... agents work inside ws.path ...
-        ws.cleanup()
     """
 
     def __init__(self, repo_path: Path, task_id: str, worktree_base: str = ".glitchlab/worktrees"):
@@ -42,23 +36,28 @@ class Workspace:
         return self.worktree_path
 
     def create(self, base_branch: str = "main") -> Path:
-        """Create isolated worktree + branch for this task."""
-        if self.worktree_path.exists():
-            logger.warning(f"[WORKSPACE] Worktree already exists: {self.worktree_path}")
-            self._created = True
-            return self.worktree_path
+        """
+        Creates a transactional sandbox. 
+        If a stale worktree or branch exists, it resets them.
+        """
+        # 1. Cleanup stale state if it exists from a crashed previous run
+        if self.worktree_path.exists() or self._branch_exists(self.branch_name):
+            logger.warning(f"[WORKSPACE] Found stale state for {self.task_id}. Resetting...")
+            self.cleanup()
 
-        # Ensure parent dir exists
+        # 2. Ensure parent structure
         self.worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Create branch
-        self._git("branch", self.branch_name, base_branch, check=False)
+        # 3. Transactional Creation: Create branch and worktree in one shot
+        # We use -B to force create/reset the branch to the base_branch (main)
+        try:
+            # -B creates or resets the branch to the start-point
+            self._git("worktree", "add", "-B", self.branch_name, str(self.worktree_path), base_branch)
+            self._created = True
+            logger.info(f"[WORKSPACE] Transactional sandbox created: {self.worktree_path}")
+        except Exception as e:
+            raise WorkspaceError(f"Failed to create isolated worktree: {e}")
 
-        # Create worktree
-        self._git("worktree", "add", str(self.worktree_path), self.branch_name)
-
-        self._created = True
-        logger.info(f"[WORKSPACE] Created: {self.worktree_path} on branch {self.branch_name}")
         return self.worktree_path
 
     def commit(self, message: str, add_all: bool = True) -> str | None:
@@ -66,7 +65,6 @@ class Workspace:
         if add_all:
             self._worktree_git("add", "-A")
 
-        # Check if there's anything to commit
         result = self._worktree_git("status", "--porcelain", capture=True)
         if not result.strip():
             logger.info("[WORKSPACE] Nothing to commit.")
@@ -74,67 +72,54 @@ class Workspace:
 
         self._worktree_git("commit", "-m", message)
         sha = self._worktree_git("rev-parse", "HEAD", capture=True).strip()
-        logger.info(f"[WORKSPACE] Committed: {sha[:8]} — {message}")
         return sha
 
-    def diff_stat(self) -> str:
-        """Return diff --stat against base branch."""
-        return self._worktree_git("diff", "--stat", "main", capture=True)
-
-    def diff_full(self) -> str:
-        """Return full diff against base branch."""
-        return self._worktree_git("diff", "main", capture=True)
-
-    def push(self) -> None:
-        """Push the task branch to origin."""
-        self._worktree_git("push", "-u", "origin", self.branch_name)
-        logger.info(f"[WORKSPACE] Pushed: {self.branch_name}")
+    def push(self, force: bool = True) -> None:
+        """Push the task branch. Force push by default for transactional integrity."""
+        cmd = ["push", "-u", "origin", self.branch_name]
+        if force:
+            cmd.insert(1, "--force")
+        
+        self._worktree_git(*cmd)
+        logger.info(f"[WORKSPACE] Pushed (force={force}): {self.branch_name}")
 
     def cleanup(self) -> None:
-        """Remove worktree and optionally the branch."""
-        if not self._created:
-            return
-
+        """Hard removal of worktree and pruning of git metadata."""
+        # 1. Remove the worktree from git's tracking
         try:
-            self._git("worktree", "remove", str(self.worktree_path), "--force", check=False)
-        except Exception as e:
-            logger.warning(f"[WORKSPACE] Worktree remove failed: {e}")
+            self._git("worktree", "remove", "--force", str(self.worktree_path), check=False)
+        except Exception:
+            pass
 
-        # Fallback: delete directory
+        # 2. Force delete the directory (handles cases where git remove fails)
         if self.worktree_path.exists():
             shutil.rmtree(self.worktree_path, ignore_errors=True)
 
-        # Prune worktree list
+        # 3. Delete the local branch to keep the repo index clean
+        try:
+            self._git("branch", "-D", self.branch_name, check=False)
+        except Exception:
+            pass
+
+        # 4. Final pruning
         self._git("worktree", "prune", check=False)
-        logger.info(f"[WORKSPACE] Cleaned up: {self.task_id}")
+        self._created = False
+        logger.info(f"[WORKSPACE] Transactional cleanup complete: {self.task_id}")
+
+    def _branch_exists(self, name: str) -> bool:
+        """Check if a local branch exists."""
+        res = self._git("branch", "--list", name, capture=True)
+        return name in res
 
     def _git(self, *args: str, check: bool = True, capture: bool = False) -> str:
-        """Run git command in the main repo."""
         return self._run_cmd(["git", *args], cwd=self.repo_path, check=check, capture=capture)
 
     def _worktree_git(self, *args: str, check: bool = True, capture: bool = False) -> str:
-        """Run git command inside the worktree."""
-        return self._run_cmd(
-            ["git", *args], cwd=self.worktree_path, check=check, capture=capture
-        )
+        return self._run_cmd(["git", *args], cwd=self.worktree_path, check=check, capture=capture)
 
     @staticmethod
-    def _run_cmd(
-        cmd: list[str], cwd: Path, check: bool = True, capture: bool = False
-    ) -> str:
-        result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
+    def _run_cmd(cmd: list[str], cwd: Path, check: bool = True, capture: bool = False) -> str:
+        result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=60)
         if check and result.returncode != 0:
-            raise WorkspaceError(
-                f"Command failed: {' '.join(cmd)}\n"
-                f"stderr: {result.stderr}\n"
-                f"stdout: {result.stdout}"
-            )
-        if capture:
-            return result.stdout
-        return result.stdout
+            raise WorkspaceError(f"Git failed: {' '.join(cmd)}\n{result.stderr}")
+        return result.stdout if capture else ""

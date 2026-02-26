@@ -48,23 +48,26 @@ Rules:
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        changes = context.previous_output
+        # v2: previous_output is TaskState.to_agent_summary("release")
+        # Contains: task_id, objective, mode, risk_level,
+        #           files_modified, implementation_summary, security_verdict
+        state = context.previous_output
         diff_text = context.extra.get("diff", "No diff available")
 
         user_content = f"""Analyze these changes for version impact.
 
 Task: {context.objective}
 Task ID: {context.task_id}
+Mode: {state.get('mode', 'evolution')}
 
-Changes:
-{json.dumps(changes.get('changes', []), indent=2)[:3000]}
+Files modified: {state.get('files_modified', [])}
+Implementation summary: {state.get('implementation_summary', 'No summary available')}
+Security verdict: {state.get('security_verdict', 'not yet reviewed')}
 
 Diff:
 ```
 {diff_text[:5000]}
 ```
-
-Public API changed: {changes.get('public_api_changed', 'unknown')}
 
 Determine version bump and write changelog entry as JSON."""
 

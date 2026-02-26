@@ -1,310 +1,218 @@
 """
-GLITCHLAB Repo Indexer — File Discovery
+GLITCHLAB Repo Indexer — The Navigator
 
-Walks the repository and builds a lightweight file map so agents
-can reference real paths instead of hallucinating them.
+Philosophy: Context Routing, not Context Hoarding.
+Walks the repository to build a "Route Map" of symbols and dependencies.
+Agents use this to surgically request code instead of receiving repo dumps.
 
-Produces:
-  - File tree (filtered, no noise)
-  - Module/crate/package structure
-  - Language detection
-  - Key file identification (configs, entry points, tests)
-
-The index is cheap to build and injected into planner context.
+v2.0 Improvements:
+  - Surgical Symbol Extraction (Regex-based for speed)
+  - Import Discovery (Finds local dependencies)
+  - Routing-First Agent Context (Encourages tool use)
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Set
 
 from loguru import logger
 
-# Directories to always skip
+# ---------------------------------------------------------------------------
+# Constants & Configuration
+# ---------------------------------------------------------------------------
+
 SKIP_DIRS = {
     ".git", ".glitchlab", ".context", ".venv", "venv", "env",
     "node_modules", "target", "dist", "build", "__pycache__",
     ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
     ".next", ".nuxt", "coverage", ".cargo", "vendor",
-    ".idea", ".vscode", "out", "bin", "obj",
 }
 
-# File extensions we care about
 CODE_EXTENSIONS = {
     ".rs", ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".java",
-    ".c", ".cpp", ".h", ".hpp", ".cs", ".rb", ".swift", ".kt",
-    ".toml", ".yaml", ".yml", ".json", ".md", ".txt",
-    ".sql", ".graphql", ".proto", ".sh", ".bash",
-    ".css", ".scss", ".html", ".svelte", ".vue",
 }
 
-# Key files that indicate project structure
 KEY_FILES = {
     "Cargo.toml", "package.json", "pyproject.toml", "setup.py",
-    "go.mod", "Makefile", "Dockerfile", "docker-compose.yml",
-    "tsconfig.json", "vite.config.ts", "next.config.js",
-    ".env.example", "README.md", "CHANGELOG.md",
-    "justfile", "Taskfile.yml", "flake.nix",
+    "go.mod", "Makefile", "Dockerfile", "README.md",
 }
 
+# Regex patterns for surgical symbol extraction (no heavy AST required for indexing)
+SYMBOL_PATTERNS = {
+    ".py": [
+        re.compile(r"^(?:class|def)\s+([a-zA-Z_][a-zA-Z0-9_]*)"),
+    ],
+    ".rs": [
+        re.compile(r"^(?:pub\s+)?(?:struct|enum|trait|union|fn)\s+([a-zA-Z_][a-zA-Z0-9_]*)"),
+        re.compile(r"^(?:pub\s+)?type\s+([a-zA-Z_][a-zA-Z0-9_]*)"),
+    ],
+    ".ts": [
+        re.compile(r"^(?:export\s+)?(?:class|interface|type|function|const|enum)\s+([a-zA-Z_][a-zA-Z0-9_]*)"),
+    ],
+}
+
+# Patterns to find local imports (for Layer 3 Dependency Graphing)
+IMPORT_PATTERNS = {
+    ".py": re.compile(r"^(?:from|import)\s+([a-zA-Z0-9_\.]+)"),
+    ".rs": re.compile(r"^(?:use)\s+([a-zA-Z0-9_:]+)"),
+}
+
+# ---------------------------------------------------------------------------
+# Data Models
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SymbolEntry:
+    name: str
+    kind: str  # class, fn, struct, etc.
+    line: int
 
 @dataclass
 class FileEntry:
     path: str
     extension: str
-    size_bytes: int
+    symbols: List[str] = field(default_factory=list)
+    imports: List[str] = field(default_factory=list)
     is_test: bool = False
-    is_key_file: bool = False
-
+    is_key: bool = False
 
 @dataclass
 class RepoIndex:
-    """Lightweight index of a repository's file structure."""
+    """A deterministic map of the repository structure and logic."""
     root: str
+    files: Dict[str, FileEntry] = field(default_factory=dict)
+    languages: Dict[str, int] = field(default_factory=dict)
     total_files: int = 0
-    languages: dict[str, int] = field(default_factory=dict)  # ext → count
-    files: list[FileEntry] = field(default_factory=list)
-    directories: list[str] = field(default_factory=list)
-    key_files: list[str] = field(default_factory=list)
-    test_files: list[str] = field(default_factory=list)
-    crates: list[str] = field(default_factory=list)  # Rust workspace members
-    packages: list[str] = field(default_factory=list)  # Node workspace packages
 
-    def to_agent_context(self, max_files: int = 300) -> str:
+    def to_agent_context(self, max_files: int = 200) -> str:
         """
-        Format the index as a string suitable for injecting into agent context.
-        Prioritizes structure over exhaustive listing.
+        Formats the index as a "Routing Map".
+        Encourages the agent to use `read_file` or `get_symbol` tools.
         """
-        parts = []
-        parts.append(f"=== REPO INDEX ({self.total_files} files) ===\n")
+        parts = ["=== REPO ROUTE MAP ===", "Use this to identify where to surgicaly inject context.\n"]
 
-        # Language breakdown
-        if self.languages:
-            lang_str = ", ".join(
-                f"{ext}: {count}" for ext, count
-                in sorted(self.languages.items(), key=lambda x: -x[1])[:10]
-            )
-            parts.append(f"Languages: {lang_str}\n")
+        # 1. Summary
+        lang_summary = ", ".join(f"{k}({v})" for k, v in sorted(self.languages.items(), key=lambda x: -x[1]))
+        parts.append(f"Project Stats: {self.total_files} code files | Languages: {lang_summary}")
 
-        # Crates / packages
-        if self.crates:
-            parts.append(f"Rust crates: {', '.join(self.crates)}\n")
-        if self.packages:
-            parts.append(f"Packages: {', '.join(self.packages)}\n")
+        # 2. Key Entry Points
+        keys = [f.path for f in self.files.values() if f.is_key]
+        if keys:
+            parts.append(f"Entry Points: {', '.join(keys)}")
 
-        # Key files
-        if self.key_files:
-            parts.append(f"Key files: {', '.join(self.key_files)}\n")
+        # 3. Symbol Registry (The "Router" part)
+        # We show symbols for the most important files to help the Planner point correctly
+        parts.append("\nLogic Registry (Top Files & Symbols):")
+        
+        # Sort files by importance (Key files first, then by number of symbols)
+        sorted_files = sorted(
+            self.files.values(), 
+            key=lambda x: (x.is_key, len(x.symbols)), 
+            reverse=True
+        )
 
-        # Directory structure (top 2 levels)
-        if self.directories:
-            parts.append("\nDirectory structure:")
-            for d in self.directories[:50]:
-                depth = d.count("/")
-                indent = "  " * depth
-                name = d.split("/")[-1] if "/" in d else d
-                parts.append(f"  {indent}{name}/")
-
-        # File listing (truncated)
-        parts.append(f"\nSource files ({min(len(self.files), max_files)} shown):")
-        for entry in self.files[:max_files]:
-            markers = []
-            if entry.is_test:
-                markers.append("test")
-            if entry.is_key_file:
-                markers.append("key")
-            suffix = f"  [{', '.join(markers)}]" if markers else ""
-            parts.append(f"  {entry.path}{suffix}")
+        for entry in sorted_files[:max_files]:
+            symbol_str = f" symbols: [{', '.join(entry.symbols[:10])}]" if entry.symbols else ""
+            test_marker = " [TEST]" if entry.is_test else ""
+            parts.append(f"  - {entry.path}{test_marker}{symbol_str}")
 
         if len(self.files) > max_files:
-            parts.append(f"  ... and {len(self.files) - max_files} more files")
+            parts.append(f"\n... and {len(self.files) - max_files} more files.")
 
+        parts.append("\nINSTRUCTION: Do not guess code. Use `get_file(path)` to see full content.")
         return "\n".join(parts)
 
+# ---------------------------------------------------------------------------
+# Extraction Logic
+# ---------------------------------------------------------------------------
 
-def _is_test_file(path: str) -> bool:
-    """Heuristic: is this a test file?"""
+def _harvest_metadata(file_path: Path, rel_path: str) -> tuple[List[str], List[str]]:
+    """Surgically extract symbols and imports without full AST overhead."""
+    symbols: List[str] = []
+    imports: List[str] = []
+    ext = file_path.suffix
+
+    if ext not in SYMBOL_PATTERNS and ext not in IMPORT_PATTERNS:
+        return [], []
+
+    try:
+        # Read only first 500 lines for indexing purposes to keep it fast
+        content = []
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for _ in range(500):
+                line = f.readline()
+                if not line: break
+                content.append(line)
+        
+        full_text = "".join(content)
+
+        # Extract Symbols
+        for pattern in SYMBOL_PATTERNS.get(ext, []):
+            matches = pattern.findall(full_text)
+            symbols.extend(matches)
+
+        # Extract Imports (to help build the Layer 3 dependency graph later)
+        if ext in IMPORT_PATTERNS:
+            import_matches = IMPORT_PATTERNS[ext].findall(full_text)
+            imports.extend(import_matches)
+
+    except Exception as e:
+        logger.debug(f"[INDEX] Could not harvest {rel_path}: {e}")
+
+    return sorted(list(set(symbols))), sorted(list(set(imports)))
+
+def _is_test(path: str) -> bool:
     lower = path.lower()
-    parts = lower.split("/")
-    name = parts[-1] if parts else ""
+    return any(x in lower for x in ["test", "spec", "__tests__"])
 
-    return (
-        "test" in name
-        or "spec" in name
-        or "tests/" in lower
-        or "test/" in lower
-        or "__tests__/" in lower
-        or "spec/" in lower
-        or name.startswith("test_")
-        or name.endswith("_test.rs")
-        or name.endswith("_test.go")
-        or name.endswith(".test.ts")
-        or name.endswith(".test.tsx")
-        or name.endswith(".test.js")
-        or name.endswith(".spec.ts")
-        or name.endswith(".spec.js")
-    )
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
-
-def _detect_rust_crates(repo_path: Path) -> list[str]:
-    """Detect Rust workspace members from root Cargo.toml."""
-    cargo_toml = repo_path / "Cargo.toml"
-    if not cargo_toml.exists():
-        return []
-
-    try:
-        content = cargo_toml.read_text()
-        # Simple parse — look for [workspace] members
-        in_members = False
-        crates = []
-        for line in content.splitlines():
-            if "members" in line and "[" in line:
-                in_members = True
-                # Handle inline: members = ["a", "b"]
-                if "]" in line:
-                    import re
-                    crates.extend(re.findall(r'"([^"]+)"', line))
-                    in_members = False
-                continue
-            if in_members:
-                if "]" in line:
-                    in_members = False
-                import re
-                found = re.findall(r'"([^"]+)"', line)
-                crates.extend(found)
-
-        # Also check for individual crate Cargo.tomls
-        if not crates:
-            for ct in repo_path.rglob("Cargo.toml"):
-                rel = str(ct.parent.relative_to(repo_path))
-                if rel != "." and "target" not in rel:
-                    crates.append(rel)
-
-        return sorted(set(crates))
-    except Exception:
-        return []
-
-
-def _detect_node_packages(repo_path: Path) -> list[str]:
-    """Detect Node workspace packages."""
-    pkg_json = repo_path / "package.json"
-    if not pkg_json.exists():
-        return []
-
-    try:
-        import json
-        data = json.loads(pkg_json.read_text())
-        workspaces = data.get("workspaces", [])
-        if isinstance(workspaces, dict):
-            workspaces = workspaces.get("packages", [])
-        return sorted(workspaces)
-    except Exception:
-        return []
-
-
-def build_index(repo_path: Path, max_depth: int = 8) -> RepoIndex:
+def build_index(repo_path: Path) -> RepoIndex:
     """
-    Walk the repository and build a lightweight index.
-
-    Uses git ls-files if available (respects .gitignore),
-    falls back to filesystem walk.
+    Builds the GlitchLab v2 Navigator Index.
+    Uses git ls-files for speed and respects .gitignore automatically.
     """
     repo_path = repo_path.resolve()
     index = RepoIndex(root=str(repo_path))
 
-    # Try git ls-files first (fast, respects .gitignore)
-    files = _git_ls_files(repo_path)
-    if not files:
-        files = _walk_files(repo_path, max_depth)
+    # 1. Discovery (Deterministic via Git)
+    try:
+        raw_files = subprocess.check_output(
+            ["git", "ls-files"], cwd=repo_path, text=True
+        ).splitlines()
+    except subprocess.CalledProcessError:
+        logger.warning("[INDEX] Git not found, falling back to manual walk.")
+        raw_files = [str(p.relative_to(repo_path)) for p in repo_path.rglob("*") if p.is_file()]
 
-    directories = set()
-
-    for rel_path in files:
-        # Skip noise
-        parts = rel_path.split("/")
-        if any(p in SKIP_DIRS for p in parts):
+    # 2. Processing
+    for rel_path in raw_files:
+        if any(d in rel_path for d in SKIP_DIRS):
             continue
 
-        ext = ""
-        if "." in parts[-1]:
-            ext = "." + parts[-1].rsplit(".", 1)[-1]
+        full_path = repo_path / rel_path
+        ext = full_path.suffix
 
-        # Only index code files
-        if ext not in CODE_EXTENSIONS and parts[-1] not in KEY_FILES:
-            continue
-
-        full = repo_path / rel_path
-        try:
-            size = full.stat().st_size if full.exists() else 0
-        except OSError:
-            size = 0
-
-        is_test = _is_test_file(rel_path)
-        is_key = parts[-1] in KEY_FILES
-
-        entry = FileEntry(
-            path=rel_path,
-            extension=ext,
-            size_bytes=size,
-            is_test=is_test,
-            is_key_file=is_key,
-        )
-        index.files.append(entry)
-
-        if is_key:
-            index.key_files.append(rel_path)
-        if is_test:
-            index.test_files.append(rel_path)
-
-        # Track language
-        if ext in CODE_EXTENSIONS and ext not in {".toml", ".yaml", ".yml", ".json", ".md", ".txt"}:
-            index.languages[ext] = index.languages.get(ext, 0) + 1
-
-        # Track directories (first 2 levels)
-        for i in range(1, min(len(parts), 3)):
-            directories.add("/".join(parts[:i]))
+        if ext in CODE_EXTENSIONS or rel_path in KEY_FILES:
+            symbols, imports = [], []
+            if ext in CODE_EXTENSIONS:
+                symbols, imports = _harvest_metadata(full_path, rel_path)
+                index.languages[ext] = index.languages.get(ext, 0) + 1
+            
+            index.files[rel_path] = FileEntry(
+                path=rel_path,
+                extension=ext,
+                symbols=symbols,
+                imports=imports,
+                is_test=_is_test(rel_path),
+                is_key=rel_path in KEY_FILES
+            )
 
     index.total_files = len(index.files)
-    index.directories = sorted(directories)
-
-    # Detect project structure
-    index.crates = _detect_rust_crates(repo_path)
-    index.packages = _detect_node_packages(repo_path)
-
-    logger.info(
-        f"[INDEX] Indexed {index.total_files} files, "
-        f"{len(index.directories)} dirs, "
-        f"{len(index.languages)} languages"
-    )
-
+    logger.info(f"[INDEX] Navigator built: {index.total_files} files mapped.")
     return index
-
-
-def _git_ls_files(repo_path: Path) -> list[str]:
-    """Use git ls-files for fast, .gitignore-aware listing."""
-    try:
-        result = subprocess.run(
-            ["git", "ls-files"],
-            cwd=repo_path,
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if result.returncode == 0:
-            return [f for f in result.stdout.strip().splitlines() if f]
-    except Exception:
-        pass
-    return []
-
-
-def _walk_files(repo_path: Path, max_depth: int = 8) -> list[str]:
-    """Fallback: walk filesystem manually."""
-    files = []
-    for item in repo_path.rglob("*"):
-        if item.is_file():
-            rel = str(item.relative_to(repo_path))
-            parts = rel.split("/")
-            if len(parts) <= max_depth and not any(p in SKIP_DIRS for p in parts):
-                files.append(rel)
-    return files

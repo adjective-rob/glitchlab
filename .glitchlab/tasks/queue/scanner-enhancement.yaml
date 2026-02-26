@@ -1,0 +1,7 @@
+id: scanner-edge-001
+objective: "Update scanner.py to detect hardcoded API keys or secrets using a basic regex pattern."
+constraints:
+  - "Add a new 'secret_detected' finding kind."
+  - "Update the Finding dataclass to support this new kind if necessary."
+risk: low
+mode: evolution

@@ -9,6 +9,9 @@ Three modes:
 Plus utilities:
   - glitchlab status        (check config + API keys)
   - glitchlab init <path>   (bootstrap .glitchlab in a repo)
+  - glitchlab batch         (parallel task execution)
+  - glitchlab history       (view previous runs)
+  - glitchlab audit         (scan for new tasks)
 """
 
 from __future__ import annotations
@@ -94,7 +97,11 @@ def run(
         console.print(f"[cyan]Fetching GitHub issue #{issue}...[/]")
         task = Task.from_github_issue(repo, issue)
     elif local_task or task_file:
-        tf = task_file or (repo / ".glitchlab" / "tasks" / "next.yaml")
+        # Check queue first, then root tasks dir
+        tf = task_file or (repo / ".glitchlab" / "tasks" / "queue" / "next.yaml")
+        if not tf.exists():
+            tf = (repo / ".glitchlab" / "tasks" / "next.yaml")
+            
         if not tf.exists():
             console.print(f"[red]Task file not found: {tf}[/]")
             raise typer.Exit(1)
@@ -257,6 +264,7 @@ def init(
     gl_dir = repo / ".glitchlab"
     gl_dir.mkdir(exist_ok=True)
     (gl_dir / "tasks").mkdir(exist_ok=True)
+    (gl_dir / "tasks" / "queue").mkdir(exist_ok=True) # Permanent Fix: Ensure queue exists
     (gl_dir / "logs").mkdir(exist_ok=True)
     (gl_dir / "worktrees").mkdir(exist_ok=True)
 
@@ -350,7 +358,8 @@ def batch(
     _configure_logging(verbose)
 
     repo = repo.resolve()
-    td = tasks_dir or (repo / ".glitchlab" / "tasks")
+    # Permanent Fix: Default to the 'queue' subfolder used by the Auditor
+    td = tasks_dir or (repo / ".glitchlab" / "tasks" / "queue")
 
     if not td.exists():
         console.print(f"[red]Tasks directory not found: {td}[/]")
@@ -574,39 +583,3 @@ def _configure_logging(verbose: bool) -> None:
 
 if __name__ == "__main__":
     app()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

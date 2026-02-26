@@ -1,0 +1,17 @@
+# GLITCHLAB repo-level config overrides
+# These merge with the built-in defaults.
+
+# Override routing for this specific project:
+# routing:
+#   implementer: "anthropic/claude-sonnet-4-20250514"
+
+# Set project-specific boundaries:
+# boundaries:
+#   protected_paths:
+#     - "crates/zephyr-core"
+#     - "crates/zephyr-envelope"
+
+# Adjust limits:
+# limits:
+#   max_fix_attempts: 3
+#   max_dollars_per_task: 5.0

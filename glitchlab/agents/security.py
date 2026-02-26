@@ -68,23 +68,25 @@ Rules:
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        changes = context.previous_output
+        # v2: previous_output is TaskState.to_agent_summary("security")
+        # Contains: task_id, objective, mode, risk_level,
+        #           files_modified, files_created, implementation_summary
+        state = context.previous_output
         diff_text = context.extra.get("diff", "No diff available")
 
-        changes_summary = ""
-        for change in changes.get("changes", []):
-            changes_summary += (
-                f"\n{change.get('action', '?')} {change.get('file', '?')}: "
-                f"{change.get('description', 'no description')}\n"
-            )
+        files_modified = state.get("files_modified", [])
+        files_created = state.get("files_created", [])
+        impl_summary = state.get("implementation_summary", "No summary available")
 
         user_content = f"""Review these code changes for security and policy compliance.
 
 Task: {context.objective}
 Task ID: {context.task_id}
+Mode: {state.get('mode', 'evolution')}
 
-Changes summary:
-{changes_summary}
+Implementation summary: {impl_summary}
+Files modified: {files_modified}
+Files created: {files_created}
 
 Full diff:
 ```

@@ -18,12 +18,12 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class RoutingConfig(BaseModel):
-    planner: str = "openai/gpt-5-mini"
-    implementer: str = "openai/gpt-5.2"
-    debugger: str = "openai/gpt-5.2"
-    security: str = "openai/gpt-5-nano"
-    release: str = "openai/gpt-5-nano"
-    archivist: str = "openai/gpt-5-nano"
+    planner: str = "gemini/gemini-3.1-pro-preview"
+    implementer: str = "gemini/gemini-3.1-pro-preview"
+    debugger: str = "gemini/gemini-3.1-pro-preview"
+    security: str = "gemini/gemini-3-flash-preview"
+    release: str = "gemini/gemini-3-flash-preview"
+    archivist: str = "gemini/gemini-3-flash-preview"
 
 
 class LimitsConfig(BaseModel):

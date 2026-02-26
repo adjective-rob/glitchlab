@@ -11,13 +11,42 @@ Energy: manic genius with whiteboard chaos.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
+from pydantic import BaseModel, Field, ValidationError
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
+
+# ---------------------------------------------------------------------------
+# Strict Output Schemas
+# ---------------------------------------------------------------------------
+
+class PlanStep(BaseModel):
+    step_number: int
+    description: str
+    files: list[str] = Field(min_length=1, description="Must contain at least one valid file path")
+    # Literal types prevent the LLM from hallucinating unsupported actions
+    action: Literal["modify", "create", "delete"]
+
+
+class ExecutionPlan(BaseModel):
+    steps: list[PlanStep]
+    files_likely_affected: list[str]
+    requires_core_change: bool
+    risk_level: Literal["low", "medium", "high"]
+    risk_notes: str
+    test_strategy: list[str]
+    estimated_complexity: Literal["trivial", "small", "medium", "large"]
+    dependencies_affected: bool
+    public_api_changed: bool
+
+
+# ---------------------------------------------------------------------------
+# Agent Implementation
+# ---------------------------------------------------------------------------
 
 class PlannerAgent(BaseAgent):
     role = "planner"
@@ -26,7 +55,7 @@ class PlannerAgent(BaseAgent):
 
 Your job is to take a development task and produce a precise, actionable execution plan.
 
-You MUST respond with valid JSON only. No markdown, no commentary.
+You MUST respond with a valid JSON object ONLY. No markdown, no commentary.
 
 Output schema:
 {
@@ -60,6 +89,12 @@ Rules:
 - Every step MUST have at least one valid file path in the 'files' array.
 """
 
+    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+        """Override run to enforce JSON mode at the API level."""
+        # This prevents the LLM from surrounding the response with conversational filler
+        kwargs["response_format"] = {"type": "json_object"}
+        return super().run(context, **kwargs)
+
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         file_context = ""
         if context.file_context:
@@ -84,28 +119,33 @@ Produce your execution plan as JSON."""
         return [self._system_msg(), self._user_msg(user_content)]
 
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        """Parse the JSON plan from Professor Zap."""
+        """Parse and rigorously validate the JSON plan from Professor Zap."""
         content = response.content.strip()
 
-        # Strip markdown code fences if present
+        # Strip markdown code fences if present (fallback in case LLM ignores json_object instructions)
         if content.startswith("```"):
             lines = content.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
+            lines = [l for l in lines if not l.strip().startswith("```") and not l.strip().lower() == "json"]
             content = "\n".join(lines)
 
         try:
-            plan = json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"[ZAP] Failed to parse plan JSON: {e}")
+            raw_json = json.loads(content)
+            
+            # STRICT VALIDATION: Throws ValidationError if the LLM hallucinated keys/values/actions
+            validated_plan = ExecutionPlan(**raw_json)
+            plan = validated_plan.model_dump()
+            
+        except (json.JSONDecodeError, ValidationError) as e:
+            logger.error(f"[ZAP] Failed to parse/validate plan JSON: {e}")
             logger.debug(f"[ZAP] Raw response: {content[:500]}")
             plan = {
                 "steps": [],
                 "files_likely_affected": [],
                 "requires_core_change": False,
                 "risk_level": "high",
-                "risk_notes": f"Failed to parse planner output: {e}",
+                "risk_notes": f"Validation failed: {e}",
                 "test_strategy": [],
-                "estimated_complexity": "unknown",
+                "estimated_complexity": "unknown", # Safe fallback value for the controller
                 "parse_error": True,
                 "raw_response": content[:1000],
             }

@@ -62,49 +62,39 @@ Rules:
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        impl = context.previous_output
-        changes = impl.get("changes", [])
-        summary = impl.get("summary", "No summary")
-        commit_msg = impl.get("commit_message", "No commit message")
+        # v2: previous_output is TaskState.to_agent_summary("archivist")
+        # Contains: task_id, objective, mode, risk_level,
+        #           plan_steps, files_modified, implementation_summary, version_bump
+        state = context.previous_output
 
-        changes_text = ""
-        for change in changes:
-            changes_text += (
-                f"\n- {change.get('action', '?')} {change.get('file', '?')}: "
-                f"{change.get('description', 'no description')}"
+        # Build changes text from structured state
+        files_modified = state.get("files_modified", [])
+        files_text = "\n".join(f"- {f}" for f in files_modified) if files_modified else "- None"
+
+        # Plan context from structured state
+        plan_steps = state.get("plan_steps", [])
+        steps_text = ""
+        for step in plan_steps:
+            steps_text += (
+                f"\n- Step {step.get('step_number', '?')}: "
+                f"{step.get('description', 'no description')}"
             )
-
-        # Include Prelude context if available
-        prelude_section = ""
-        prelude_ctx = context.extra.get("prelude_context", "")
-        if prelude_ctx:
-            prelude_section = f"\n\nProject Context:\n{prelude_ctx}\n"
-
-        # Include plan info
-        plan = context.extra.get("plan", {})
-        risk = plan.get("risk_level", "unknown")
-        complexity = plan.get("estimated_complexity", "unknown")
-        core_change = plan.get("requires_core_change", False)
-
-        # Release info
-        release = context.extra.get("release", {})
-        version_bump = release.get("version_bump", "unknown")
 
         user_content = f"""A task has been successfully completed. Document it.
 
 Task: {context.objective}
 Task ID: {context.task_id}
-Commit: {commit_msg}
-{prelude_section}
-Summary: {summary}
+Mode: {state.get('mode', 'evolution')}
+Risk level: {state.get('risk_level', 'unknown')}
+Version bump: {state.get('version_bump', 'unknown')}
 
-Changes made:
-{changes_text}
+Implementation summary: {state.get('implementation_summary', 'No summary')}
 
-Risk level: {risk}
-Complexity: {complexity}
-Core change: {core_change}
-Version bump: {version_bump}
+Plan steps:
+{steps_text}
+
+Files modified:
+{files_text}
 
 Existing docs in repo:
 {chr(10).join(f'- {f}' for f in context.extra.get('existing_docs', []))}

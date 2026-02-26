@@ -1,0 +1,10 @@
+id: cli-version-001
+objective: "Add a --version flag to the main Typer app that prints the current version from glitchlab.__version__"
+constraints:
+  - "Use glitchlab.__version__"
+  - "Ensure it works when running 'glitchlab --version'"
+acceptance:
+  - "glitchlab --version prints the version string"
+  - "The main help text still works"
+risk: low
+mode: evolution

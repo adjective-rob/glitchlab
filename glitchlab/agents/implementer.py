@@ -1,106 +1,120 @@
 """
-🔧 Patch — The Implementer
+🔧 Patch — The Implementer (v2.1)
 
-Writes code. Adds tests. Makes surgical diffs.
-Minimal scope. No feature creep.
-
-Energy: hoodie-wearing prodigy.
+Writes code. Now supports surgical Search & Replace blocks
+to prevent JSON truncation on large files.
 """
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Literal
 
 from loguru import logger
+from pydantic import BaseModel, Field, ValidationError
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
 
+# ---------------------------------------------------------------------------
+# Surgical Output Schemas
+# ---------------------------------------------------------------------------
+
+class SurgicalBlock(BaseModel):
+    """A single Search & Replace operation."""
+    search: str = Field(..., description="The EXACT snippet of code to look for.")
+    replace: str = Field(..., description="The code that should replace the search block.")
+
+class FileChange(BaseModel):
+    """Schema for an individual file modification."""
+    file: str
+    action: Literal["modify", "create", "delete"]
+    # v2.1: Content is now optional if surgical_blocks are provided
+    content: str | None = Field(
+        default=None,
+        description="FULL file content. Required for 'create'. Optional for 'modify'."
+    )
+    surgical_blocks: list[SurgicalBlock] = Field(
+        default_factory=list,
+        description="List of Search & Replace blocks for surgical edits to large files."
+    )
+    description: str
+
+
+class TestChange(BaseModel):
+    file: str
+    content: str
+    description: str
+
+
+class ImplementationResult(BaseModel):
+    changes: list[FileChange] = Field(default_factory=list)
+    tests_added: list[TestChange] = Field(default_factory=list)
+    commit_message: str
+    summary: str
+
+
+# ---------------------------------------------------------------------------
+# Agent Implementation
+# ---------------------------------------------------------------------------
+
 class ImplementerAgent(BaseAgent):
     role = "implementer"
 
-    system_prompt = """You are Patch, the implementation engine inside GLITCHLAB.
+    system_prompt = """You are Patch, the surgical implementation engine.
 
-You receive an execution plan and produce code changes.
+You MUST respond with a valid JSON object. No markdown wrapping.
 
-You MUST respond with valid JSON only. No markdown wrapping around the JSON itself.
+STRATEGY FOR LARGE FILES (>100 lines):
+- Do NOT rewrite the whole file in 'content'. This causes JSON truncation.
+- Instead, use 'surgical_blocks' to perform Search & Replace edits.
+- Each block must contain enough unique code in 'search' to be found accurately.
+
+STRATEGY FOR SMALL FILES (<100 lines):
+- Provide the FULL file in 'content' and leave 'surgical_blocks' empty.
 
 Output schema:
 {
   "changes": [
     {
       "file": "path/to/file",
-      "action": "modify|create|delete",
-      "content": "FULL file content. ALWAYS provide this as a fallback for 'modify' actions, even if you provide a patch. Do not truncate.",
-      "patch": "Valid unified diff. REQUIRED for 'modify'. Must apply cleanly with 'git apply'.",
-      "description": "what this change does"
+      "action": "modify",
+      "surgical_blocks": [
+        {
+          "search": "def old_func():\\n    pass",
+          "replace": "def new_func():\\n    return True"
+        }
+      ],
+      "description": "surgical update"
     }
   ],
-  "tests_added": [
-    {
-      "file": "path/to/test_file",
-      "content": "full test file content or additions",
-      "description": "what this tests"
-    }
-  ],
-  "commit_message": "type(scope): concise description",
-  "summary": "Brief human-readable summary of all changes"
+  "tests_added": [...],
+  "commit_message": "...",
+  "summary": "..."
 }
 
-CRITICAL RULES FOR 'modify':
-
-- You MUST produce a valid unified diff.
-- The diff MUST apply cleanly using 'git apply'.
-- Include at least 3 context lines before and after each modified region.
-- Do NOT truncate context lines.
-- Do NOT invent line numbers.
-- The patch must match the provided file content exactly.
-- Preserve indentation and whitespace precisely.
-- Do not modify unrelated lines.
-- ALWAYS provide the FULL updated file in the 'content' field as a fallback, even when providing a patch. Do not truncate.
-
-When generating a patch:
-- Use standard unified diff format:
-  --- a/path/to/file
-  +++ b/path/to/file
-  @@
-- Ensure context lines exactly match the file content shown.
-- If unsure about surrounding lines, include more context rather than less.
-
-For 'create':
-- Provide full file content.
-- Do not include a patch.
-
-For 'delete':
-- No content required.
-- Patch optional.
-
-General Rules:
-- Follow the plan exactly. Do not add unrequested features.
-- Only add or update tests if explicitly instructed by the execution plan.
-- Keep changes minimal and surgical.
-- Never modify files not mentioned in the plan.
-- If a step is unclear, implement the safest interpretation.
-- For Rust: no unwrap() in library code.
-- For Python: include type hints and docstrings.
-- For TypeScript: strict types, no any.
-- Commit message must follow Conventional Commits.
+CRITICAL RULES:
+1. Whitespace in 'search' blocks must be EXACT.
+2. If using 'surgical_blocks', leave 'content' as null.
+3. For NEW files (action='create'), always use 'content'.
 """
 
+    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+        kwargs["response_format"] = {"type": "json_object"}
+        return super().run(context, **kwargs)
+
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        plan = context.previous_output
+        state = context.previous_output
+        
+        # Determine if we should nudge the model toward surgical edits
+        files_in_scope = state.get("files_in_scope", [])
+        is_large_task = len(files_in_scope) > 2 or state.get("estimated_complexity") == "high"
+
         steps_text = ""
-        if plan.get("steps"):
-            for step in plan["steps"]:
-                steps_text += (
-                    f"\nStep {step.get('step_number', '?')}: "
-                    f"{step.get('description', 'no description')}\n"
-                    f"  Files: {step.get('files', [])}\n"
-                    f"  Action: {step.get('action', '?')}\n"
-                )
+        for step in state.get("plan_steps", []):
+            steps_text += f"\nStep {step.get('step_number')}: {step.get('description')}\n"
 
         file_context = ""
         if context.file_context:
@@ -108,60 +122,24 @@ General Rules:
             for fname, content in context.file_context.items():
                 file_context += f"\n--- {fname} ---\n{content}\n"
 
-        # Inject Prelude project context if available
-        prelude_section = ""
-        prelude_ctx = context.extra.get("prelude_context", "")
-        if prelude_ctx:
-            prelude_section = f"\n\n{prelude_ctx}\n"
-
         user_content = f"""Task: {context.objective}
-Task ID: {context.task_id}
-{prelude_section}
-Execution Plan:
-{steps_text}
-
-Files likely affected: {plan.get('files_likely_affected', [])}
-Test strategy: {plan.get('test_strategy', [])}
+Plan: {steps_text}
 {file_context}
 
-Implement the changes as specified. Return JSON with your changes."""
+IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncation."""
 
         return [self._system_msg(), self._user_msg(user_content)]
 
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        """Parse implementation output from Patch."""
         content = response.content.strip()
-
-        # Strip markdown code fences
-        if content.startswith("```"):
-            lines = content.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
-            content = "\n".join(lines)
-
         try:
-            result = json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.error(f"[PATCH] Failed to parse implementation JSON: {e}")
-
-            # Try to extract JSON from response
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                try:
-                    result = json.loads(json_match.group())
-                except json.JSONDecodeError:
-                    result = self._fallback_result(content, str(e))
-            else:
-                result = self._fallback_result(content, str(e))
+            raw_json = json.loads(content)
+            validated_impl = ImplementationResult(**raw_json)
+            result = validated_impl.model_dump()
+        except Exception as e:
+            result = self._fallback_result(content, str(e))
 
         result["_agent"] = "implementer"
-        result["_model"] = response.model
-        result["_tokens"] = response.tokens_used
-        result["_cost"] = response.cost
-
-        n_changes = len(result.get("changes", []))
-        n_tests = len(result.get("tests_added", []))
-        logger.info(f"[PATCH] Implementation ready — {n_changes} changes, {n_tests} tests")
-
         return result
 
     @staticmethod
@@ -170,7 +148,7 @@ Implement the changes as specified. Return JSON with your changes."""
             "changes": [],
             "tests_added": [],
             "commit_message": "fix: implementation (parse error)",
-            "summary": f"Failed to parse implementation output: {error}",
+            "summary": f"Failed to parse: {error}",
             "parse_error": True,
             "raw_response": raw[:2000],
         }
