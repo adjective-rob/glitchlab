@@ -1,0 +1,7 @@
+id: refactor-scanner-001
+objective: "Break down the _scan_file method in scanner.py into smaller, private helper methods to reduce cognitive complexity."
+constraints:
+  - "Do not change the public scan() method signature."
+  - "Ensure existing 'todo' and 'missing_doc' detection remains functional."
+risk: medium
+mode: maintenance

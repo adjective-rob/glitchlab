@@ -1,0 +1,10 @@
+id: audit-todo-003
+objective: 'Address TODO/FIXME comments in: glitchlab/auditor/task_writer.py'
+constraints:
+- Do not modify function signatures
+- Do not modify any logic unless explicitly required
+acceptance:
+- cargo test passes
+- Clean diff
+risk: medium
+source: auditor

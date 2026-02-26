@@ -326,37 +326,6 @@ class PreludeContext:
         return decisions
 
     # ------------------------------------------------------------------
-    # Agent Context Builder
-    # ------------------------------------------------------------------
-
-    def build_agent_prefix(self, max_chars: int = 8000) -> str:
-        """
-        Build a context prefix for injecting into agent prompts.
-
-        This is the primary integration point — prepended to every agent's
-        context so they understand the project before planning or coding.
-
-        Args:
-            max_chars: Truncate to this length to manage token budget.
-        """
-        context = self.export()
-        if not context:
-            return ""
-
-        prefix = (
-            "=== PROJECT CONTEXT (via Prelude) ===\n"
-            "The following is machine-readable context about this project's "
-            "stack, architecture, patterns, constraints, and decisions. "
-            "Respect all constraints and decisions when planning or implementing.\n\n"
-        )
-
-        remaining = max_chars - len(prefix)
-        if len(context) > remaining:
-            context = context[:remaining] + "\n\n[... context truncated for token budget ...]"
-
-        return prefix + context
-
-    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 

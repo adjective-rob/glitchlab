@@ -42,3 +42,7 @@ include = ["glitchlab*"]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+
+# Prevent Pytest from scanning the whole repo for "test_*.py" files
+[tool.pytest.ini_options]
+testpaths = ["tests"]

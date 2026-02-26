@@ -234,3 +234,9 @@ env/
 # OS
 .DS_Store
 Thumbs.db
+
+# Prelude internal state and exports
+.context/.prelude/
+.context/export.md
+.context/export.json
+.context/.watchlog.json
