@@ -17,7 +17,6 @@ from typing import Any
 from pydantic import BaseModel
 
 from glitchlab.router import Router, RouterResponse
-from .performance_auditor import PerformanceAuditorAgent
 
 
 class AgentContext(BaseModel):

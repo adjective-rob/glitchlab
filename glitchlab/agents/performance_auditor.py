@@ -1,24 +1,21 @@
 import json
 from typing import Any
 
-from glitchlab.agents import BaseAgent, AgentContext
-from glitchlab.router import RouterResponse
+from glitchlab.agents.base import BaseAgent
 
 class PerformanceAuditorAgent(BaseAgent):
     role = "performance_auditor"
+    
+    # Core Model: Gemini 3 Flash
+    # Note: Image generation (Nano Banana) and Video (Veo) are available tools
+    
     system_prompt = (
-        "You are the Performance Auditor. Your job is to analyze code for I/O inefficiencies "
-        "and resource leaks. Return your findings as a JSON object with a 'findings' list."
+        "You are the Performance Auditor. Your job is to analyze code for I/O inefficiencies."
     )
 
-    def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        content = f"Analyze the following files for performance issues:\n\n"
-        for path, code in context.file_context.items():
-            content += f"--- {path} ---\n{code}\n\n"
-        return [self._system_msg(), self._user_msg(content)]
+    def build_messages(self, context: Any) -> list[dict[str, str]]:
+        # Logic here
+        return [self._system_msg(), self._user_msg("Analyze this code...")]
 
-    def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        try:
-            return json.loads(response.content)
-        except json.JSONDecodeError:
-            return {"findings": [], "raw": response.content}
+    def parse_response(self, response: Any, context: Any) -> dict[str, Any]:
+        return json.loads(response.content)
