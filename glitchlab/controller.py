@@ -735,6 +735,59 @@ class Controller:
     Pipeline: Plan → Implement → Test → Debug Loop → Security → Release → PR
     """
 
+    # -----------------------------------------------------------------------
+    # Git sync (pre-task)
+    # -----------------------------------------------------------------------
+
+    def _is_git_repo(self, path: Path) -> bool:
+        """Return True if `path` looks like a git working tree."""
+        try:
+            if (path / ".git").exists():
+                return True
+            # Worktrees can have a .git file pointing to the actual gitdir
+            if (path / ".git").is_file():
+                return True
+        except Exception:
+            return False
+        return False
+
+    def _run_git(self, args: list[str], cwd: Path, timeout: int = 20) -> subprocess.CompletedProcess:
+        """Run a git command and capture output for logging."""
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+    def _pre_task_git_fetch(self) -> None:
+        """Best-effort fetch to ensure planning is against recent `origin/main`.
+
+        Soft-fails (warn + continue) to avoid breaking offline/CI runs.
+        """
+        if not self._is_git_repo(self.repo_path):
+            logger.debug(f"[GIT] Skipping fetch: not a git repo: {self.repo_path}")
+            return
+
+        try:
+            res = self._run_git(["fetch", "origin", "main"], cwd=self.repo_path, timeout=20)
+            if res.returncode != 0:
+                stderr = (res.stderr or "").strip()
+                stdout = (res.stdout or "").strip()
+                msg = stderr or stdout or f"git fetch failed with code {res.returncode}"
+                logger.warning(f"[GIT] Pre-task fetch failed (soft): {msg}")
+                return
+
+            out = (res.stdout or "").strip()
+            if out:
+                logger.info(f"[GIT] Pre-task fetch: {out}")
+            else:
+                logger.debug("[GIT] Pre-task fetch: up to date")
+        except Exception as e:
+            logger.warning(f"[GIT] Pre-task fetch exception (soft): {e}")
+            return
+
     def __init__(
         self,
         repo_path: Path,
@@ -777,6 +830,10 @@ class Controller:
 
     def run(self, task: Task) -> dict[str, Any]:
         """Execute the full agent pipeline for a task."""
+
+        # Ensure we plan against the most recent code.
+        # Soft-fail to avoid breaking offline/CI scenarios.
+        self._pre_task_git_fetch()
 
         # --- EXECUTION GUARD (Manual Patch) ---
         # Check for uncommitted changes in the main repo, ignoring .glitchlab/
