@@ -50,6 +50,7 @@ from glitchlab.agents.implementer import ImplementerAgent
 from glitchlab.agents.planner import PlannerAgent
 from glitchlab.agents.release import ReleaseAgent
 from glitchlab.agents.security import SecurityAgent
+from glitchlab.agents.performance import PerformanceAuditorAgent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 from glitchlab.history import TaskHistory
@@ -759,6 +760,7 @@ class Controller:
         self.security = SecurityAgent(self.router)
         self.release = ReleaseAgent(self.router)
         self.archivist = ArchivistAgent(self.router)
+        self.performance_auditor = PerformanceAuditorAgent(self.router)
 
         # Run state (reset per-task)
         self._state: TaskState | None = None

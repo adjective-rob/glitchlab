@@ -1,24 +1,14 @@
 {
-  "task_id": "infra-014-performance-auditor",
-  "objective": "Implement a Performance Auditor agent that checks for I/O inefficiencies and resource leaks.",
+  "task_id": "infra-015a-register-auditor",
+  "objective": "Import and instantiate the PerformanceAuditorAgent in the Controller.",
   "mode": "evolution",
-  "risk_level": "medium",
+  "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Create the PerformanceAuditorAgent class inheriting from BaseAgent, configured to use gemini-3.5-flash for checking I/O inefficiencies and resource leaks.",
+      "description": "Import PerformanceAuditorAgent and instantiate it in the Controller's initialization or agent registration section.",
       "files": [
-        "glitchlab/agents/performance_auditor.py"
-      ],
-      "action": "create",
-      "status": "pending",
-      "outcome": ""
-    },
-    {
-      "step_number": 2,
-      "description": "Export the new PerformanceAuditorAgent in the agents module initialization file.",
-      "files": [
-        "glitchlab/agents/__init__.py"
+        "glitchlab/controller.py"
       ],
       "action": "modify",
       "status": "pending",
@@ -26,30 +16,25 @@
     }
   ],
   "files_in_scope": [
-    "glitchlab/agents/performance_auditor.py",
-    "glitchlab/agents/__init__.py",
-    "glitchlab/agents/performance_auditor.py",
-    "glitchlab/agents/__init__.py"
+    "glitchlab/controller.py",
+    "glitchlab/controller.py"
   ],
-  "estimated_complexity": "small",
-  "requires_core_change": false,
+  "estimated_complexity": "trivial",
+  "requires_core_change": true,
   "files_modified": [
-    "glitchlab/agents/performance_auditor.py",
-    "glitchlab/agents/__init__.py"
+    "glitchlab/controller.py"
   ],
-  "files_created": [
-    "glitchlab/agents/performance_auditor.py"
-  ],
+  "files_created": [],
   "tests_added": [],
-  "commit_message": "Add PerformanceAuditorAgent to check for I/O inefficiencies and resource leaks",
-  "implementation_summary": "Implemented PerformanceAuditorAgent and exported it in the agents module.",
+  "commit_message": "feat: integrate PerformanceAuditorAgent into Controller",
+  "implementation_summary": "Imported and instantiated the PerformanceAuditorAgent in the Controller's initialization.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
   "security_verdict": "pass",
   "version_bump": "minor",
-  "changelog_entry": "### Added\n- Introduced `PerformanceAuditorAgent` to monitor and identify I/O inefficiencies and resource leaks within the system.",
+  "changelog_entry": "### Added\n- Integrated `PerformanceAuditorAgent` into the main `Controller` to enable automated performance auditing and telemetry collection.",
   "completed_phases": [
     "plan",
     "implement",
@@ -61,80 +46,80 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-26T23:38:30.990168+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:04:38.255841+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-014-performance-auditor"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-015a-register-auditor"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-26T23:38:30.994861+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:04:38.260715+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
-        "total_files": 32,
+        "total_files": 33,
         "languages": {
-          ".py": 30
+          ".py": 31
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-26T23:38:31.059372+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:04:38.321542+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-26T23:38:42.655314+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:04:45.151561+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
-        "steps": 2,
+        "steps": 1,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-26T23:39:04.487024+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:05:07.672249+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
-        "changes": 2,
+        "changes": 1,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-26T23:39:04.716323+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:05:07.899102+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-26T23:39:07.829967+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:05:09.668051+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
         "verdict": "pass"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-26T23:39:23.315155+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:05:11.386287+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
         "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-26T23:39:27.595655+00:00",
-      "task_id": "infra-014-performance-auditor",
+      "timestamp": "2026-02-27T00:05:15.093224+00:00",
+      "task_id": "infra-015a-register-auditor",
       "data": {
         "wrote_adr": true,
-        "doc_updates": 2
+        "doc_updates": 1
       }
     }
   ]
