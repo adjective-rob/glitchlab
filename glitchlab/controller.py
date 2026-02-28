@@ -45,6 +45,7 @@ from rich.table import Table
 
 from glitchlab.agents import AgentContext
 from glitchlab.agents.archivist import ArchivistAgent
+from glitchlab.agents.auditor import AuditorAgent
 from glitchlab.agents.debugger import DebuggerAgent
 from glitchlab.agents.implementer import ImplementerAgent
 from glitchlab.agents.planner import PlannerAgent
@@ -159,6 +160,14 @@ class TaskState(BaseModel):
                 "last_error": self.last_error,
                 "debug_attempts": self.debug_attempts,
                 "previous_fixes": self.previous_fixes[-2:] if self.previous_fixes else [],
+            }
+
+        elif for_agent == "auditor":
+            return {
+                **base,
+                "files_modified": self.files_modified,
+                "files_created": self.files_created,
+                "implementation_summary": self.implementation_summary,
             }
 
         elif for_agent == "security":
@@ -810,6 +819,7 @@ class Controller:
         self.planner = PlannerAgent(self.router)
         self.implementer = ImplementerAgent(self.router)
         self.debugger = DebuggerAgent(self.router)
+        self.auditor = AuditorAgent(self.router)
         self.security = SecurityAgent(self.router)
         self.release = ReleaseAgent(self.router)
         self.archivist = ArchivistAgent(self.router)
@@ -1130,6 +1140,10 @@ class Controller:
                 self._state.test_passing = test_ok
                 self._state.mark_phase("test")
                 self._state.persist(ws_path)
+
+                # ── 5.5. Auditor ──
+                audit = self._run_auditor(task, impl, ws_path)
+                self._state.mark_phase("audit")
 
                 # ── 6. Security Review ──
                 sec = self._run_security(task, impl, ws_path)
@@ -1546,6 +1560,26 @@ Ensure:
                 continue
 
         return False
+
+    def _run_auditor(self, task: Task, impl: dict, ws_path: Path) -> dict:
+        console.print("\n[bold yellow]🕵️  [AUDITOR] Checking for performance smells...[/]")
+
+        diff = self._workspace.diff_full() if self._workspace else ""
+
+        context = AgentContext(
+            task_id=task.task_id,
+            objective=task.objective,
+            repo_path=str(self.repo_path),
+            working_dir=str(ws_path),
+            previous_output=self._state.to_agent_summary("auditor"),
+            extra={
+                "diff": diff,
+            },
+        )
+
+        result = self.auditor.run(context)
+        self._log_event("auditor_feedback", {"feedback": result.get("feedback")})
+        return result
 
     def _run_security(self, task: Task, impl: dict, ws_path: Path) -> dict:
         console.print("\n[bold red]🔒 [FRANKIE] Security scan...[/]")

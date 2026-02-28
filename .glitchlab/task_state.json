@@ -1,14 +1,14 @@
 {
-  "task_id": "infra-015c-verify-auditor-fix",
-  "objective": "Force the Auditor to catch and fix the inefficient I/O in 'glitchlab/audit_logger.py'.",
+  "task_id": "infra-015b-wire-auditor-logic",
+  "objective": "Inject the Auditor into the execution loop to catch performance smells.",
   "mode": "evolution",
-  "risk_level": "low",
+  "risk_level": "medium",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Optimize file I/O in audit_logger.py by implementing buffered writing or batching to resolve inefficient I/O.",
+      "description": "Import the auditor and inject it into the execution loop, ensuring its feedback is appended to the session history.",
       "files": [
-        "glitchlab/audit_logger.py"
+        "glitchlab/controller.py"
       ],
       "action": "modify",
       "status": "pending",
@@ -16,8 +16,8 @@
     }
   ],
   "files_in_scope": [
-    "glitchlab/audit_logger.py",
-    "glitchlab/audit_logger.py"
+    "glitchlab/controller.py",
+    "glitchlab/controller.py"
   ],
   "estimated_complexity": "small",
   "requires_core_change": false,
@@ -28,15 +28,15 @@
     "glitchlab/audit_logger.py"
   ],
   "tests_added": [],
-  "commit_message": "Optimize file I/O in audit_logger.py with buffered writing",
-  "implementation_summary": "Implemented buffered writing in AuditLogger to resolve inefficient I/O.",
+  "commit_message": "feat: inject Auditor into execution loop to catch performance smells",
+  "implementation_summary": "Added the AuditorAgent to the controller pipeline to analyze code for performance smells and append feedback to the session history.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
   "security_verdict": "warn",
   "version_bump": "minor",
-  "changelog_entry": "### Added\n- Implemented buffered writing in `AuditLogger` to significantly reduce I/O overhead and improve system performance during high-volume logging events.",
+  "changelog_entry": "### Added\n- Integrated `AuditorAgent` into the execution controller to automatically detect and report performance smells during the execution loop.",
   "completed_phases": [
     "plan",
     "implement",
@@ -48,16 +48,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-02-27T00:06:13.764287+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:17.445388+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-015c-verify-auditor-fix"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/infra-015b-wire-auditor-logic"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-02-27T00:06:13.768398+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:17.448811+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "total_files": 33,
         "languages": {
@@ -67,25 +67,25 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-02-27T00:06:13.834470+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:17.510452+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-02-27T00:06:22.740993+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:25.482673+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "steps": 1,
-        "risk": "low"
+        "risk": "medium"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-02-27T00:06:29.872745+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:52.934228+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "changes": 1,
         "tests": 0
@@ -93,32 +93,32 @@
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-02-27T00:06:30.095925+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:53.164961+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-02-27T00:06:33.265869+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:55.960773+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-02-27T00:06:54.675259+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:05:59.681271+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "bump": "minor"
       }
     },
     {
       "type": "archivist_completed",
-      "timestamp": "2026-02-27T00:07:14.550258+00:00",
-      "task_id": "infra-015c-verify-auditor-fix",
+      "timestamp": "2026-02-27T00:06:08.988189+00:00",
+      "task_id": "infra-015b-wire-auditor-logic",
       "data": {
         "wrote_adr": true,
         "doc_updates": 1
