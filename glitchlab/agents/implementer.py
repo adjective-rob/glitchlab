@@ -152,21 +152,66 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         modified_files = set()
         created_files = set()
         think_count = 0
-        search_count = 0
         max_steps = 15
         
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
             
-            # Proactive context compression: compress old tool results
+            # 1. Proactive smart context compression
             for i in range(len(messages)):
-                if messages[i].get("role") == "tool" and messages[i].get("name") in ("read_file", "search_grep", "run_check"):
-                    # Check if consumed by a subsequent assistant message
+                # Compress tool outputs after they've been consumed by the assistant
+                if messages[i].get("role") == "tool":
                     consumed = any(m.get("role") == "assistant" for m in messages[i+1:])
                     if consumed:
-                        content = messages[i].get("content", "")
-                        if len(content) > 500 and "... [Content compressed" not in content:
-                            messages[i]["content"] = content[:500] + "\n... [Content compressed to save budget. Use tool again if needed]"
+                        content = str(messages[i].get("content", ""))
+                        if "... [Content compressed" in content or "... [Search results compressed" in content:
+                            continue  # Already compressed
+                        
+                        tname = messages[i].get("name")
+                        
+                        # Smart symbol extraction for read_file
+                        if tname == "read_file" and len(content) > 1000:
+                            lines = content.splitlines()
+                            head = "\n".join(lines[:10])
+                            tail = "\n".join(lines[-10:])
+                            # Extract functions, classes, structs, etc.
+                            symbols = [l.strip() for l in lines if l.strip().startswith(("def ", "class ", "async def ", "pub fn ", "struct ", "type ", "export "))]
+                            sym_str = "\n".join(symbols[:20])
+                            messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
+                        
+                        # Reference-only extraction for search_grep
+                        elif tname == "search_grep" and len(content) > 500:
+                            lines = content.splitlines()
+                            refs = []
+                            for l in lines:
+                                parts = l.split(":")
+                                if len(parts) >= 2:
+                                    refs.append(f"{parts[0]}:{parts[1]}")
+                            if refs:
+                                messages[i]["content"] = "\n".join(refs[:30]) + "\n... [Search results compressed to references only]"
+                            else:
+                                messages[i]["content"] = content[:500] + "\n... [Search results compressed]"
+                
+                # Compress tool inputs (e.g. massive write_file contents) after consumption
+                if messages[i].get("role") == "assistant" and messages[i].get("tool_calls"):
+                    consumed = any(m.get("role") == "tool" for m in messages[i+1:])
+                    if consumed:
+                        for tc in messages[i]["tool_calls"]:
+                            if tc.get("function", {}).get("name") == "write_file":
+                                try:
+                                    args = json.loads(tc["function"]["arguments"])
+                                    if "content" in args and len(str(args["content"])) > 200:
+                                        lines_written = len(str(args["content"]).splitlines())
+                                        path = args.get("path", "unknown")
+                                        args["content"] = f"... [Content compressed: wrote {lines_written} lines to {path}]"
+                                        tc["function"]["arguments"] = json.dumps(args)
+                                except Exception:
+                                    pass
+
+            # 2. Rolling window search spiral guard
+            # Look at the last 6 tool calls across all messages
+            recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
+            search_count = recent_tools.count("search_grep")
 
             response = self.router.complete(
                 role=self.role,
@@ -204,17 +249,11 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
 
                 logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
 
-                if tc_name == "search_grep":
-                    search_count += 1
-                else:
-                    search_count = 0
-
                 if tc_name == "think":
                     think_count += 1
                     if think_count > 3:
                         res = "Thinking limit reached. Please proceed with actions (read, write, or search)."
                     else:
-                        # Verbatim return to keep the reasoning in context
                         res = "Reasoning noted. Continue when ready."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
@@ -229,7 +268,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
 
                 elif tc_name == "search_grep":
                     if search_count >= 3:
-                        res = "You have searched multiple times. Consider using `think` to consolidate your findings or `read_file` to look closer."
+                        res = "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."
                         messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
                         continue
 
