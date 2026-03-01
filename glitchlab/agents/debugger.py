@@ -86,6 +86,18 @@ DEBUGGER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "rollback_file",
+            "description": "Undo your changes to a file, restoring it to the version before you modified it. Use this when your fix broke something worse and you need to start that file over.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_check",
             "description": "Run a shell command (e.g., a linter or compiler) to validate your fix.",
             "parameters": {
@@ -148,7 +160,8 @@ You now operate in an agentic loop. You have tools to think, investigate, fix, a
 3. Use `search_grep` if you don't know the exact file path.
 4. Use `read_file` to examine the logic.
 5. ALWAYS prefer `replace_in_file` to apply surgical fixes. Only use `write_file` if you are completely rewriting a file.
-6. When the test passes, call `done`.
+6. If you make a mistake and break a file further, use the `rollback_file` tool to undo your changes.
+7. When the test passes, call `done`.
 
 The test command you are debugging is: {test_command}
 """
@@ -382,12 +395,39 @@ Investigate and fix. Call `done` when the tests pass."""
                         res = f"Error replacing in file: {e}"
                         
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    
+                elif tc_name == "rollback_file":
+                    path = tc_args.get("path")
+                    try:
+                        fpath = workspace_dir / path
+                        if path in created_files:
+                            if fpath.exists():
+                                fpath.unlink()
+                            created_files.discard(path)
+                            res = f"Rolled back {path} (deleted newly created file)."
+                        elif path in modified_files:
+                            subprocess.run(
+                                ["git", "checkout", "--", path],
+                                cwd=workspace_dir,
+                                capture_output=True,
+                                text=True,
+                                check=True
+                            )
+                            modified_files.discard(path)
+                            res = f"Rolled back {path} to original version."
+                        else:
+                            res = f"Error: {path} has not been modified or created by you."
+                    except Exception as e:
+                        res = f"Error rolling back file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
                     if tool_executor:
                         try:
                             tres = tool_executor.execute(test_cmd)
                             res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                            if tres.returncode != 0:
+                                res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
                     else:
@@ -400,6 +440,8 @@ Investigate and fix. Call `done` when the tests pass."""
                         try:
                             tres = tool_executor.execute(cmd)
                             res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                            if tres.returncode != 0:
+                                res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
                     else:

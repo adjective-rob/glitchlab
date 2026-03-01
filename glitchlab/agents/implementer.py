@@ -82,7 +82,19 @@ IMPLEMENTER_TOOLS = [
                 "required": ["path", "find", "replace"]
             }
         }
-    },  
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rollback_file",
+            "description": "Undo your changes to a file, restoring it to the version before you modified it. Use this when a write_file broke something and you need to start that file over.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -133,13 +145,14 @@ class ImplementerAgent(BaseAgent):
 
     system_prompt = """You are Patch, the surgical implementation engine.
 
-You now operate in an agentic loop. You have tools to think, read, write, and check.
+You now operate in an agentic loop. You have tools to think, read, write, check, and rollback.
 1. You MUST use the `think` tool to explain your step-by-step execution plan BEFORE you use the `write_file` tool for the first time.
 2. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
 3. For existing files, ALWAYS prefer `replace_in_file` to make surgical edits. Only use `write_file` if you are creating a brand new file or completely rewriting a very small one.
 4. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
 5. When using write_file, you MUST output the ENTIRE file contents. NEVER use placeholders like 'rest of code here'. Doing so will delete the user's code.
-6. When you are confident the plan is implemented, use the `done` tool.
+6. If you make a mistake and break a file, use the `rollback_file` tool to undo your changes and start over.
+7. When you are confident the plan is implemented, use the `done` tool.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -372,6 +385,31 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                         
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
+                elif tc_name == "rollback_file":
+                    path = tc_args.get("path")
+                    try:
+                        fpath = workspace_dir / path
+                        if path in created_files:
+                            if fpath.exists():
+                                fpath.unlink()
+                            created_files.discard(path)
+                            res = f"Rolled back {path} (deleted newly created file)."
+                        elif path in modified_files:
+                            subprocess.run(
+                                ["git", "checkout", "--", path],
+                                cwd=workspace_dir,
+                                capture_output=True,
+                                text=True,
+                                check=True
+                            )
+                            modified_files.discard(path)
+                            res = f"Rolled back {path} to original version."
+                        else:
+                            res = f"Error: {path} has not been modified or created by you."
+                    except Exception as e:
+                        res = f"Error rolling back file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
                 elif tc_name == "run_check":
                     cmd = tc_args.get("command")
                     if tool_executor:
@@ -379,6 +417,8 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                             # Use the sandboxed executor
                             tool_res = tool_executor.execute(cmd)
                             res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
+                            if tool_res.returncode != 0:
+                                res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
                     else:
