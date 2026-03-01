@@ -81,7 +81,7 @@ Output schema:
 
 Rules:
 - Be precise about file paths. Use the file context provided.
-- MAX 2 FILES MODIFIED PER PLAN. If the objective requires more, isolate the most independent module and only plan for that.
+- Include ALL files required to satisfy the objective.
 - Keep steps minimal. Fewer steps = fewer patch errors.
 - Flag core changes honestly — this triggers human review.
 - If the task is ambiguous, say so in risk_notes.
