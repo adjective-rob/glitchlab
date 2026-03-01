@@ -168,7 +168,7 @@ Investigate and fix. Call `done` when the tests pass."""
         created_files = set()
         think_count = 0
         search_count = 0
-        max_steps = 10 
+        max_steps = 30 
 
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
@@ -340,8 +340,11 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
                     if tool_executor:
-                        tres = tool_executor.execute(test_cmd)
-                        res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                        try:
+                            tres = tool_executor.execute(test_cmd)
+                            res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                        except Exception as e:
+                            res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: No executor wired up."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
@@ -349,8 +352,11 @@ Investigate and fix. Call `done` when the tests pass."""
                 elif tc_name == "run_check":
                     cmd = tc_args.get("command")
                     if tool_executor:
-                        tres = tool_executor.execute(cmd)
-                        res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                        try:
+                            tres = tool_executor.execute(cmd)
+                            res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                        except Exception as e:
+                            res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: Tool executor not wired up."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
