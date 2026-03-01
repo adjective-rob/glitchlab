@@ -70,6 +70,22 @@ IMPLEMENTER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "replace_in_file",
+            "description": "Replace a specific exact string with a new string in an existing file. ALWAYS prefer this over write_file for existing files to avoid deleting code. The 'find' string MUST match the existing file content exactly.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "find": {"type": "string", "description": "The exact existing text to find. Must match whitespace and indentation perfectly."},
+                    "replace": {"type": "string", "description": "The new text to replace it with."}
+                },
+                "required": ["path", "find", "replace"]
+            }
+        }
+    },  
+    {
+        "type": "function",
+        "function": {
             "name": "run_check",
             "description": "Run a shell command (like a linter, compiler, or tests) to validate your changes. e.g., 'cargo check' or 'python -m pytest'",
             "parameters": {
@@ -108,7 +124,7 @@ IMPLEMENTER_TOOLS = [
                 "required": ["pattern"]
             }
         }
-    }                 
+    }               
 ]
 
 
@@ -120,9 +136,10 @@ class ImplementerAgent(BaseAgent):
 You now operate in an agentic loop. You have tools to think, read, write, and check.
 1. You MUST use the `think` tool to explain your step-by-step execution plan BEFORE you use the `write_file` tool for the first time.
 2. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
-3. Write one file at a time using `write_file`.
+3. For existing files, ALWAYS prefer `replace_in_file` to make surgical edits. Only use `write_file` if you are creating a brand new file or completely rewriting a very small one.
 4. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
-5. When you are confident the plan is implemented, use the `done` tool.
+5. When using write_file, you MUST output the ENTIRE file contents. NEVER use placeholders like 'rest of code here'. Doing so will delete the user's code.
+6. When you are confident the plan is implemented, use the `done` tool.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -324,6 +341,35 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                         res = f"Successfully wrote {len(content)} characters to {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "replace_in_file":
+                    if think_count == 0:
+                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+                        
+                    path = tc_args.get("path")
+                    find_str = tc_args.get("find", "")
+                    replace_str = tc_args.get("replace", "")
+                    
+                    try:
+                        fpath = workspace_dir / path
+                        if not fpath.exists():
+                            res = f"Error: {path} does not exist."
+                        else:
+                            content = fpath.read_text(encoding='utf-8')
+                            if find_str not in content:
+                                res = "Error: The exact 'find' string was not found. You must match spaces and indentation exactly. Use read_file to check the exact text."
+                            else:
+                                count = content.count(find_str)
+                                new_content = content.replace(find_str, replace_str)
+                                fpath.write_text(new_content, encoding='utf-8')
+                                modified_files.add(path)
+                                res = f"Success: Replaced {count} occurrence(s) in {path}."
+                    except Exception as e:
+                        res = f"Error replacing in file: {e}"
+                        
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "run_check":

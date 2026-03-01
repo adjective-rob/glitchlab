@@ -70,6 +70,22 @@ DEBUGGER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "replace_in_file",
+            "description": "Replace a specific exact string with a new string in an existing file. ALWAYS prefer this over write_file to avoid accidentally deleting code. The 'find' string MUST match the existing file content exactly.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "find": {"type": "string", "description": "The exact existing text to find. Must match whitespace and indentation perfectly."},
+                    "replace": {"type": "string", "description": "The new text to replace it with."}
+                },
+                "required": ["path", "find", "replace"]
+            }
+        }
+    },   
+    {
+        "type": "function",
+        "function": {
             "name": "run_check",
             "description": "Run a shell command (e.g., a linter or compiler) to validate your fix.",
             "parameters": {
@@ -131,7 +147,7 @@ You now operate in an agentic loop. You have tools to think, investigate, fix, a
 2. Use `get_error` to see the current failure.
 3. Use `search_grep` if you don't know the exact file path.
 4. Use `read_file` to examine the logic.
-5. Use `write_file` to apply a surgical fix.
+5. ALWAYS prefer `replace_in_file` to apply surgical fixes. Only use `write_file` if you are completely rewriting a file.
 6. When the test passes, call `done`.
 
 The test command you are debugging is: {test_command}
@@ -336,6 +352,35 @@ Investigate and fix. Call `done` when the tests pass."""
                         res = f"Successfully updated {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "replace_in_file":
+                    if think_count == 0:
+                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+                        
+                    path = tc_args.get("path")
+                    find_str = tc_args.get("find", "")
+                    replace_str = tc_args.get("replace", "")
+                    
+                    try:
+                        fpath = workspace_dir / path
+                        if not fpath.exists():
+                            res = f"Error: {path} does not exist."
+                        else:
+                            content = fpath.read_text(encoding='utf-8')
+                            if find_str not in content:
+                                res = "Error: The exact 'find' string was not found. You must match spaces and indentation exactly. Use read_file to check the exact text."
+                            else:
+                                count = content.count(find_str)
+                                new_content = content.replace(find_str, replace_str)
+                                fpath.write_text(new_content, encoding='utf-8')
+                                modified_files.add(path)
+                                res = f"Success: Replaced {count} occurrence(s) in {path}."
+                    except Exception as e:
+                        res = f"Error replacing in file: {e}"
+                        
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
