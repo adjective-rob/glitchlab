@@ -1422,11 +1422,8 @@ Ensure:
         self, task: Task, ws_path: Path, tools: ToolExecutor, impl: dict
     ) -> bool:
         """
-        Run test → debug → fix loop (v2.1).
-        
-        Hardened to distinguish between:
-          - Transport Failures: JSON truncation, parsing errors.
-          - Logic Failures: Syntax errors, failing assertions.
+        Run test → debug → fix loop (v3.0).
+        Debugger is now agentic and manages its own tool-loop to investigate and fix.
         """
         max_attempts = self.config.limits.max_fix_attempts
 
@@ -1434,7 +1431,7 @@ Ensure:
             console.print(f"\n[bold]🧪 Test run {attempt}/{max_attempts}...[/]")
 
             try:
-                # 1. Execute test command inside the isolated sandbox
+                # 1. Execute test command
                 result = tools.execute(self.test_command)
             except ToolViolationError as e:
                 console.print(f"[red]Tool violation: {e}[/]")
@@ -1449,94 +1446,49 @@ Ensure:
             console.print(f"[red]❌ Tests failed (attempt {attempt})[/]")
             self._log_event("tests_failed", {"attempt": attempt})
 
-            # 2. Update TaskState with error context
-            self._state.last_error = (error_output or "")[:3000]
-            self._state.debug_attempts = attempt
-
             if attempt >= max_attempts:
                 break
 
-            # 3. Invoke debugger with surgical context
+            # 2. Invoke Debugger (Agentic Loop)
             console.print(f"\n[bold yellow]🐛 [REROUTE] Debugging (attempt {attempt})...[/]")
-
-            # Resolve file context for ONLY the files the implementer changed
-            file_context = self._scope.resolve_for_files(
-                [c["file"] for c in impl.get("changes", [])],
-                include_deps=True,
-            )
-
-            # Detect prior failures to switch to "Full Content" strategy if patches fail
-            patch_failed = any(
-                "FAIL" in str(fix.get("_apply_result", ""))
-                or "PATCH_FAILED" in str(fix.get("_apply_result", ""))
-                for fix in self._state.previous_fixes
-            )
-
-            extra = {
-                "error_output": (error_output or "")[:800], # Cap for JSON headroom
-                "test_command": self.test_command,
-                "attempt": attempt,
-            }
-
-            if patch_failed or attempt > 1:
-                extra["patch_strategy"] = (
-                    "IMPORTANT: Previous patches failed. Do NOT output unified diffs. "
-                    "Provide the COMPLETE file content in the 'content' field."
-                )
 
             context = AgentContext(
                 task_id=task.task_id,
                 objective=task.objective,
                 repo_path=str(self.repo_path),
                 working_dir=str(ws_path),
-                file_context=file_context,
                 previous_output=self._state.to_agent_summary("debugger"),
-                extra=extra,
+                extra={
+                    "error_output": (error_output or "")[:1000],
+                    "test_command": self.test_command,
+                    "tool_executor": tools, # Wire the sandbox executor
+                },
             )
 
-            # 4. Invoke Reroute
             debug_result = self.debugger.run(context)
             
-            # --- POLICY OVERRIDE: Transport vs Logic ---
-            is_transport_failure = (
-                debug_result.get("parse_error") or 
-                debug_result.get("root_cause") == "JSON_TRUNCATION"
-            )
-            
-            if is_transport_failure:
-                console.print("[yellow]⚠ Transport failure (JSON truncation). Forcing retry...[/]")
-                debug_result["should_retry"] = True  # System > Model Policy
-            
+            # Record debug Turn for TaskHistory
             self._state.previous_fixes.append(debug_result)
-
-            if not debug_result.get("should_retry", False): #
-                console.print("[yellow]Debugger says: don't retry (logic failure).[/]")
-                break
-
-            # 5. Apply the fix
+            self._state.last_error = debug_result.get("diagnosis", "Unknown error")
+            self._state.debug_attempts = attempt
+            
+            # Sync TaskState with files written by the debugger's tools
             fix_changes = debug_result.get("fix", {}).get("changes", [])
-            if fix_changes:
-                is_maintenance = (task.mode == "maintenance")
-                fix_applied = apply_changes(
-                    ws_path,
-                    fix_changes,
-                    boundary=self.boundary,
-                    allow_core=self.allow_core,
-                    allow_test_modifications=(not is_maintenance),
-                    allow_full_rewrite=True,
-                )
-                for a in fix_applied:
-                    console.print(f"  [cyan]{a}[/]")
+            for change in fix_changes:
+                f = change.get("file")
+                if f:
+                    if change.get("action") == "create" and f not in self._state.files_created:
+                        self._state.files_created.append(f)
+                    elif f not in self._state.files_modified:
+                        self._state.files_modified.append(f)
 
-                debug_result["_apply_result"] = fix_applied
-
-                if all("FAIL" in a or "PATCH_FAILED" in a or "SKIP" in a for a in fix_applied):
-                    console.print("[yellow]⚠ Debug fix failed to apply. Skipping re-test.[/]")
-                    continue
-            else:
-                if not is_transport_failure:
-                    console.print("[yellow]⚠ Debugger returned no fix changes.[/]")
+            if debug_result.get("parse_error"):
+                console.print("[yellow]⚠ Debugger failed to conclude. Retrying loop...[/]")
                 continue
+
+            if not debug_result.get("should_retry", False):
+                console.print("[yellow]Debugger suggests abandoning fix.[/]")
+                break
 
         return False
 

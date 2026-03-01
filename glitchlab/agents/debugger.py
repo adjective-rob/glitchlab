@@ -1,16 +1,14 @@
 """
-🐛 Reroute — The Debugger (v2.2)
+🐛 Reroute — The Debugger (v3.0 Tool-Loop Architecture)
 
-Only appears when things break. Laser-focused.
-Hardened against truncated / malformed LLM JSON responses.
-
-Energy: quiet gremlin that only appears when things break.
+Now operates in an agentic loop. Can read failing code, run tests to see 
+evolving errors, and apply surgical fixes directly via tools.
 """
 
 from __future__ import annotations
 
 import json
-import re
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -18,224 +16,196 @@ from loguru import logger
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
+DEBUGGER_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the contents of a file to understand the failing logic or type signatures.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write corrected content to a file to fix the bug.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"}
+                },
+                "required": ["path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_check",
+            "description": "Run a shell command (e.g., a linter or compiler) to validate your fix.",
+            "parameters": {
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_error",
+            "description": "Re-run the failing test command and return fresh output. Use this to see if your partial fix changed the error.",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "done",
+            "description": "Signal that the bug is fixed and verified.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "diagnosis": {"type": "string", "description": "Short summary of what was failing"},
+                    "root_cause": {"type": "string", "description": "The specific logic error found"},
+                    "fix_summary": {"type": "string", "description": "What you changed to fix it"},
+                    "confidence": {"type": "string", "enum": ["high", "medium", "low"]}
+                },
+                "required": ["diagnosis", "root_cause", "fix_summary", "confidence"]
+            }
+        }
+    }
+]
 
 class DebuggerAgent(BaseAgent):
     role = "debugger"
 
-    # Immutable system contract
-    system_prompt = """You are Reroute, the debug engine inside GLITCHLAB.
+    system_prompt = """You are Reroute, the surgical debug engine.
 
-You are invoked ONLY when tests fail or builds break.
-Your job is to produce a MINIMAL, surgically precise fix.
+You are invoked when tests fail. You have tools to investigate, fix, and verify.
+1. Use `get_error` to see the current failure.
+2. Use `read_file` to examine the code around the failure.
+3. Use `write_file` to apply a surgical fix.
+4. Use `get_error` or `run_check` again to verify the fix.
+5. When the test passes, call `done`.
 
-You MUST respond with valid JSON only. No markdown wrapping.
-
-Output schema:
-{
-  "diagnosis": "Short summary of what failed",
-  "root_cause": "The specific line or logic error",
-  "fix": {
-    "changes": [
-      {
-        "file": "path/to/file",
-        "action": "modify",
-        "surgical_blocks": [
-          {
-            "search": "The EXACT lines to find in the original file, including 2-3 lines of unchanged context above and below to ensure uniqueness.",
-            "replace": "The new lines that will replace the search block."
-          }
-        ],
-        "description": "Fixes the specific error"
-      }
-    ]
-  },
-  "confidence": "high|medium|low",
-  "should_retry": true
-}
-
-CRITICAL RULES:
-1. Fix the EXACT failure. Do not refactor unrelated code.
-2. YOU MUST USE `surgical_blocks` FOR MODIFICATIONS. NEVER output the full file content.
-3. The `search` string must EXACTLY match the original file character-for-character, including whitespace and indentation.
-4. If tokens run out, prioritize completing the JSON structure.
-5. Do NOT wrap output in markdown.
-6. If Exit Code 5 (No tests collected), check for missing __init__.py.
+The test command you are debugging is: {test_command}
+You can call `get_error` with no arguments to re-run this specific command.
 """
 
-    # ------------------------------------------------------------------ #
-    # Prompt Construction
-    # ------------------------------------------------------------------ #
-
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        """Construct prompt with capped error context to preserve token headroom."""
-
         state = context.previous_output or {}
+        test_cmd = context.extra.get("test_command", "unknown")
+        error_log = context.extra.get("error_output", "")[:1000]
 
-        raw_error = context.extra.get("error_output", "") or ""
-        error_output = raw_error[:1000]  # Hard cap for token safety
+        sys_prompt = self.system_prompt.format(test_command=test_cmd)
 
-        test_command = context.extra.get("test_command", "unknown")
-        attempt = state.get("debug_attempts", 1)
-        patch_strategy = context.extra.get("patch_strategy", "")
-
-        # Previous attempts (limit to last 2)
-        previous_fixes = state.get("previous_fixes", [])
-        prev_fixes_text = ""
-        if previous_fixes:
-            prev_fixes_text = "\n\nFAILED PREVIOUS ATTEMPTS:\n"
-            for i, fix in enumerate(previous_fixes[-2:], 1):
-                diag = fix.get("diagnosis", "unknown")
-                prev_fixes_text += f"Attempt {i}: {diag}\n"
-
-        # File context
-        file_context = ""
-        if context.file_context:
-            file_context = "\n\nFILES FOR CONTEXT (Use as base for fix):\n"
-            for fname, content in context.file_context.items():
-                if fname.startswith("[dep] "):
-                    file_context += f"\n[SIGNATURES] {fname[6:]}:\n{content}\n"
-                else:
-                    file_context += f"\n--- {fname} ---\n{content}\n"
-
-        user_content = f"""FAILURE DETECTED (Attempt {attempt})
-
+        user_content = f"""FAILURE DETECTED
 Objective: {context.objective}
-Mode: {state.get('mode', 'evolution')}
-Modified files: {state.get('files_modified', [])}
+Failing Command: {test_cmd}
 
-FAILED COMMAND: {test_command}
+Initial Error Output:
+{error_log}
 
-ERROR LOG (TRUNCATED):
-{error_output}
+Modified Files: {state.get('files_modified', [])}
 
-{f"⚠️ STRATEGY: {patch_strategy}" if patch_strategy else ""}
-{prev_fixes_text}
-{file_context}
+Use your tools to investigate and fix the bug. Call `done` when the tests pass."""
 
-Produce the minimal JSON fix using strict surgical_blocks."""
+        return [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}]
 
-        return [self._system_msg(), self._user_msg(user_content)]
+    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+        messages = self.build_messages(context)
+        workspace_dir = Path(context.working_dir)
+        tool_executor = context.extra.get("tool_executor")
+        test_cmd = context.extra.get("test_command")
+        
+        modified_files = set()
+        max_steps = 10  # Surgical limit
 
-    # ------------------------------------------------------------------ #
-    # Response Parsing
-    # ------------------------------------------------------------------ #
+        for step in range(max_steps):
+            response = self.router.complete(
+                role=self.role,
+                messages=messages,
+                tools=DEBUGGER_TOOLS,
+                **kwargs
+            )
 
-    def parse_response(
-        self,
-        response: RouterResponse,
-        context: AgentContext
-    ) -> dict[str, Any]:
-        """Parse debug output with resilient JSON extraction + repair."""
+            assist_msg = {"role": "assistant"}
+            if response.content: assist_msg["content"] = response.content
+            if response.tool_calls:
+                assist_msg["tool_calls"] = [
+                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc) 
+                    for tc in response.tool_calls
+                ]
+            messages.append(assist_msg)
 
-        content = response.content.strip()
+            if not response.tool_calls:
+                messages.append({"role": "user", "content": "Please use a tool or call `done`."})
+                continue
 
-        # Remove markdown fences if model violated rules
-        content = self._strip_markdown(content)
+            for tool_call in response.tool_calls:
+                tc_id = tool_call.id
+                tc_name = tool_call.function.name
+                tc_args = json.loads(tool_call.function.arguments or "{}")
 
-        # Attempt direct parse
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
-            logger.warning("[REROUTE] Malformed JSON detected. Attempting recovery...")
-            result = self._recover_json(content)
+                logger.info(f"[REROUTE] 🛠️ Tool: {tc_name}")
 
-        # Attach metadata
-        result["_agent"] = "debugger"
-        result["_model"] = response.model
-        result["_tokens"] = response.tokens_used
+                if tc_name == "read_file":
+                    path = tc_args.get("path")
+                    try:
+                        content = (workspace_dir / path).read_text(encoding='utf-8')
+                        res = f"Content of {path}:\n{content}"
+                    except Exception as e: res = f"Error: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-        logger.info(
-            f"[REROUTE] Diagnosis: {result.get('diagnosis', 'Unknown')[:60]}... "
-            f"Confidence: {result.get('confidence', 'low')}"
-        )
+                elif tc_name == "write_file":
+                    path, content = tc_args.get("path"), tc_args.get("content")
+                    try:
+                        fpath = workspace_dir / path
+                        fpath.parent.mkdir(parents=True, exist_ok=True)
+                        fpath.write_text(content, encoding='utf-8')
+                        modified_files.add(path)
+                        res = f"Successfully updated {path}."
+                    except Exception as e: res = f"Error: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-        return result
+                elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
+                    if tool_executor:
+                        tres = tool_executor.execute(test_cmd)
+                        res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                    else: res = "Error: No executor."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-    # ------------------------------------------------------------------ #
-    # JSON Recovery Logic
-    # ------------------------------------------------------------------ #
+                elif tc_name == "run_check":
+                    cmd = tc_args.get("command")
+                    if tool_executor:
+                        tres = tool_executor.execute(cmd)
+                        res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
+                    else: res = "Error: No executor."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-    def _strip_markdown(self, content: str) -> str:
-        """Remove ``` or ```json wrappers safely."""
-        if content.startswith("```"):
-            content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
-        return content.strip()
+                elif tc_name == "done":
+                    return {
+                        "diagnosis": tc_args.get("diagnosis"),
+                        "root_cause": tc_args.get("root_cause"),
+                        "fix": {
+                            "changes": [{"file": f, "action": "modify", "_already_applied": True} for f in modified_files]
+                        },
+                        "confidence": tc_args.get("confidence"),
+                        "should_retry": True,
+                        "summary": tc_args.get("fix_summary"),
+                        "_agent": "debugger",
+                        "_model": response.model,
+                        "_tokens": response.tokens_used
+                    }
 
-    def _recover_json(self, content: str) -> dict[str, Any]:
-        """
-        Recover largest valid JSON object from truncated response.
-        Strategy:
-        1. Extract first full JSON object if embedded in noise.
-        2. Attempt structural balancing.
-        3. Fallback to regex extraction.
-        """
+        return {"diagnosis": "Max steps reached", "root_cause": "JSON_TRUNCATION", "should_retry": False, "parse_error": True}
 
-        # 1. Try extracting largest {...} block
-        extracted = self._extract_outer_json(content)
-        if extracted:
-            try:
-                return json.loads(extracted)
-            except Exception:
-                pass
-
-        # 2. Structural balancing
-        balanced = self._balance_json(content)
-        if balanced:
-            try:
-                return json.loads(balanced)
-            except Exception:
-                pass
-
-        # 3. Regex fallback
-        logger.error("[REROUTE] JSON recovery failed. Using minimal fallback.")
-        diag_match = re.search(r'"diagnosis"\s*:\s*"([^"]+)"', content)
-
-        return {
-            "diagnosis": diag_match.group(1) if diag_match else "Truncated response",
-            "root_cause": "JSON_TRUNCATION",
-            "fix": {"changes": []},
-            "confidence": "low",
-            "should_retry": False,
-            "parse_error": True,
-        }
-
-    def _extract_outer_json(self, text: str) -> str | None:
-        """Extract first top-level JSON object using brace tracking."""
-        start = text.find("{")
-        if start == -1:
-            return None
-
-        depth = 0
-        for i in range(start, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    return text[start:i + 1]
-
-        return None
-
-    def _balance_json(self, text: str) -> str | None:
-        """Attempt to balance braces and brackets in truncated JSON."""
-
-        open_braces = text.count("{")
-        close_braces = text.count("}")
-        open_brackets = text.count("[")
-        close_brackets = text.count("]")
-
-        repaired = text
-
-        # Close unterminated string if odd quotes
-        if repaired.count('"') % 2 != 0:
-            repaired += '"'
-
-        # Close brackets first
-        if open_brackets > close_brackets:
-            repaired += "]" * (open_brackets - close_brackets)
-
-        # Then braces
-        if open_braces > close_braces:
-            repaired += "}" * (open_braces - close_braces)
-
-        return repaired if repaired != text else None
+    def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
+        pass
