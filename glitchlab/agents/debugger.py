@@ -163,11 +163,21 @@ Investigate and fix. Call `done` when the tests pass."""
         modified_files = set()
         created_files = set()
         think_count = 0
+        search_count = 0
         max_steps = 10 
 
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
             
+            # Proactive context compression: compress old tool results
+            for i in range(len(messages)):
+                if messages[i].get("role") == "tool" and messages[i].get("name") in ("read_file", "search_grep", "run_check", "get_error"):
+                    consumed = any(m.get("role") == "assistant" for m in messages[i+1:])
+                    if consumed:
+                        content = messages[i].get("content", "")
+                        if len(content) > 500 and "... [Content compressed" not in content:
+                            messages[i]["content"] = content[:500] + "\n... [Content compressed to save budget. Use tool again if needed]"
+
             response = self.router.complete(
                 role=self.role,
                 messages=messages,
@@ -202,6 +212,11 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 logger.info(f"[REROUTE] 🛠️ Tool call: {tc_name}")
 
+                if tc_name == "search_grep":
+                    search_count += 1
+                else:
+                    search_count = 0
+
                 if tc_name == "think":
                     think_count += 1
                     if think_count > 3:
@@ -220,6 +235,11 @@ Investigate and fix. Call `done` when the tests pass."""
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "search_grep":
+                    if search_count >= 3:
+                        res = "You have searched multiple times. Consider using `think` to consolidate your findings or `read_file` to look closer."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:

@@ -15,9 +15,13 @@ from typing import Any
 import litellm
 from loguru import logger
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 from glitchlab.config_loader import GlitchLabConfig
+
+
+class BudgetExceededError(Exception):
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +43,7 @@ class BudgetTracker:
     max_tokens: int = 150_000
     max_dollars: float = 10.0
     usage: UsageRecord = field(default_factory=UsageRecord)
+    role_usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def tokens_remaining(self) -> int:
@@ -52,13 +57,14 @@ class BudgetTracker:
     def budget_exceeded(self) -> bool:
         return self.usage.total_tokens >= self.max_tokens or self.usage.estimated_cost >= self.max_dollars
 
-    def record(self, response: Any) -> None:
+    def record(self, response: Any, role: str) -> None:
         """Record usage from a LiteLLM response."""
         usage = getattr(response, "usage", None)
+        total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
         if usage:
             self.usage.prompt_tokens += getattr(usage, "prompt_tokens", 0)
             self.usage.completion_tokens += getattr(usage, "completion_tokens", 0)
-            self.usage.total_tokens += getattr(usage, "total_tokens", 0)
+            self.usage.total_tokens += total_tokens
 
         try:
             cost = litellm.completion_cost(completion_response=response)
@@ -67,6 +73,7 @@ class BudgetTracker:
             pass
 
         self.usage.call_count += 1
+        self.role_usage[role] = self.role_usage.get(role, 0) + total_tokens
 
     def summary(self) -> dict:
         return {
@@ -231,7 +238,11 @@ class Router:
             raise ValueError(f"Unknown agent role: {role}. Known: {list(self._role_model_map)}")
         return model
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(min=1, max=10))
+    @retry(
+        stop=stop_after_attempt(3), 
+        wait=wait_exponential(min=1, max=10),
+        retry=retry_if_not_exception_type(BudgetExceededError)
+    )
     def complete(
         self,
         role: str,
@@ -255,6 +266,25 @@ class Router:
         if self.budget.budget_exceeded:
             raise BudgetExceededError(
                 f"Budget exceeded: {self.budget.summary()}"
+            )
+
+        role_limits = {
+            "planner": 0.15,
+            "implementer": 0.60,
+            "debugger": 0.30,
+            "auditor": 0.10,
+            "security": 0.10,
+            "release": 0.10,
+            "archivist": 0.10,
+        }
+        
+        limit_ratio = role_limits.get(role, 0.50)
+        role_token_limit = int(self.budget.max_tokens * limit_ratio)
+        current_role_usage = self.budget.role_usage.get(role, 0)
+        
+        if current_role_usage >= role_token_limit:
+            raise BudgetExceededError(
+                f"Role budget exceeded for {role}: {current_role_usage} / {role_token_limit} tokens"
             )
 
         model = self.resolve_model(role)
@@ -283,7 +313,7 @@ class Router:
         # Accuracy Fix: Place calculation here to capture total time spent including failover
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
-        self.budget.record(response)
+        self.budget.record(response, role)
 
         # Extract tool calls safely
         response_message = response.choices[0].message
@@ -305,7 +335,3 @@ class Router:
             latency_ms=elapsed_ms,
             tool_calls=tool_calls
         )
-
-
-class BudgetExceededError(Exception):
-    pass

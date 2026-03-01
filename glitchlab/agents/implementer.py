@@ -107,6 +107,7 @@ IMPLEMENTER_TOOLS = [
     }                 
 ]
 
+
 class ImplementerAgent(BaseAgent):
     role = "implementer"
 
@@ -151,11 +152,22 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         modified_files = set()
         created_files = set()
         think_count = 0
+        search_count = 0
         max_steps = 15
         
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
             
+            # Proactive context compression: compress old tool results
+            for i in range(len(messages)):
+                if messages[i].get("role") == "tool" and messages[i].get("name") in ("read_file", "search_grep", "run_check"):
+                    # Check if consumed by a subsequent assistant message
+                    consumed = any(m.get("role") == "assistant" for m in messages[i+1:])
+                    if consumed:
+                        content = messages[i].get("content", "")
+                        if len(content) > 500 and "... [Content compressed" not in content:
+                            messages[i]["content"] = content[:500] + "\n... [Content compressed to save budget. Use tool again if needed]"
+
             response = self.router.complete(
                 role=self.role,
                 messages=messages,
@@ -192,6 +204,11 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
 
                 logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
 
+                if tc_name == "search_grep":
+                    search_count += 1
+                else:
+                    search_count = 0
+
                 if tc_name == "think":
                     think_count += 1
                     if think_count > 3:
@@ -211,6 +228,11 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "search_grep":
+                    if search_count >= 3:
+                        res = "You have searched multiple times. Consider using `think` to consolidate your findings or `read_file` to look closer."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:
