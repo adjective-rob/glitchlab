@@ -1,12 +1,9 @@
 """
-🔒 Firewall Frankie — Security + Policy Guard (v3.1 Tool-Loop Architecture)
+📦 Semver Sam — Release + Version Guardian (v3.1 Tool-Loop)
 
-Scans for dangerous patterns.
-Checks dependency diffs.
-Investigates the codebase for hidden vulnerabilities.
-Watches core boundaries.
-
-Energy: cartoon cop with a magnifying glass.
+Analyzes API surface area to decide on version bumps.
+Surgically updates CHANGELOG.md.
+Energy: accountant with neon sneakers.
 """
 
 from __future__ import annotations
@@ -22,25 +19,25 @@ from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
 
-SECURITY_TOOLS = [
+SAM_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "think",
-            "description": "Use this to plan your security audit BEFORE taking action. Map out which modified files you need to read and what patterns you are hunting for.",
+            "description": "Analyze the implementation summary and diff to determine versioning impact.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "audit_plan": {
+                    "api_impact": {
                         "type": "string",
-                        "description": "Your step-by-step plan to verify the security of the recent changes."
+                        "description": "Did any function signatures, variable names, or public exports change?"
                     },
-                    "threat_model": {
+                    "bump_logic": {
                         "type": "string",
-                        "description": "What specific security risks (e.g., injection, path traversal) are most likely introduced by this specific task?"
+                        "description": "Reasoning for major vs minor vs patch based on semver rules."
                     }
                 },
-                "required": ["audit_plan", "threat_model"]
+                "required": ["api_impact", "bump_logic"]
             }
         }
     },
@@ -48,10 +45,12 @@ SECURITY_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read the full contents of a modified file to check its context, imports, and data flow.",
+            "description": "Read a file (like pyproject.toml or a modified module) to verify the current state.",
             "parameters": {
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
+                "properties": {
+                    "path": {"type": "string"}
+                },
                 "required": ["path"]
             }
         }
@@ -60,19 +59,11 @@ SECURITY_TOOLS = [
         "type": "function",
         "function": {
             "name": "search_grep",
-            "description": "Search the codebase for a pattern. Useful for checking if a newly introduced variable shadows a global credential, or finding where a vulnerable function is called.",
+            "description": "Search for usages of modified functions to see if they are used as public APIs elsewhere.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "pattern": {
-                        "type": "string",
-                        "description": "The text pattern to search for"
-                    },
-                    "file_type": {
-                        "type": "string",
-                        "description": "Optional glob pattern, e.g., '*.py' or '*.rs'",
-                        "default": "*"
-                    }
+                    "pattern": {"type": "string"}
                 },
                 "required": ["pattern"]
             }
@@ -81,66 +72,53 @@ SECURITY_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "submit_report",
-            "description": "Signal that the security audit is complete and submit your final verdict.",
+            "name": "replace_in_file",
+            "description": "Surgically insert the changelog entry into CHANGELOG.md. Use this to avoid overwriting existing history.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "verdict": {
+                    "path": {
                         "type": "string",
-                        "enum": ["pass", "warn", "block"],
-                        "description": "pass = clean. warn = should fix but safe to merge. block = MUST fix before PR."
+                        "default": "CHANGELOG.md"
                     },
-                    "issues": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "severity": {
-                                    "type": "string",
-                                    "enum": ["critical", "high", "medium", "low", "info"]
-                                },
-                                "file": {"type": "string"},
-                                "line": {"type": "integer"},
-                                "description": {"type": "string"},
-                                "recommendation": {"type": "string"}
-                            },
-                            "required": ["severity", "file", "description"]
-                        }
+                    "find": {
+                        "type": "string",
+                        "description": "The exact text to find (e.g., '# Changelog')"
                     },
-                    "dependency_changes": {
-                        "type": "object",
-                        "properties": {
-                            "added": {
-                                "type": "array",
-                                "items": {"type": "string"}
-                            },
-                            "removed": {
-                                "type": "array",
-                                "items": {"type": "string"}
-                            },
-                            "risk_assessment": {
-                                "type": "string",
-                                "enum": ["none", "low", "medium", "high"]
-                            }
-                        },
-                        "required": ["added", "removed", "risk_assessment"]
+                    "replace": {
+                        "type": "string",
+                        "description": "The new text including the changelog entry."
+                    }
+                },
+                "required": ["path", "find", "replace"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_verdict",
+            "description": "Finalize the release assessment and return structured data to the controller.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "version_bump": {
+                        "type": "string",
+                        "enum": ["none", "patch", "minor", "major"]
                     },
-                    "boundary_violations": {
+                    "reasoning": {"type": "string"},
+                    "changelog_entry": {"type": "string"},
+                    "breaking_changes": {
                         "type": "array",
                         "items": {"type": "string"}
                     },
-                    "summary": {
-                        "type": "string",
-                        "description": "Brief security summary of your findings."
-                    }
+                    "risk_summary": {"type": "string"}
                 },
                 "required": [
-                    "verdict",
-                    "issues",
-                    "dependency_changes",
-                    "boundary_violations",
-                    "summary"
+                    "version_bump",
+                    "reasoning",
+                    "changelog_entry",
+                    "risk_summary"
                 ]
             }
         }
@@ -148,67 +126,63 @@ SECURITY_TOOLS = [
 ]
 
 
-class SecurityAgent(BaseAgent):
-    role = "security"
+class ReleaseAgent(BaseAgent):
+    role = "release"
 
-    system_prompt = """You are Firewall Frankie, the security guard inside GLITCHLAB.
+    system_prompt = """You are Semver Sam, the release guardian. 
+You operate in a tool-calling loop. 
 
-You review code changes BEFORE they become a PR. You look for security issues, dangerous patterns, and policy violations.
-You operate in a read-execute-observe loop. 
+1. Use `think` first to analyze if the changes are breaking (Major), additive (Minor), or internal (Patch).
+2. Use `read_file` to check the actual code modified by the Implementer.
+3. Use `replace_in_file` to update CHANGELOG.md surgically. 
+4. Call `submit_verdict` when finished.
 
-Rules:
-1. Use the `think` tool first to build a threat model based on what files were changed.
-2. Use `read_file` to inspect the FULL context of the modified files. Do not guess based on the diff snippet alone.
-3. Use `search_grep` to trace data flow or check for cross-file vulnerabilities.
-4. Be thorough but don't false-positive on idiomatic patterns. Severity must be honest.
-5. When you have finished your audit, use the `submit_report` tool to output your JSON verdict.
+Semver Rules:
+- major: Breaking changes to public API or signatures.
+- minor: New features, non-breaking additions.
+- patch: Internal refactors, bug fixes, no API change.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         state = context.previous_output or {}
         diff_text = context.extra.get("diff", "")
 
-        # Truncate large diffs to protect context window
-        if len(diff_text) > 2000:
-            diff_text = (
-                diff_text[:2000]
-                + "\n\n... [DIFF TRUNCATED. USE read_file TO SEE FULL CHANGES] ..."
-            )
+        diff_preview = (
+            diff_text[:2000] + "\n... [Truncated]"
+            if len(diff_text) > 2000
+            else diff_text
+        )
 
-        files_modified = state.get("files_modified", [])
-        files_created = state.get("files_created", [])
-        impl_summary = state.get("implementation_summary", "No summary available")
-
-        user_content = f"""Review these recent code changes for security and policy compliance.
+        user_content = f"""Analyze the version impact of these changes.
 
 Task: {context.objective}
 Mode: {state.get('mode', 'evolution')}
-
-Implementation summary: {impl_summary}
-Files modified: {files_modified}
-Files created: {files_created}
-Protected paths: {context.extra.get('protected_paths', [])}
+Implementation Summary: {state.get('implementation_summary', 'N/A')}
 
 Diff Preview:
 
-{diff_text}
-
-Investigate the modified files using your tools. When satisfied, call `submit_report`."""
+Investigate the modified files, update CHANGELOG.md surgically, and call `submit_verdict`."""
 
         return [self._system_msg(), self._user_msg(user_content)]
 
+    def parse_response(
+        self, response: RouterResponse, context: AgentContext
+    ) -> dict[str, Any]:
+        """Unused in v3.1 Tool-Loop."""
+        return {}
+
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
-        """Execute the agentic security loop."""
+        """Execute the Semver Sam investigation loop."""
         messages = self.build_messages(context)
         workspace_dir = Path(context.working_dir)
 
         think_count = 0
-        max_steps = 15
+        max_steps = 10
 
         for step in range(max_steps):
-            logger.debug(f"[FRANKIE] Loop Step {step+1}/{max_steps}...")
+            logger.debug(f"[SEMVER] Loop Step {step+1}/{max_steps}...")
 
-            # Context compression for large tool outputs
+            # Context compression for long tool outputs
             for i in range(len(messages)):
                 if messages[i].get("role") == "tool":
                     consumed = any(
@@ -217,13 +191,9 @@ Investigate the modified files using your tools. When satisfied, call `submit_re
                     )
                     if consumed:
                         content = str(messages[i].get("content", ""))
-                        if (
-                            len(content) > 1000
-                            and "... [Content compressed" not in content
-                        ):
+                        if len(content) > 1000:
                             messages[i]["content"] = (
-                                content[:500]
-                                + "\n... [Content compressed for context window]"
+                                content[:500] + "\n... [Content compressed]"
                             )
 
             step_kwargs = dict(kwargs)
@@ -236,7 +206,7 @@ Investigate the modified files using your tools. When satisfied, call `submit_re
             response = self.router.complete(
                 role=self.role,
                 messages=messages,
-                tools=SECURITY_TOOLS,
+                tools=SAM_TOOLS,
                 **step_kwargs,
             )
 
@@ -254,7 +224,7 @@ Investigate the modified files using your tools. When satisfied, call `submit_re
                 messages.append(
                     {
                         "role": "user",
-                        "content": "Please investigate using tools or call `submit_report`.",
+                        "content": "Analyze the changes or call `submit_verdict`.",
                     }
                 )
                 continue
@@ -264,7 +234,9 @@ Investigate the modified files using your tools. When satisfied, call `submit_re
                 tc_name = tool_call.function.name
 
                 try:
-                    tc_args = json.loads(tool_call.function.arguments or "{}")
+                    tc_args = json.loads(
+                        tool_call.function.arguments or "{}"
+                    )
                 except json.JSONDecodeError:
                     messages.append(
                         {
@@ -276,120 +248,87 @@ Investigate the modified files using your tools. When satisfied, call `submit_re
                     )
                     continue
 
-                logger.info(f"[FRANKIE] 🛠️ Tool call: {tc_name}")
+                logger.info(f"[SEMVER] 🛠️ Tool call: {tc_name}")
 
                 if tc_name == "think":
                     think_count += 1
-                    res = "Threat model noted. Proceed with your file investigation."
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": res,
-                        }
-                    )
+                    res = "Impact analysis noted. Investigate files if needed."
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
                     try:
-                        content = (workspace_dir / path).read_text(
+                        res = (workspace_dir / path).read_text(
                             encoding="utf-8"
                         )
-                        res = f"Read {len(content)} chars from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": res,
-                        }
-                    )
 
                 elif tc_name == "search_grep":
                     pattern = tc_args.get("pattern")
-                    file_type = tc_args.get("file_type", "*")
                     try:
-                        cmd = [
-                            "grep",
-                            "-rn",
-                            f"--include={file_type}",
-                            "--exclude-dir=.glitchlab",
-                            "--exclude-dir=__pycache__",
-                            "--exclude-dir=.git",
-                            pattern,
-                            ".",
-                        ]
+                        cmd = ["grep", "-rn", pattern, "."]
                         proc = subprocess.run(
                             cmd,
                             cwd=workspace_dir,
                             capture_output=True,
                             text=True,
-                            timeout=15,
+                            timeout=10,
                         )
                         res = (
                             proc.stdout
                             if proc.stdout
                             else "No matches found."
                         )
-                        if len(res.splitlines()) > 50:
-                            res = (
-                                "\n".join(res.splitlines()[:50])
-                                + "\n... (truncated)"
-                            )
                     except Exception as e:
                         res = f"Search failed: {e}"
 
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": res,
-                        }
-                    )
+                elif tc_name == "replace_in_file":
+                    if think_count == 0:
+                        res = "Access Denied: Use `think` first."
+                    else:
+                        path = tc_args.get("path", "CHANGELOG.md")
+                        find_str = tc_args.get("find", "")
+                        replace_str = tc_args.get("replace", "")
+                        try:
+                            fpath = workspace_dir / path
+                            content = fpath.read_text()
+                            if find_str in content:
+                                fpath.write_text(
+                                    content.replace(find_str, replace_str)
+                                )
+                                res = f"Successfully updated {path}."
+                            else:
+                                res = (
+                                    f"Error: '{find_str}' not found in {path}."
+                                )
+                        except Exception as e:
+                            res = f"Error: {e}"
 
-                elif tc_name == "submit_report":
+                elif tc_name == "submit_verdict":
                     return {
-                        "verdict": tc_args.get("verdict", "warn"),
-                        "issues": tc_args.get("issues", []),
-                        "dependency_changes": tc_args.get(
-                            "dependency_changes",
-                            {"added": [], "removed": [], "risk_assessment": "none"},
-                        ),
-                        "boundary_violations": tc_args.get(
-                            "boundary_violations", []
-                        ),
-                        "summary": tc_args.get("summary", "Done."),
-                        "_agent": "security",
+                        "version_bump": tc_args.get("version_bump", "patch"),
+                        "reasoning": tc_args.get("reasoning", ""),
+                        "changelog_entry": tc_args.get("changelog_entry", ""),
+                        "breaking_changes": tc_args.get("breaking_changes", []),
+                        "risk_summary": tc_args.get("risk_summary", ""),
+                        "_agent": "release",
                         "_model": response.model,
                         "_tokens": response.tokens_used,
                         "_cost": response.cost,
                     }
 
-        return {
-            "verdict": "warn",
-            "issues": [
-                {
-                    "severity": "info",
-                    "file": "system",
-                    "description": "Security agent ran out of steps.",
-                    "recommendation": "Review manually.",
-                }
-            ],
-            "dependency_changes": {
-                "added": [],
-                "removed": [],
-                "risk_assessment": "none",
-            },
-            "boundary_violations": [],
-            "summary": "Security review timed out.",
-            "parse_error": True,
-        }
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc_id,
+                        "name": tc_name,
+                        "content": str(res),
+                    }
+                )
 
-    def parse_response(
-        self, response: RouterResponse, context: AgentContext
-    ) -> dict[str, Any]:
-        pass  # Unused because we overrode run()
+        return {
+            "version_bump": "patch",
+            "reasoning": "Audit timeout.",
+            "changelog_entry": "- Internal updates",
+            "risk_summary": "Low (audit failed to conclude)",
+        }
