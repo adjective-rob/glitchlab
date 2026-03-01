@@ -166,24 +166,29 @@ def _build_kwargs(
     temperature: float,
     max_tokens: int,
     response_format: dict | None,
-    tools: list[dict] | None = None,  # ADD THIS
+    tools: list[dict] | None = None,
+    **kwargs
 ) -> dict[str, Any]:
-    kwargs: dict[str, Any] = {
+    kwargs_dict: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
     }
 
     if not _is_gpt5_model(model) and not _is_o_series_model(model):
-        kwargs["temperature"] = temperature
+        kwargs_dict["temperature"] = temperature
 
     if response_format:
-        kwargs["response_format"] = response_format
+        kwargs_dict["response_format"] = response_format
         
     if tools:
-        kwargs["tools"] = tools
+        kwargs_dict["tools"] = tools
 
-    return kwargs
+    # Pass through extra parameters like tool_choice
+    for k, v in kwargs.items():
+        kwargs_dict[k] = v
+
+    return kwargs_dict
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +256,7 @@ class Router:
         max_tokens: int = 4096,
         response_format: dict | None = None,
         tools: list[dict] | None = None,
+        **kwargs
     ) -> RouterResponse:
         """
         Send a completion request through LiteLLM.
@@ -296,10 +302,12 @@ class Router:
 
         logger.debug(f"[ROUTER] {role} → {model} ({len(safe_messages)} messages)")
 
-        kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format, tools)
+        kwargs_dict = _build_kwargs(
+            model, safe_messages, temperature, max_tokens, response_format, tools, **kwargs
+        )
 
         try:
-            response = litellm.completion(**kwargs)
+            response = litellm.completion(**kwargs_dict)
         except litellm.exceptions.ServiceUnavailableError:
             # Determine which fallback to use based on the primary model tier
             # Logic: If primary is a preview/pro model, use high_tier fallback.
@@ -307,8 +315,10 @@ class Router:
             logger.warning(f"⚠️ [ROUTER] 503 Service Unavailable from {model}. Failing over to {fallback_model}...")
             
             # Rebuild kwargs for the fallback model
-            kwargs = _build_kwargs(fallback_model, safe_messages, temperature, max_tokens, response_format, tools)
-            response = litellm.completion(**kwargs)
+            kwargs_dict = _build_kwargs(
+                fallback_model, safe_messages, temperature, max_tokens, response_format, tools, **kwargs
+            )
+            response = litellm.completion(**kwargs_dict)
 
         # Accuracy Fix: Place calculation here to capture total time spent including failover
         elapsed_ms = int((time.monotonic() - start) * 1000)
