@@ -1,8 +1,8 @@
 """
 🔧 Patch — The Implementer (v3.0 Tool-Loop Architecture)
 
-Operates in a read-execute-observe loop. Can pull context on demand,
-write files individually, and run syntax checks before committing.
+Operates in a read-execute-observe loop. Now features a 'think' tool 
+for multi-file coordination and complex reasoning.
 """
 
 from __future__ import annotations
@@ -19,6 +19,23 @@ from glitchlab.router import RouterResponse
 
 
 IMPLEMENTER_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "think",
+            "description": "Use this to plan your approach before taking action. Write out your reasoning about file dependencies, execution order, or potential issues. This helps you avoid errors in complex tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string", 
+                        "description": "Your internal thoughts and step-by-step plan."
+                    }
+                },
+                "required": ["reasoning"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -95,11 +112,12 @@ class ImplementerAgent(BaseAgent):
 
     system_prompt = """You are Patch, the surgical implementation engine.
 
-You now operate in an agentic loop. You have tools to read files, write files, and run checks.
-1. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
-2. Write one file at a time using `write_file`.
-3. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
-4. When you are confident the plan is implemented, use the `done` tool.
+You now operate in an agentic loop. You have tools to think, read, write, and check.
+1. For complex tasks, use `think` first to map out dependencies.
+2. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
+3. Write one file at a time using `write_file`.
+4. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
+5. When you are confident the plan is implemented, use the `done` tool.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -124,7 +142,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         return [self._system_msg(), self._user_msg(user_content)]
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
-        """Override run to implement the Agentic Loop instead of a single shot."""
+        """Override run to implement the Agentic Loop with Cognitive Monologue."""
         messages = self.build_messages(context)
         
         workspace_dir = Path(context.working_dir)
@@ -132,7 +150,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         
         modified_files = set()
         created_files = set()
-        
+        think_count = 0
         max_steps = 15
         
         for step in range(max_steps):
@@ -174,7 +192,16 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
 
                 logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
 
-                if tc_name == "read_file":
+                if tc_name == "think":
+                    think_count += 1
+                    if think_count > 3:
+                        res = "Thinking limit reached. Please proceed with actions (read, write, or search)."
+                    else:
+                        # Verbatim return to keep the reasoning in context
+                        res = "Reasoning noted. Continue when ready."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "read_file":
                     path = tc_args.get("path")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')

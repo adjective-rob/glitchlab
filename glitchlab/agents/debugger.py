@@ -1,8 +1,8 @@
 """
 🐛 Reroute — The Debugger (v3.0 Tool-Loop Architecture)
 
-Now operates in an agentic loop. Includes search_grep to find relevant 
-code without knowing the path, and get_error to track evolving failures.
+Now operates in an agentic loop. Features a 'think' tool for root-cause
+analysis, search_grep for exploration, and get_error for verification.
 """
 
 from __future__ import annotations
@@ -19,6 +19,23 @@ from glitchlab.router import RouterResponse
 
 
 DEBUGGER_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "think",
+            "description": "Use this to analyze error logs, hypothesize root causes, or plan your fix before taking action. Write out your reasoning about the failure chain. This helps avoid incorrect patches.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "reasoning": {
+                        "type": "string", 
+                        "description": "Your internal diagnosis and step-by-step fix plan."
+                    }
+                },
+                "required": ["reasoning"]
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -105,16 +122,15 @@ class DebuggerAgent(BaseAgent):
 
     system_prompt = """You are Reroute, the surgical debug engine.
 
-You are invoked when tests fail. You have tools to investigate, fix, and verify.
-1. Use `get_error` to see the current failure.
-2. Use `search_grep` to find relevant code if you don't know the exact file path.
-3. Use `read_file` to examine the code around the failure.
-4. Use `write_file` to apply a surgical fix.
-5. Use `get_error` or `run_check` again to verify the fix.
+You now operate in an agentic loop. You have tools to think, investigate, fix, and verify.
+1. Use `think` to hypothesize why a test is failing before you change code.
+2. Use `get_error` to see the current failure.
+3. Use `search_grep` if you don't know the exact file path.
+4. Use `read_file` to examine the logic.
+5. Use `write_file` to apply a surgical fix.
 6. When the test passes, call `done`.
 
 The test command you are debugging is: {test_command}
-You can call `get_error` with no arguments to re-run this specific command.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -133,12 +149,12 @@ Initial Error Output:
 
 Modified Files: {state.get('files_modified', [])}
 
-Use your tools to investigate and fix the bug. Call `done` when the tests pass."""
+Investigate and fix. Call `done` when the tests pass."""
 
         return [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}]
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
-        """Execute the agentic debug loop."""
+        """Execute the agentic debug loop with Cognitive Monologue."""
         messages = self.build_messages(context)
         workspace_dir = Path(context.working_dir)
         tool_executor = context.extra.get("tool_executor")
@@ -146,7 +162,8 @@ Use your tools to investigate and fix the bug. Call `done` when the tests pass."
         
         modified_files = set()
         created_files = set()
-        max_steps = 10  # Surgical limit for debugging
+        think_count = 0
+        max_steps = 10 
 
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
@@ -180,12 +197,20 @@ Use your tools to investigate and fix the bug. Call `done` when the tests pass."
                 try:
                     tc_args = json.loads(tool_call.function.arguments or "{}")
                 except json.JSONDecodeError:
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON in arguments."})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON."})
                     continue
 
                 logger.info(f"[REROUTE] 🛠️ Tool call: {tc_name}")
 
-                if tc_name == "read_file":
+                if tc_name == "think":
+                    think_count += 1
+                    if think_count > 3:
+                        res = "Thinking limit reached. Please take action (read, write, or search)."
+                    else:
+                        res = "Reasoning noted. Continue when ready."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "read_file":
                     path = tc_args.get("path")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
