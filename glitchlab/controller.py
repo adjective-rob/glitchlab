@@ -1031,7 +1031,7 @@ class Controller:
 
             # ── 4B. Standard Execution Path ──
             else:
-                impl = self._run_implementer(task, plan, ws_path)
+                impl = self._run_implementer(task, plan, ws_path, tools)
 
                 if impl.get("parse_error"):
                     result["status"] = "implementation_failed"
