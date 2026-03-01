@@ -45,13 +45,11 @@ from rich.table import Table
 
 from glitchlab.agents import AgentContext
 from glitchlab.agents.archivist import ArchivistAgent
-from glitchlab.agents.auditor import AuditorAgent
 from glitchlab.agents.debugger import DebuggerAgent
 from glitchlab.agents.implementer import ImplementerAgent
 from glitchlab.agents.planner import PlannerAgent
 from glitchlab.agents.release import ReleaseAgent
 from glitchlab.agents.security import SecurityAgent
-from glitchlab.agents.performance import PerformanceAuditorAgent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 from glitchlab.history import TaskHistory
@@ -819,11 +817,9 @@ class Controller:
         self.planner = PlannerAgent(self.router)
         self.implementer = ImplementerAgent(self.router)
         self.debugger = DebuggerAgent(self.router)
-        self.auditor = AuditorAgent(self.router)
         self.security = SecurityAgent(self.router)
         self.release = ReleaseAgent(self.router)
         self.archivist = ArchivistAgent(self.router)
-        self.performance_auditor = PerformanceAuditorAgent(self.router)
 
         # Run state (reset per-task)
         self._state: TaskState | None = None
@@ -1140,10 +1136,6 @@ class Controller:
                 self._state.test_passing = test_ok
                 self._state.mark_phase("test")
                 self._state.persist(ws_path)
-
-                # ── 5.5. Auditor ──
-                audit = self._run_auditor(task, impl, ws_path)
-                self._state.mark_phase("audit")
 
                 # ── 6. Security Review ──
                 sec = self._run_security(task, impl, ws_path)

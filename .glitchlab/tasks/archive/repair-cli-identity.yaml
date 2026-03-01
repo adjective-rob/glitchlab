@@ -1,0 +1,11 @@
+id: infra-005-cli-repair
+objective: "Restore CLI functionality by creating the identity file and implementing missing helper functions."
+steps:
+  - "Create 'glitchlab/__init__.py' with __version__, __codename__, and __tagline__."
+  - "Implement the missing '_detect_test_command' and '_configure_logging' helpers at the bottom of 'glitchlab/cli.py'."
+  - "Verify the 'batch' command correctly references the Controller logic."
+constraints:
+  - "Do not remove the Banner or existing command structure."
+  - "Ensure imports at the top of cli.py match the new __init__.py exactly."
+mode: evolution
+risk: medium

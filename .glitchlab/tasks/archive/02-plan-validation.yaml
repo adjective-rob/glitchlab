@@ -1,0 +1,9 @@
+id: infra-002-plan-validation
+objective: "Implement a self-review step in the PlannerAgent to validate plans against user constraints."
+steps:
+  - "Modify the PlannerAgent to perform a secondary 'Verification' pass on its generated plan."
+  - "If the plan violates a constraint (e.g., modifying a protected file), it must rewrite the plan before showing it to the user."
+constraints:
+  - "The validation must be visible in the logs (e.g., '🔍 [VERIFY] Plan matches constraints...')."
+mode: evolution
+risk: medium

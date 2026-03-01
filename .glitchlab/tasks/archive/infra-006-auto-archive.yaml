@@ -1,0 +1,8 @@
+id: infra-006-auto-archive
+objective: "Update the Controller to automatically move completed task files from 'queue/' to 'archive/'."
+steps:
+  - "Modify 'glitchlab/controller.py' to accept the source task file path."
+  - "Implement a post-execution cleanup that moves the YAML file to the archive directory."
+  - "Ensure the move handles duplicate filenames by appending a timestamp."
+mode: evolution
+risk: low

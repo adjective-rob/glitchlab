@@ -1,0 +1,7 @@
+id: infra-010-ast-governance
+objective: "Add an AST scanner to 'glitchlab/governance/__init__.py' to flag dangerous operations like 'os.remove' during the planning phase."
+steps:
+  - "Implement a 'FrankieAudit' AST visitor in 'glitchlab/governance/__init__.py' targeting 'os.remove' and 'shell=True'."
+  - "Update 'glitchlab/controller.py' to run this scan on any proposed code blocks immediately after Planning."
+  - "Ensure the Controller halts and warns the user if a violation is detected."
+mode: evolution

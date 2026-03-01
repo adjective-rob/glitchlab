@@ -1,0 +1,10 @@
+id: infra-001-versioning
+objective: "Centralize the version string and expose it to the CLI."
+steps:
+  - "Create or update 'glitchlab/__init__.py' to define '__version__ = \"2.2.0\"'."
+  - "Modify 'glitchlab/cli.py' to add a --version flag that prints glitchlab.__version__."
+constraints:
+  - "Use the Typer 'callback' pattern for the version flag to ensure it runs even without a command."
+  - "Do not modify any core logic in cli.py, only add the version argument."
+mode: evolution
+risk: low

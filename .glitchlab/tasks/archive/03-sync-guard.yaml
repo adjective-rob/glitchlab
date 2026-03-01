@@ -1,0 +1,10 @@
+id: infra-003-sync-guard
+objective: "Add a remote-sync check to the Execution Guard."
+steps:
+  - "Update the Controller's Guard logic to run 'git fetch' at the start of a task."
+  - "Compare the local HEAD with the remote origin/main."
+  - "If the local branch is behind, abort the task with a clear message: 'Please pull remote changes first.'"
+constraints:
+  - "Do not perform an automatic pull; only alert the user to prevent accidental merge conflicts."
+mode: evolution
+risk: high

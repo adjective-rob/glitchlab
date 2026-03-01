@@ -1,0 +1,10 @@
+id: infra-015b-wire-auditor-logic
+objective: "Inject the Auditor into the execution loop to catch performance smells."
+steps:
+  - "In 'glitchlab/controller.py', locate the point after 'implementer.run' completes but BEFORE 'security.run'."
+  - "Call 'self.auditor.run()' with the implementation context."
+  - "If the auditor returns a 'reject' or 'fail' status, log the performance warning and set 'implementation_failed'."
+constraints:
+  - "Ensure the auditor's feedback is captured in the session history."
+mode: evolution
+risk: medium

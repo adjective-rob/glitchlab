@@ -1,0 +1,13 @@
+id: infra-013-audit-logger
+objective: "Implement an Audit Logger that subscribes to the Event Bus and writes events to an append-only JSONL file."
+steps:
+  - "Create a new file: 'glitchlab/audit_logger.py'."
+  - "Import 'bus' and 'GlitchEvent' from 'glitchlab.event_bus'."
+  - "Implement 'AuditLogger' class to write to '.glitchlab/audit.jsonl' in append mode."
+  - "Ensure the class creates the directory if missing."
+  - "Subscribe a logger instance to the global bus."
+constraints:
+  - "Use action='create' for the new file."
+  - "Provide full file content."
+mode: evolution
+risk: low

@@ -1,0 +1,8 @@
+id: infra-009-fix-task-schema
+objective: "Align the Task.from_interactive constructor with the Pydantic schema."
+steps:
+  - "Open 'glitchlab/controller.py'."
+  - "Locate the 'from_interactive' method."
+  - "Change the argument name from 'task_id=' to 'id=' to match the Pydantic model requirement."
+mode: evolution
+risk: low

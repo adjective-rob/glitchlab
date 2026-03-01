@@ -1,0 +1,12 @@
+id: infra-014-performance-auditor
+objective: "Implement a Performance Auditor agent that checks for I/O inefficiencies and resource leaks."
+steps:
+  - "Create a new file: 'glitchlab/agents/auditor.py' implementing the 'AuditorAgent' class."
+  - "The agent should look for 'file.open()' inside loops or frequent function calls without context managers."
+  - "Integrate the Auditor into the 'Controller.run()' loop after the Implementer but before the Security scan."
+  - "If the Auditor finds a performance smell, it should trigger a 'REJECT' status with specific feedback."
+constraints:
+  - "Inherit from 'BaseAgent'."
+  - "Use 'gemini-3.5-flash' for high-speed, low-cost auditing."
+mode: evolution
+risk: medium

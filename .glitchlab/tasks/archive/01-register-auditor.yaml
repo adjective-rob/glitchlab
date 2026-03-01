@@ -1,0 +1,9 @@
+id: infra-015a-register-auditor
+objective: "Import and instantiate the PerformanceAuditorAgent in the Controller."
+steps:
+  - "In 'glitchlab/controller.py', import 'PerformanceAuditorAgent' from 'glitchlab.agents'."
+  - "In 'Controller.__init__', initialize 'self.auditor = PerformanceAuditorAgent()'."
+constraints:
+  - "Do not modify the 'run' loop yet; only handle registration."
+mode: evolution
+risk: low

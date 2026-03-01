@@ -1,0 +1,9 @@
+id: infra-015c-verify-auditor-fix
+objective: "Force the Auditor to catch and fix the inefficient I/O in 'glitchlab/audit_logger.py'."
+steps:
+  - "Run a targeted implementation pass on 'glitchlab/audit_logger.py'."
+  - "The goal is to move the file handle to a persistent state or use a more efficient context manager as suggested by the Auditor."
+constraints:
+  - "This task serves as the 'First Real Test' of the newly wired Auditor loop."
+mode: evolution
+risk: low
