@@ -1182,11 +1182,6 @@ class Controller:
                     if adr_applied:
                         console.print(f"  [cyan]{adr_applied}[/]")
 
-                for doc_update in nova_result.get("doc_updates", []):
-                    doc_applied = self._write_doc_update(ws_path, doc_update)
-                    if doc_applied:
-                        console.print(f"  [cyan]{doc_applied}[/]")
-
                 # Maintenance mode: forbid file create/delete and out-of-scope edits
                 if is_maintenance:
                     allowed = set(plan.get("files_likely_affected") or [])
@@ -1582,15 +1577,8 @@ Ensure:
             previous_output=self._state.to_agent_summary("archivist"),
             extra={
                 "existing_docs": existing_docs[:20],
-            },
+            }
         )
-
-        result = self.archivist.run(context)
-        self._log_event("archivist_completed", {
-            "wrote_adr": result.get("should_write_adr", False),
-            "doc_updates": len(result.get("doc_updates", [])),
-        })
-        return result
 
     @staticmethod
     def _write_adr(ws_path: Path, adr: dict) -> str | None:

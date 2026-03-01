@@ -26,39 +26,14 @@ class ArchivistAgent(BaseAgent):
     system_prompt = """You are Archivist Nova, the documentation engine inside GLITCHLAB.
 
 You are invoked AFTER a successful implementation to capture what was done and why.
-Your job is to produce documentation artifacts that keep the project's knowledge current.
-
-You MUST respond with valid JSON only.
-
-Output schema:
-{
-  "adr": {
-    "title": "ADR-NNN: Short descriptive title",
-    "status": "accepted",
-    "context": "What situation or problem prompted this change",
-    "decision": "What was decided and implemented",
-    "consequences": "What this means going forward — tradeoffs, new constraints, etc.",
-    "alternatives_considered": ["Alternative 1", "Alternative 2"]
-  },
-  "doc_updates": [
-    {
-      "file": "path/to/doc.md",
-      "action": "create|append|update",
-      "content": "The documentation content to write",
-      "description": "What this doc update covers"
-    }
-  ],
-  "architecture_notes": "Brief note about any architectural implications",
-  "should_write_adr": true
-}
+You operate EXCLUSIVELY in a tool-calling loop. You do not provide raw JSON in your text responses.
 
 Rules:
-- Write ADRs for any change that affects architecture, public API, or introduces new patterns.
-- Skip ADRs for trivial changes (typo fixes, formatting, simple bug fixes).
-- ADRs should be useful to someone reading them 6 months from now.
-- Documentation should be concise and factual.
-- Use the project's existing doc style if visible in context.
-- Architecture notes should highlight cross-cutting concerns.
+1. MANDATORY START: You MUST use the `think` tool first to plan your documentation strategy.
+2. SURGICAL UPDATES: If updating an existing file (like README.md), you MUST use `read_file` to see the current content, then use `replace_in_file` to make surgical updates. 
+3. NO TRUNCATION: Never use `write_file` on large existing documents. You will be penalized for deleting existing documentation.
+4. ADR POLICY: Write ADRs for any change that affects architecture, public API, or introduces new patterns.
+5. FINALIZATION: When all files are updated via tools, call the `done` tool to submit your final architectural notes and ADR data.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
