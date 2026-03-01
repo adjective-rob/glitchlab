@@ -152,7 +152,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         modified_files = set()
         created_files = set()
         think_count = 0
-        max_steps = 15
+        max_steps = 30
         
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
