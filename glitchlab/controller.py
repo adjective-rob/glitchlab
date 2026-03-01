@@ -50,6 +50,7 @@ from glitchlab.agents.implementer import ImplementerAgent
 from glitchlab.agents.planner import PlannerAgent
 from glitchlab.agents.release import ReleaseAgent
 from glitchlab.agents.security import SecurityAgent
+from glitchlab.agents.testgen import TestGenAgent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 from glitchlab.history import TaskHistory
@@ -148,6 +149,14 @@ class TaskState(BaseModel):
                 "plan_steps": [s.model_dump() for s in self.plan_steps],
                 "files_in_scope": self.files_in_scope,
                 "estimated_complexity": self.estimated_complexity,
+            }
+        
+        elif for_agent == "testgen":
+            return {
+                **base,
+                "files_modified": self.files_modified,
+                "files_created": self.files_created,
+                "implementation_summary": self.implementation_summary,
             }
 
         elif for_agent == "debugger":
@@ -828,6 +837,7 @@ class Controller:
         self.security = SecurityAgent(self.router)
         self.release = ReleaseAgent(self.router)
         self.archivist = ArchivistAgent(self.router)
+        self.testgen = TestGenAgent(self.router)
 
         # Run state (reset per-task)
         self._state: TaskState | None = None
@@ -1118,6 +1128,9 @@ class Controller:
                     console.print("[red]❌ Patch retry failed. Aborting.[/]")
                     result["status"] = "implementation_failed"
                     return result
+                
+            # ---> INSERT SHIELD HERE <---
+            self._run_testgen(task, ws_path, is_doc_only)    
 
             # ── Phase routing: doc-only skips test/security/release ──
             if is_doc_only:
@@ -1418,6 +1431,60 @@ Ensure:
         )
 
         return self.implementer.run(context, max_tokens=8192)
+    
+    def _run_testgen(self, task: Task, ws_path: Path, is_doc_only: bool) -> None:
+        """Run the Shield agent to generate a regression test if none exists."""
+        if is_doc_only:
+            return
+
+        # Check if tests already created by the implementer
+        existing_tests = self._state.tests_added[:]
+        for f in self._state.files_created + self._state.files_modified:
+            if "test_" in f.lower() or "_test" in f.lower() or f.startswith("tests/"):
+                existing_tests.append(f)
+
+        if existing_tests:
+            console.print(f"  [dim]Tests already exist/created: {existing_tests[0]}. Skipping Shield.[/]")
+            return
+
+        console.print("\n[bold green]🛡️ [SHIELD] Generating regression test...[/]")
+        
+        # Resolve actual written code for Shield to analyze
+        file_context = self._scope.resolve_for_files(
+            self._state.files_modified,
+            include_deps=False,
+        )
+        
+        context = AgentContext(
+            task_id=task.task_id,
+            objective=task.objective,
+            repo_path=str(self.repo_path),
+            working_dir=str(ws_path),
+            previous_output=self._state.to_agent_summary("testgen"),
+            file_context=file_context,
+            extra={"test_command": self.test_command}
+        )
+        
+        result = self.testgen.run(context)
+        
+        if result.get("parse_error") or not result.get("test_file"):
+            console.print("  [yellow]Shield failed to generate a valid test. Continuing.[/]")
+            return
+            
+        test_file = result["test_file"]
+        content = result["content"]
+        desc = result["description"]
+        
+        try:
+            fpath = ws_path / test_file
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            fpath.write_text(content)
+            self._state.tests_added.append(test_file)
+            self._log_event("testgen_created", {"file": test_file, "description": desc})
+            console.print(f"  [cyan]TESTGEN {test_file}[/]")
+            console.print(f"  [dim]Generated: {desc}[/]")
+        except Exception as e:
+            console.print(f"  [red]Failed to write test file: {e}[/]")
 
     def _run_fix_loop(
         self, task: Task, ws_path: Path, tools: ToolExecutor, impl: dict
