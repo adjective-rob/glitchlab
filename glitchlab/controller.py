@@ -1177,7 +1177,7 @@ class Controller:
                 if is_maintenance:
                     nova_result["should_write_adr"] = False
 
-                if nova_result.get("should_write_adr") and nova_result.get("adr"):
+                if nova_result and nova_result.get("should_write_adr") and nova_result.get("adr"):
                     adr_applied = self._write_adr(ws_path, nova_result["adr"])
                     if adr_applied:
                         console.print(f"  [cyan]{adr_applied}[/]")
@@ -1568,7 +1568,6 @@ Ensure:
                 if p.is_file() and ".glitchlab" not in str(p)
             )
 
-        # v2: Archivist gets structured summary, not raw blobs
         context = AgentContext(
             task_id=task.task_id,
             objective=task.objective,
@@ -1576,9 +1575,18 @@ Ensure:
             working_dir=str(ws_path),
             previous_output=self._state.to_agent_summary("archivist"),
             extra={
-                "existing_docs": existing_docs[:20],
+                "existing_docs": existing_docs[:50], # Increased to 50 for better visibility
             }
         )
+
+        # ── THE MISSING PIECE ──
+        # Call Nova's new tool-loop and return the dict result
+        result = self.archivist.run(context)
+        
+        if result is None:
+            return {"should_write_adr": False, "doc_updates": [], "architecture_notes": "Archivist failed."}
+            
+        return result
 
     @staticmethod
     def _write_adr(ws_path: Path, adr: dict) -> str | None:
