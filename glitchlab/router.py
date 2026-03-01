@@ -159,23 +159,22 @@ def _build_kwargs(
     temperature: float,
     max_tokens: int,
     response_format: dict | None,
+    tools: list[dict] | None = None,  # ADD THIS
 ) -> dict[str, Any]:
-    """
-    Build LiteLLM kwargs with per-model param filtering.
-    Different model families support different parameters.
-    """
     kwargs: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
     }
 
-    # GPT-5 and o-series models don't support arbitrary temperature
     if not _is_gpt5_model(model) and not _is_o_series_model(model):
         kwargs["temperature"] = temperature
 
     if response_format:
         kwargs["response_format"] = response_format
+        
+    if tools:
+        kwargs["tools"] = tools
 
     return kwargs
 
@@ -190,11 +189,12 @@ class AgentMessage(BaseModel):
 
 
 class RouterResponse(BaseModel):
-    content: str
+    content: str | None = None  # LLMs return None for content when calling tools
     model: str
     tokens_used: int = 0
     cost: float = 0.0
     latency_ms: int = 0
+    tool_calls: Any | None = None  # Attach the raw LiteLLM tool calls
 
 
 class Router:

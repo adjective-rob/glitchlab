@@ -516,6 +516,11 @@ def apply_changes(
         if not filename:
             continue
 
+        # ── NEW: Skip files the agent already wrote natively via tool calls ──
+        if change.get("_already_applied"):
+            applied.append(f"AGENT_APPLIED {filename}")
+            continue
+
         if boundary:
             boundary.check([filename], allow_core)
 
@@ -1320,38 +1325,20 @@ class Controller:
 
         return plan
 
-    def _run_implementer(self, task: Task, plan: dict, ws_path: Path) -> dict:
+    def _run_implementer(self, task: Task, plan: dict, ws_path: Path, tools: ToolExecutor) -> dict:
         console.print("\n[bold blue]🔧 [PATCH] Implementing...[/]")
 
-        # v2: ScopeResolver computes context from actual imports
-        # instead of blindly reading planner's guess list
+        # KEEP THIS: ScopeResolver computes context from actual imports
+        # Gives the tool-loop a great starting point so it doesn't have to read_file blindly
         file_context = self._scope.resolve_for_files(
             plan.get("files_likely_affected", []),
             include_deps=True,
         )
 
-        # Build constraints for reliable file operations
+        # Keep the user's task constraints, but DROP the JSON formatting constraints
         impl_constraints = list(task.constraints)
 
-        create_files = [
-            s.get("files", []) for s in plan.get("steps", [])
-            if s.get("action") == "create"
-        ]
-        if create_files:
-            impl_constraints.append(
-                "CRITICAL SCHEMA ENFORCEMENT: For NEW files (action='create'), you MUST strictly adhere to the JSON response format. "
-                "Do NOT output raw python code or markdown text. You must output a JSON object containing a 'changes' array. "
-                "Inside that array, include an object with 'action': 'create', 'file': '<filepath>', and 'content': '<YOUR FULL CODE>'."
-            )
-
-        impl_constraints.append(
-            "For MODIFIED files (action='modify'), prefer providing complete file "
-            "content in the 'content' field. Only use the 'patch' field if the file "
-            "is large (>200 lines) and the change is small. Never wrap patches in "
-            "markdown code fences."
-        )
-
-        # v2: Pass structured task state, not raw plan blob
+        # Pass structured task state AND the tool executor
         context = AgentContext(
             task_id=task.task_id,
             objective=task.objective,
@@ -1361,14 +1348,14 @@ class Controller:
             acceptance_criteria=task.acceptance_criteria,
             file_context=file_context,
             previous_output=self._state.to_agent_summary("implementer"),
-            extra={},
+            extra={"tool_executor": tools}, # <-- TOOL EXECUTOR WIRED HERE
         )
 
         impl = self.implementer.run(context, max_tokens=12000)
 
         # For doc-comment tasks, use surgical insertion
         for change in impl.get("changes", []):
-            if change.get("action") == "modify":
+            if change.get("action") == "modify" and not change.get("_already_applied"):
                 fpath = ws_path / change["file"]
                 if fpath.exists():
                     inserted = insert_doc_comments(fpath, self.router)

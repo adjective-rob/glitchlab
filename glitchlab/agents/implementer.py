@@ -1,114 +1,101 @@
 """
-🔧 Patch — The Implementer (v2.1)
+🔧 Patch — The Implementer (v3.0 Tool-Loop Architecture)
 
-Writes code. Now supports surgical Search & Replace blocks
-to prevent JSON truncation on large files.
+Operates in a read-execute-observe loop. Can pull context on demand,
+write files individually, and run syntax checks before committing.
 """
 
 from __future__ import annotations
 
 import json
-import re
-from typing import Any, Literal
+from pathlib import Path
+from typing import Any
 
 from loguru import logger
-from pydantic import BaseModel, Field, ValidationError
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
 
-# ---------------------------------------------------------------------------
-# Surgical Output Schemas
-# ---------------------------------------------------------------------------
-
-class SurgicalBlock(BaseModel):
-    """A single Search & Replace operation."""
-    search: str = Field(..., description="The EXACT snippet of code to look for.")
-    replace: str = Field(..., description="The code that should replace the search block.")
-
-class FileChange(BaseModel):
-    file: str
-    action: Literal["modify", "create", "delete"]
-    content: str | None = None
-    surgical_blocks: list[SurgicalBlock] = Field(default_factory=list)
-    description: str = "automated change" # Default value prevents validation errors
-
-class TestChange(BaseModel):
-    file: str
-    content: str
-    description: str = ""  # Make this optional
-
-class ImplementationResult(BaseModel):
-    changes: list[FileChange] = Field(default_factory=list)
-    tests_added: list[TestChange] = Field(default_factory=list)
-    commit_message: str = "chore: implementation update"  # Give a safe default
-    summary: str = "Implementation completed."
-
-
-# ---------------------------------------------------------------------------
-# Agent Implementation
-# ---------------------------------------------------------------------------
+IMPLEMENTER_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the contents of a file from the workspace to get type signatures or context.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Write complete content to a file in the workspace (creates or overwrites).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"}
+                },
+                "required": ["path", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_check",
+            "description": "Run a shell command (like a linter, compiler, or tests) to validate your changes. e.g., 'cargo check' or 'python -m pytest'",
+            "parameters": {
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "done",
+            "description": "Signal that implementation is complete and you have fulfilled the plan.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "commit_message": {"type": "string", "description": "Conventional commit message"},
+                    "summary": {"type": "string", "description": "What you accomplished"}
+                },
+                "required": ["commit_message", "summary"]
+            }
+        }
+    }
+]
 
 class ImplementerAgent(BaseAgent):
     role = "implementer"
 
     system_prompt = """You are Patch, the surgical implementation engine.
 
-You MUST respond with a valid JSON object. No markdown wrapping.
-
-STRATEGY FOR LARGE FILES (>100 lines):
-- Do NOT rewrite the whole file in 'content'. This causes JSON truncation.
-- Instead, use 'surgical_blocks' to perform Search & Replace edits.
-- Each block must contain enough unique code in 'search' to be found accurately.
-
-STRATEGY FOR SMALL FILES (<100 lines):
-- Provide the FULL file in 'content' and leave 'surgical_blocks' empty.
-
-Output schema:
-{
-  "changes": [
-    {
-      "file": "path/to/file",
-      "action": "modify",
-      "surgical_blocks": [
-        {
-          "search": "def old_func():\\n    pass",
-          "replace": "def new_func():\\n    return True"
-        }
-      ],
-      "description": "surgical update"
-    }
-  ],
-  "tests_added": [...],
-  "commit_message": "...",
-  "summary": "..."
-}
-
-CRITICAL RULES:
-1. Whitespace in 'search' blocks must be EXACT.
-2. If using 'surgical_blocks', leave 'content' as null.
-3. For NEW files (action='create'), always use 'content'.
+You now operate in an agentic loop. You have tools to read files, write files, and run checks.
+1. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
+2. Write one file at a time using `write_file`.
+3. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
+4. When you are confident the plan is implemented, use the `done` tool.
 """
-
-    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
-        kwargs["response_format"] = {"type": "json_object"}
-        return super().run(context, **kwargs)
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         state = context.previous_output
         
-        # Determine if we should nudge the model toward surgical edits
-        files_in_scope = state.get("files_in_scope", [])
-        is_large_task = len(files_in_scope) > 2 or state.get("estimated_complexity") == "high"
-
         steps_text = ""
         for step in state.get("plan_steps", []):
             steps_text += f"\nStep {step.get('step_number')}: {step.get('description')}\n"
 
         file_context = ""
         if context.file_context:
-            file_context = "\n\nCurrent file contents:\n"
+            file_context = "\n\nInitial file contents provided by router:\n"
             for fname, content in context.file_context.items():
                 file_context += f"\n--- {fname} ---\n{content}\n"
 
@@ -116,96 +103,128 @@ CRITICAL RULES:
 Plan: {steps_text}
 {file_context}
 
-IMPORTANT: If modifying large files, use 'surgical_blocks' to avoid JSON truncation."""
+Use your tools to explore, implement, and verify this plan. When finished, call `done`."""
 
         return [self._system_msg(), self._user_msg(user_content)]
 
-    def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
-        content = response.content.strip()
+    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+        """Override run to implement the Agentic Loop instead of a single shot."""
+        messages = self.build_messages(context)
         
-        # Phase 1: Markdown Cleaning
-        content = re.sub(r"^```json\s*", "", content, flags=re.MULTILINE)
-        content = re.sub(r"^```\s*", "", content, flags=re.MULTILINE)
-        content = content.strip("`").strip()
+        workspace_dir = Path(context.working_dir)
+        tool_executor = context.extra.get("tool_executor")
+        
+        modified_files = set()
+        created_files = set()
+        
+        max_steps = 15
+        
+        for step in range(max_steps):
+            logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
+            
+            response = self.router.complete(
+                role=self.role,
+                messages=messages,
+                tools=IMPLEMENTER_TOOLS,
+                **kwargs
+            )
 
-        # Phase 2: Standard Parse
-        try:
-            raw_json = json.loads(content)
-            # Fix schema quirks on the fly
-            if "changes" in raw_json:
-                for c in raw_json["changes"]:
-                    if not c.get("description"): c["description"] = "automatic update"
-            if "tests_added" in raw_json and isinstance(raw_json["tests_added"], list):
-                raw_json["tests_added"] = [t for t in raw_json["tests_added"] if isinstance(t, dict)]
+            # Append assistant message
+            assist_msg = {"role": "assistant"}
+            if response.content:
+                assist_msg["content"] = response.content
+            if response.tool_calls:
+                # Format litellm tool_calls to dict for the chat history
+                assist_msg["tool_calls"] = [
+                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc) 
+                    for tc in response.tool_calls
+                ]
+            messages.append(assist_msg)
+
+            if not response.tool_calls:
+                # If the LLM just talks without using tools, nudge it.
+                messages.append({"role": "user", "content": "Please use your tools to take action, or call `done` if you are finished."})
+                continue
+
+            for tool_call in response.tool_calls:
+                tc_id = tool_call.id
+                tc_name = tool_call.function.name
                 
-            return ImplementationResult(**raw_json).model_dump()
-            
-        except Exception as e:
-            logger.warning(f"[IMPLEMENTER] JSON parse failed ({e}). Running Emergency Extraction...")
+                try:
+                    tc_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON in arguments."})
+                    continue
 
-            # Phase 3: The Surgical Extraction
-            f_match = re.search(r'"file":\s*"([^"]+)"', content)
-            c_match = re.search(r'"content":\s*"(.*?)"(?=\s*[,}\n])', content, re.DOTALL)
-            
-            if f_match and c_match:
-                filename = f_match.group(1)
-                code = c_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
-                
-                logger.info(f"[IMPLEMENTER] SURGERY SUCCESS: Extracted {filename} from broken JSON.")
-                return {
-                    "changes": [{
-                        "file": filename,
-                        "action": "create", 
-                        "content": code,
-                        "description": "Recovered via Emergency Extraction"
-                    }],
-                    "tests_added": [],
-                    "commit_message": "feat: auto-creation via recovery",
-                    "summary": "Recovered file content from malformed LLM response."
-                }
-            
-            return self._fallback_result(content, str(e))
+                logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
 
-        except Exception as e:
-            logger.warning(f"[IMPLEMENTER] JSON broken, attempting Emergency Extraction: {e}")
+                if tc_name == "read_file":
+                    path = tc_args.get("path")
+                    try:
+                        content = (workspace_dir / path).read_text(encoding='utf-8')
+                        res = f"Read {len(content)} characters:\n\n{content}"
+                    except Exception as e:
+                        res = f"Error reading file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-            # --- PHASE 3: THE EMERGENCY EXTRACTION ---
-            # We look for the "file" and "content" values directly using regex.
-            # This works even if the JSON is missing braces, commas, or has trailing text.
-            file_match = re.search(r'"file":\s*"([^"]+)"', content)
-            
-            # This regex captures everything between the "content" quotes. 
-            # It's greedy but stops at the last potential quote before the next key or end of object.
-            code_match = re.search(r'"content":\s*"(.*?)"(?=\s*[,}])', content, re.DOTALL)
-            
-            if file_match and code_match:
-                filename = file_match.group(1)
-                # Unescape common JSON characters so the code is actually valid Python
-                extracted_code = code_match.group(1).replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
-                
-                logger.info(f"[IMPLEMENTER] Successfully extracted {filename} via Emergency Regex!")
-                return {
-                    "changes": [{
-                        "file": filename, 
-                        "action": "modify", # Use modify since we'll 'touch' it first
-                        "content": extracted_code, 
-                        "description": "Recovered via Emergency Extraction"
-                    }],
-                    "tests_added": [],
-                    "commit_message": "feat: audit logger (recovered)",
-                    "summary": "The LLM's JSON was malformed, but the implementation logic was surgically recovered."
-                }
-            
-            # If even the regex fails, we admit defeat
-            return self._fallback_result(content, str(e))
+                elif tc_name == "write_file":
+                    path = tc_args.get("path")
+                    content = tc_args.get("content")
+                    try:
+                        fpath = workspace_dir / path
+                        is_new = not fpath.exists()
+                        fpath.parent.mkdir(parents=True, exist_ok=True)
+                        fpath.write_text(content, encoding='utf-8')
+                        
+                        if is_new:
+                            created_files.add(path)
+                        else:
+                            modified_files.add(path)
+                            
+                        res = f"Successfully wrote {len(content)} characters to {path}."
+                    except Exception as e:
+                        res = f"Error writing file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-    @staticmethod
-    def _fallback_result(raw: str, error: str) -> dict[str, Any]:
+                elif tc_name == "run_check":
+                    cmd = tc_args.get("command")
+                    if tool_executor:
+                        try:
+                            # Use the sandboxed executor
+                            tool_res = tool_executor.execute(cmd)
+                            res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
+                        except Exception as e:
+                            res = f"Execution blocked or failed: {e}"
+                    else:
+                        res = "Error: Tool executor not wired up."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "done":
+                    # Exit the loop!
+                    return {
+                        "changes": [
+                            {"file": f, "action": "modify", "_already_applied": True} for f in modified_files
+                        ] + [
+                            {"file": f, "action": "create", "_already_applied": True} for f in created_files
+                        ],
+                        "tests_added": [],
+                        "commit_message": tc_args.get("commit_message", "chore: automated implementation"),
+                        "summary": tc_args.get("summary", "Done."),
+                        "_agent": "implementer",
+                        "_model": response.model,
+                        "_tokens": response.tokens_used,
+                        "_cost": response.cost,
+                    }
+
+        # If it hits max steps without calling 'done'
+        logger.warning("[PATCH] Loop exhausted without calling `done`.")
         return {
             "changes": [],
             "tests_added": [],
-            "commit_message": "fix: implementation (parse error)",
-            "summary": f"Failed to parse: {error}",
+            "commit_message": "chore: partial implementation",
+            "summary": "Implementer hit max step limit.",
             "parse_error": True,
-            "raw_response": raw[:2000],
         }
+
+    def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
+        pass # Unused because we overrode run()
