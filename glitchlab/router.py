@@ -239,6 +239,7 @@ class Router:
         temperature: float = 0.2,
         max_tokens: int = 4096,
         response_format: dict | None = None,
+        tools: list[dict] | None = None,
     ) -> RouterResponse:
         """
         Send a completion request through LiteLLM.
@@ -249,6 +250,7 @@ class Router:
             temperature: Sampling temperature (dropped automatically for models that don't support it)
             max_tokens: Max response tokens
             response_format: Optional JSON schema for structured output
+            tools: Optional list of tools/functions the agent can call
         """
         if self.budget.budget_exceeded:
             raise BudgetExceededError(
@@ -264,7 +266,7 @@ class Router:
 
         logger.debug(f"[ROUTER] {role} → {model} ({len(safe_messages)} messages)")
 
-        kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format)
+        kwargs = _build_kwargs(model, safe_messages, temperature, max_tokens, response_format, tools)
 
         try:
             response = litellm.completion(**kwargs)
@@ -275,7 +277,7 @@ class Router:
             logger.warning(f"⚠️ [ROUTER] 503 Service Unavailable from {model}. Failing over to {fallback_model}...")
             
             # Rebuild kwargs for the fallback model
-            kwargs = _build_kwargs(fallback_model, safe_messages, temperature, max_tokens, response_format)
+            kwargs = _build_kwargs(fallback_model, safe_messages, temperature, max_tokens, response_format, tools)
             response = litellm.completion(**kwargs)
 
         # Accuracy Fix: Place calculation here to capture total time spent including failover
@@ -283,7 +285,10 @@ class Router:
 
         self.budget.record(response)
 
-        content = response.choices[0].message.content or ""
+        # Extract tool calls safely
+        response_message = response.choices[0].message
+        content = response_message.content
+        tool_calls = getattr(response_message, "tool_calls", None)
 
         logger.debug(
             f"[ROUTER] {role} complete — "
@@ -298,6 +303,7 @@ class Router:
             tokens_used=getattr(response.usage, "total_tokens", 0),
             cost=self.budget.usage.estimated_cost,
             latency_ms=elapsed_ms,
+            tool_calls=tool_calls
         )
 
 
