@@ -23,16 +23,20 @@ DEBUGGER_TOOLS = [
         "type": "function",
         "function": {
             "name": "think",
-            "description": "Use this to analyze error logs, hypothesize root causes, or plan your fix before taking action. Write out your reasoning about the failure chain. This helps avoid incorrect patches.",
+            "description": "Use this to analyze the error output and plan your investigation BEFORE taking action.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "reasoning": {
+                    "hypothesis": {
                         "type": "string", 
-                        "description": "Your internal diagnosis and step-by-step fix plan."
+                        "description": "Based on the error log, what do you think is actually broken?"
+                    },
+                    "investigation_plan": {
+                        "type": "string",
+                        "description": "Step-by-step plan of which files to read or search to verify your hypothesis."
                     }
                 },
-                "required": ["reasoning"]
+                "required": ["hypothesis", "investigation_plan"]
             }
         }
     },
@@ -123,7 +127,7 @@ class DebuggerAgent(BaseAgent):
     system_prompt = """You are Reroute, the surgical debug engine.
 
 You now operate in an agentic loop. You have tools to think, investigate, fix, and verify.
-1. Use `think` to hypothesize why a test is failing before you change code.
+1. You MUST use the `think` tool to state your hypothesis and investigation plan BEFORE taking any actions.
 2. Use `get_error` to see the current failure.
 3. Use `search_grep` if you don't know the exact file path.
 4. Use `read_file` to examine the logic.
@@ -163,6 +167,7 @@ Investigate and fix. Call `done` when the tests pass."""
         modified_files = set()
         created_files = set()
         think_count = 0
+        search_count = 0
         max_steps = 10 
 
         for step in range(max_steps):
@@ -229,11 +234,16 @@ Investigate and fix. Call `done` when the tests pass."""
             recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
             search_count = recent_tools.count("search_grep")
 
+            # 3. Deterministic First Step: Force 'think' on step 0
+            step_kwargs = dict(kwargs)
+            if step == 0:
+                step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
+
             response = self.router.complete(
                 role=self.role,
                 messages=messages,
                 tools=DEBUGGER_TOOLS,
-                **kwargs
+                **step_kwargs
             )
 
             # Append assistant message
@@ -265,10 +275,7 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 if tc_name == "think":
                     think_count += 1
-                    if think_count > 3:
-                        res = "Thinking limit reached. Please take action (read, write, or search)."
-                    else:
-                        res = "Reasoning noted. Continue when ready."
+                    res = "Hypothesis noted. Proceed with your investigation plan."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
@@ -309,6 +316,11 @@ Investigate and fix. Call `done` when the tests pass."""
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":
+                    if think_count == 0:
+                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+                        
                     path = tc_args.get("path")
                     content = tc_args.get("content")
                     try:

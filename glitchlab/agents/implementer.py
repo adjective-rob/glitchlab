@@ -23,16 +23,20 @@ IMPLEMENTER_TOOLS = [
         "type": "function",
         "function": {
             "name": "think",
-            "description": "Use this to plan your approach before taking action. Write out your reasoning about file dependencies, execution order, or potential issues. This helps you avoid errors in complex tasks.",
+            "description": "Use this to plan your approach. You must map out your search strategy and list the files you suspect you need to modify before taking action.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "reasoning": {
+                    "search_strategy": {
                         "type": "string", 
-                        "description": "Your internal thoughts and step-by-step plan."
+                        "description": "How you will find the code you need (e.g., 'I will grep for X to find all downstream imports')."
+                    },
+                    "execution_plan": {
+                        "type": "string",
+                        "description": "Step-by-step plan of which files to read and write."
                     }
                 },
-                "required": ["reasoning"]
+                "required": ["search_strategy", "execution_plan"]
             }
         }
     },
@@ -114,7 +118,7 @@ class ImplementerAgent(BaseAgent):
     system_prompt = """You are Patch, the surgical implementation engine.
 
 You now operate in an agentic loop. You have tools to think, read, write, and check.
-1. For complex tasks, use `think` first to map out dependencies.
+1. You MUST use the `think` tool to explain your step-by-step execution plan BEFORE you use the `write_file` tool for the first time.
 2. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
 3. Write one file at a time using `write_file`.
 4. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
@@ -152,6 +156,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
         modified_files = set()
         created_files = set()
         think_count = 0
+        search_count = 0
         max_steps = 30
         
         for step in range(max_steps):
@@ -213,11 +218,16 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
             recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
             search_count = recent_tools.count("search_grep")
 
+            # 3. Deterministic First Step: Force 'think' on step 0
+            step_kwargs = dict(kwargs)
+            if step == 0:
+                step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
+
             response = self.router.complete(
                 role=self.role,
                 messages=messages,
                 tools=IMPLEMENTER_TOOLS,
-                **kwargs
+                **step_kwargs
             )
 
             # Append assistant message
@@ -251,10 +261,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
 
                 if tc_name == "think":
                     think_count += 1
-                    if think_count > 3:
-                        res = "Thinking limit reached. Please proceed with actions (read, write, or search)."
-                    else:
-                        res = "Reasoning noted. Continue when ready."
+                    res = "Strategy noted. Proceed with your plan."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
@@ -296,6 +303,11 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":
+                    if think_count == 0:
+                        res = "Access Denied: You must use the `think` tool to explain your modifications before calling `write_file`."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
                     path = tc_args.get("path")
                     content = tc_args.get("content")
                     try:
