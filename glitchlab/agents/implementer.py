@@ -8,6 +8,7 @@ write files individually, and run syntax checks before committing.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +72,22 @@ IMPLEMENTER_TOOLS = [
                 "required": ["commit_message", "summary"]
             }
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_grep",
+            "description": "Search the codebase for a pattern. Returns matching lines with file paths and line numbers. Use this to find function definitions, imports, or usages before using read_file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "The text pattern to search for"},
+                    "file_type": {"type": "string", "description": "Optional glob pattern, e.g., '*.py' or '*.rs'", "default": "*"}
+                },
+                "required": ["pattern"]
+            }
+        }
+    }                 
 ]
 
 class ImplementerAgent(BaseAgent):
@@ -162,9 +178,33 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                     path = tc_args.get("path")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
-                        res = f"Read {len(content)} characters:\n\n{content}"
+                        res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "search_grep":
+                    pattern = tc_args.get("pattern")
+                    file_type = tc_args.get("file_type", "*")
+                    try:
+                        # Direct subprocess call for read-only universal search
+                        cmd = [
+                            "grep", "-rn", 
+                            f"--include={file_type}",
+                            "--exclude-dir=.glitchlab", 
+                            "--exclude-dir=__pycache__",
+                            "--exclude-dir=node_modules",
+                            "--exclude-dir=.git",
+                            pattern, "."
+                        ]
+                        proc = subprocess.run(cmd, cwd=workspace_dir, capture_output=True, text=True, timeout=30)
+                        lines = proc.stdout.splitlines()
+                        if len(lines) > 50:
+                            res = "\n".join(lines[:50]) + "\n(truncated, refine your search)"
+                        else:
+                            res = proc.stdout if proc.stdout else "No matches found."
+                    except Exception as e:
+                        res = f"Search failed: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":

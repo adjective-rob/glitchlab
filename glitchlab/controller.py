@@ -516,11 +516,14 @@ def apply_changes(
         if not filename:
             continue
 
-        # ── NEW: Skip files the agent already wrote natively via tool calls ──
+        # ── SAFETY CHECK: Detect native agent modifications ──
+        # If an agent used 'write_file' tool, skip manual application.
         if change.get("_already_applied"):
             applied.append(f"AGENT_APPLIED {filename}")
+            logger.info(f"[APPLY] Skipping {filename} — already applied by agent tool.")
             continue
 
+        # Existing logic for files that still need applying...
         if boundary:
             boundary.check([filename], allow_core)
 
@@ -1348,7 +1351,10 @@ class Controller:
             acceptance_criteria=task.acceptance_criteria,
             file_context=file_context,
             previous_output=self._state.to_agent_summary("implementer"),
-            extra={"tool_executor": tools}, # <-- TOOL EXECUTOR WIRED HERE
+            extra={
+                "tool_executor": tools, # <-- WIRE THE KEYS TO THE SANDBOX HERE
+                "test_command": self.test_command, # Optional: let Patch run the primary test
+            },
         )
 
         impl = self.implementer.run(context, max_tokens=12000)
@@ -1431,7 +1437,7 @@ Ensure:
             console.print(f"\n[bold]🧪 Test run {attempt}/{max_attempts}...[/]")
 
             try:
-                # 1. Execute test command
+                # 1. Execute test command to see if a fix is even needed
                 result = tools.execute(self.test_command)
             except ToolViolationError as e:
                 console.print(f"[red]Tool violation: {e}[/]")
@@ -1461,10 +1467,11 @@ Ensure:
                 extra={
                     "error_output": (error_output or "")[:1000],
                     "test_command": self.test_command,
-                    "tool_executor": tools, # Wire the sandbox executor
+                    "tool_executor": tools, # Hand over the keys to the sandbox
                 },
             )
 
+            # Debugger now runs its own 10-step loop internally
             debug_result = self.debugger.run(context)
             
             # Record debug Turn for TaskHistory
