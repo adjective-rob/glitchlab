@@ -1159,6 +1159,14 @@ class Controller:
                 self._state.mark_phase("test")
                 self._state.persist(ws_path)
 
+                # --- FAST MODE CHECK ---
+                is_fast_mode = (
+                    len(self._state.files_modified) <= 2 
+                    and self._state.estimated_complexity in ("trivial", "small")
+                )
+                if is_fast_mode:
+                    console.print("  [dim]Trivial change detected. Forcing downstream agents into Fast Mode.[/]")
+
                 # ── 6. Security Review ──
                 sec = self._run_security(task, impl, ws_path)
 
@@ -1179,14 +1187,14 @@ class Controller:
                         return result
 
                 # ── 7. Release Assessment ──
-                rel = self._run_release(task, impl, ws_path)
+                rel = self._run_release(task, impl, ws_path, is_fast_mode)
 
                 self._state.version_bump = rel.get("version_bump", "")
                 self._state.changelog_entry = rel.get("changelog_entry", "")
                 self._state.mark_phase("release")
 
                 # ── 7.5. Archivist (Governed Documentation) ──
-                nova_result = self._run_archivist(task, impl, plan, rel, ws_path)
+                nova_result = self._run_archivist(task, impl, plan, rel, ws_path, is_fast_mode)
 
                 if is_maintenance:
                     nova_result["should_write_adr"] = False
@@ -1609,7 +1617,7 @@ Ensure:
         self._log_event("auditor_feedback", {"feedback": result.get("feedback")})
         return result
 
-    def _run_security(self, task: Task, impl: dict, ws_path: Path) -> dict:
+    def _run_security(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> dict:
         console.print("\n[bold red]🔒 [FRANKIE] Security scan...[/]")
 
         diff = self._workspace.diff_full() if self._workspace else ""
@@ -1624,6 +1632,7 @@ Ensure:
             extra={
                 "diff": diff,
                 "protected_paths": self.config.boundaries.protected_paths,
+                "fast_mode": is_fast_mode,
             },
         )
 
@@ -1631,7 +1640,7 @@ Ensure:
         self._log_event("security_review", {"verdict": result.get("verdict")})
         return result
 
-    def _run_release(self, task: Task, impl: dict, ws_path: Path) -> dict:
+    def _run_release(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> dict:
         console.print("\n[bold cyan]📦 [SEMVER] Release assessment...[/]")
 
         diff = self._workspace.diff_stat() if self._workspace else ""
@@ -1642,7 +1651,10 @@ Ensure:
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
             previous_output=self._state.to_agent_summary("release"),
-            extra={"diff": diff},
+            extra={
+                "diff": diff,
+                "fast_mode": is_fast_mode,
+            },
         )
 
         result = self.release.run(context)
@@ -1650,7 +1662,7 @@ Ensure:
         return result
 
     def _run_archivist(
-        self, task: Task, impl: dict, plan: dict, release: dict, ws_path: Path
+        self, task: Task, impl: dict, plan: dict, release: dict, ws_path: Path, is_fast_mode: bool = False
     ) -> dict:
         """Run Archivist Nova with structured state context."""
         console.print("\n[bold dim]📚 [NOVA] Documenting...[/]")
@@ -1670,7 +1682,8 @@ Ensure:
             working_dir=str(ws_path),
             previous_output=self._state.to_agent_summary("archivist"),
             extra={
-                "existing_docs": existing_docs[:50], # Increased to 50 for better visibility
+                "existing_docs": existing_docs[:50],
+                "fast_mode": is_fast_mode,
             }
         )
 

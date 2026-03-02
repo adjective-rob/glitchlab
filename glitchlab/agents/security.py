@@ -12,6 +12,7 @@ Energy: cartoon cop with a magnifying glass.
 from __future__ import annotations
 
 import json
+from multiprocessing import context
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -190,10 +191,14 @@ Files created: {files_created}
 Protected paths: {context.extra.get('protected_paths', [])}
 
 Diff Preview:
-
 {diff_text}
 
 Investigate the modified files using your tools. When satisfied, call `submit_report`."""
+
+        if context.extra.get("fast_mode"):
+            user_content += """
+
+FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_report`)."""
 
         return [self._system_msg(), self._user_msg(user_content)]
 

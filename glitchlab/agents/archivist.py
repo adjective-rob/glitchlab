@@ -192,6 +192,10 @@ Existing docs in repo:
 
 Use your tools to update/create documentation and ADRs as needed.
 When finished, call `done` with architecture_notes, should_write_adr, adr (or null), and doc_updates."""
+
+        if context.extra.get("fast_mode"):
+            user_content += "\n\nFAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `write_file`, `replace_in_file`, or `search_grep`. Rely strictly on the implementation summary and immediately call your final submission tool (`done`)."
+
         return [self._system_msg(), self._user_msg(user_content)]
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
