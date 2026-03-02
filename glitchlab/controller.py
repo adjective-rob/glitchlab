@@ -53,7 +53,7 @@ from glitchlab.agents.security import SecurityAgent
 from glitchlab.agents.testgen import TestGenAgent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
-from glitchlab.history import TaskHistory
+from glitchlab.history import TaskHistory, extract_patterns_from_messages
 from glitchlab.indexer import build_index
 from glitchlab.prelude import PreludeContext
 from glitchlab.router import BudgetExceededError, Router
@@ -1349,6 +1349,9 @@ class Controller:
         # Keep the user's task constraints, but DROP the JSON formatting constraints
         impl_constraints = list(task.constraints)
 
+        # --- MEMORY INJECTION ---
+        heuristics = self._history.build_heuristics(plan.get("files_likely_affected", []))
+
         # Pass structured task state AND the tool executor
         context = AgentContext(
             task_id=task.task_id,
@@ -1362,10 +1365,19 @@ class Controller:
             extra={
                 "tool_executor": tools, # <-- WIRE THE KEYS TO THE SANDBOX HERE
                 "test_command": self.test_command, # Optional: let Patch run the primary test
+                "learned_heuristics": heuristics,
             },
         )
 
         impl = self.implementer.run(context, max_tokens=12000)
+
+        # --- MEMORY EXTRACTION ---
+        messages = impl.get("_messages", [])
+        if messages:
+            outcome = "fail" if impl.get("parse_error") else "pass"
+            patterns = extract_patterns_from_messages(messages, outcome)
+            if patterns:
+                self._history.record_patterns(task.task_id, patterns)
 
         # For doc-comment tasks, use surgical insertion
         for change in impl.get("changes", []):
@@ -1540,6 +1552,17 @@ Ensure:
             self._state.previous_fixes.append(debug_result)
             self._state.last_error = debug_result.get("diagnosis", "Unknown error")
             self._state.debug_attempts = attempt
+
+            # --- RECORD FAILURE MEMORY ---
+            fix_changes = debug_result.get("fix", {}).get("changes", [])
+            for change in fix_changes:
+                if change.get("file"):
+                    self._history.record_failure_detail(
+                        task_id=task.task_id,
+                        file_modified=change["file"],
+                        error_type=self._state.last_error,
+                        resolution=debug_result.get("root_cause", "Fixed in debug loop")
+                    )
             
             # Sync TaskState with files written by the debugger's tools
             fix_changes = debug_result.get("fix", {}).get("changes", [])

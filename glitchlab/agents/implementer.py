@@ -170,11 +170,16 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 
         user_content = f"""Task: {context.objective}
 Plan: {steps_text}
-{file_context}
+{file_context}"""
 
-Use your tools to explore, implement, and verify this plan. When finished, call `done`."""
+        # --- ADD HEURISTICS ---
+        heuristics = context.extra.get("learned_heuristics")
+        if heuristics:
+            user_content += f"\n\n{heuristics}"
 
-        return [self._system_msg(), self._user_msg(user_content)]
+        user_content += "\n\nUse your tools to explore, implement, and verify this plan. When finished, call `done`."
+
+        return [self._system_msg(), self._user_msg(user_content)]  
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
         """Override run to implement the Agentic Loop with Cognitive Monologue."""
@@ -440,6 +445,7 @@ Use your tools to explore, implement, and verify this plan. When finished, call 
                         "_model": response.model,
                         "_tokens": response.tokens_used,
                         "_cost": response.cost,
+                        "_messages": messages,
                     }
 
         # If it hits max steps without calling 'done'

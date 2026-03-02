@@ -180,3 +180,153 @@ class TaskHistory:
 
         summary["fix_attempts"] = fix_attempts
         return summary
+    
+    def record_patterns(self, task_id: str, patterns: list[dict]) -> None:
+        """Append extracted tool-loop patterns to patterns.jsonl."""
+        if not patterns:
+            return
+            
+        patterns_file = self.log_dir / "patterns.jsonl"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        
+        try:
+            with open(patterns_file, "a", encoding="utf-8") as f:
+                for p in patterns:
+                    p["task_id"] = task_id
+                    p["timestamp"] = datetime.now(timezone.utc).isoformat()
+                    p["type"] = "discovery_pattern"
+                    f.write(json.dumps(p) + "\n")
+            
+            # Cap at ~500 entries to prevent unbounded growth
+            self._rotate_file_if_needed(patterns_file, max_lines=500)
+        except Exception as e:
+            logger.warning(f"[HISTORY] Failed to record patterns: {e}")
+
+    def record_failure_detail(self, task_id: str, file_modified: str, error_type: str, resolution: str) -> None:
+        """Capture specific debug loop failures and how they were resolved."""
+        patterns_file = self.log_dir / "patterns.jsonl"
+        self.log_dir.mkdir(parents=True, exist_ok=True)
+        
+        entry = {
+            "task_id": task_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "failure_resolution",
+            "file_modified": file_modified,
+            "error_type": error_type,
+            "resolution": resolution
+        }
+        
+        try:
+            with open(patterns_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.warning(f"[HISTORY] Failed to record failure detail: {e}")
+
+    def build_heuristics(self, files_in_scope: list[str]) -> str:
+        """Filter and rank historical patterns relevant to the current files."""
+        patterns_file = self.log_dir / "patterns.jsonl"
+        if not patterns_file.exists() or not files_in_scope:
+            return ""
+            
+        file_stats = {}
+        failure_examples = []
+        
+        try:
+            lines = patterns_file.read_text(encoding="utf-8").strip().splitlines()
+            for line in lines:
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                    
+                target_file = data.get("file_modified")
+                if target_file not in files_in_scope:
+                    continue
+                    
+                ptype = data.get("type")
+                if ptype == "discovery_pattern" and data.get("outcome") == "pass":
+                    reads = data.get("files_read_first", [])
+                    if reads:
+                        if target_file not in file_stats:
+                            file_stats[target_file] = {"runs": 0, "reads": {}}
+                        
+                        file_stats[target_file]["runs"] += 1
+                        for r in reads:
+                            file_stats[target_file]["reads"][r] = file_stats[target_file]["reads"].get(r, 0) + 1
+                            
+                elif ptype == "failure_resolution":
+                    failure_examples.append(
+                        f"- Avoid modifying {target_file} without addressing: {data.get('error_type')}. "
+                        f"Previous resolution: {data.get('resolution')}"
+                    )
+        except Exception as e:
+            logger.warning(f"[HISTORY] Error building heuristics: {e}")
+            return ""
+
+        # Format the output string
+        parts = []
+        for target, stats in file_stats.items():
+            runs = stats["runs"]
+            # Get the top 2 most common reads for this file
+            top_reads = sorted(stats["reads"].items(), key=lambda x: -x[1])[:2]
+            if top_reads:
+                read_strs = [f"{f} ({count}/{runs} runs)" for f, count in top_reads]
+                parts.append(f"- {target}: Usually requires reading {', '.join(read_strs)} first.")
+
+        if not parts and not failure_examples:
+            return ""
+
+        result = "Known patterns from previous runs:\n"
+        if parts:
+            result += "\n".join(parts[:10]) + "\n" # Cap at 10
+        if failure_examples:
+            result += "\nFailure Contexts to Avoid:\n" + "\n".join(failure_examples[-3:]) # Cap at 3 recent failures
+            
+        return result
+
+    def _rotate_file_if_needed(self, filepath: Path, max_lines: int) -> None:
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                lines = f.readlines()
+            if len(lines) > max_lines:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.writelines(lines[-int(max_lines * 0.8):]) # Keep the most recent 80%
+        except Exception:
+            pass
+
+def extract_patterns_from_messages(messages: list[dict], outcome: str) -> list[dict]:
+    """Pure function to extract discovery patterns from a tool-loop message history."""
+    patterns = []
+    files_read = set()
+    tools_used = []
+    
+    for msg in messages:
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            for tc in msg["tool_calls"]:
+                try:
+                    name = tc.get("function", {}).get("name", "")
+                    args = json.loads(tc.get("function", {}).get("arguments", "{}"))
+                    tools_used.append(name)
+                    
+                    if name in ("read_file", "search_grep"):
+                        # search_grep might not have 'path', handle gracefully
+                        path = args.get("path") or args.get("pattern")
+                        if path:
+                            files_read.add(path)
+                            
+                    elif name in ("write_file", "replace_in_file"):
+                        file_modified = args.get("path")
+                        if file_modified:
+                            patterns.append({
+                                "file_modified": file_modified,
+                                "files_read_first": list(files_read),
+                                "tools_used": list(tools_used),
+                                "outcome": outcome
+                            })
+                            # Reset discovery state after a write
+                            files_read.clear()
+                            tools_used.clear()
+                except Exception:
+                    continue
+                    
+    return patterns
