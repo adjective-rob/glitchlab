@@ -32,6 +32,10 @@ dev = [
     "ruff>=0.3.0",
 ]
 
+ast = [
+    "tree-sitter-languages>=1.10.2",
+]
+
 [project.scripts]
 glitchlab = "glitchlab.cli:app"
 

@@ -59,6 +59,7 @@ from glitchlab.prelude import PreludeContext
 from glitchlab.router import BudgetExceededError, Router
 from glitchlab.workspace import Workspace
 from glitchlab.workspace.tools import ToolExecutor, ToolViolationError
+from glitchlab.symbols import SymbolIndex
 
 console = Console()
 
@@ -1339,6 +1340,9 @@ class Controller:
     def _run_implementer(self, task: Task, plan: dict, ws_path: Path, tools: ToolExecutor) -> dict:
         console.print("\n[bold blue]🔧 [PATCH] Implementing...[/]")
 
+        # --- AST LAYER INITIALIZATION ---
+        symbol_index = SymbolIndex(ws_path)
+
         # KEEP THIS: ScopeResolver computes context from actual imports
         # Gives the tool-loop a great starting point so it doesn't have to read_file blindly
         file_context = self._scope.resolve_for_files(
@@ -1366,6 +1370,7 @@ class Controller:
                 "tool_executor": tools, # <-- WIRE THE KEYS TO THE SANDBOX HERE
                 "test_command": self.test_command, # Optional: let Patch run the primary test
                 "learned_heuristics": heuristics,
+                "symbol_index": symbol_index,
             },
         )
 

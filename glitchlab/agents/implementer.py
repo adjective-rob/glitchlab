@@ -136,6 +136,36 @@ IMPLEMENTER_TOOLS = [
                 "required": ["pattern"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_references",
+            "description": "Find all locations where a symbol is defined, called, or imported. More precise than search_grep — ignores matches in comments and strings. Use this for renaming, understanding callers, or checking impact of changes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "The exact symbol name to find"},
+                    "language": {"type": "string", "description": "Optional language filter (e.g. 'python', 'rust')"}
+                },
+                "required": ["symbol"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_function",
+            "description": "Get the complete body of a function or method by name. Returns the full implementation including signature. Use this instead of read_file when you only need one function from a large file to save context window.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "symbol": {"type": "string", "description": "The function or method name"},
+                    "file": {"type": "string", "description": "Optional file path to restrict the search"}
+                },
+                "required": ["symbol"]
+            }
+        }
     }               
 ]
 
@@ -147,12 +177,14 @@ class ImplementerAgent(BaseAgent):
 
 You now operate in an agentic loop. You have tools to think, read, write, check, and rollback.
 1. You MUST use the `think` tool to explain your step-by-step execution plan BEFORE you use the `write_file` tool for the first time.
-2. DO NOT guess type signatures. If you need to know how a module works, use `read_file`.
+2. DO NOT guess type signatures. If you need to know how a module works, use `read_file` or `get_function`.
 3. For existing files, ALWAYS prefer `replace_in_file` to make surgical edits. Only use `write_file` if you are creating a brand new file or completely rewriting a very small one.
 4. If you are unsure if your code is right, use `run_check` to run the compiler, linter, or tests.
 5. When using write_file, you MUST output the ENTIRE file contents. NEVER use placeholders like 'rest of code here'. Doing so will delete the user's code.
 6. If you make a mistake and break a file, use the `rollback_file` tool to undo your changes and start over.
-7. When you are confident the plan is implemented, use the `done` tool.
+7. Use `get_function` to read specific function bodies instead of `read_file` to save context space on large files.
+8. Use `find_references` to understand where a symbol is defined or called before changing its signature.
+9. When you are confident the plan is implemented, use the `done` tool.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -187,6 +219,7 @@ Plan: {steps_text}
         
         workspace_dir = Path(context.working_dir)
         tool_executor = context.extra.get("tool_executor")
+        symbol_index = context.extra.get("symbol_index")
         
         modified_files = set()
         created_files = set()
@@ -218,6 +251,36 @@ Plan: {steps_text}
                             symbols = [l.strip() for l in lines if l.strip().startswith(("def ", "class ", "async def ", "pub fn ", "struct ", "type ", "export "))]
                             sym_str = "\n".join(symbols[:20])
                             messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
+                        
+                        elif tc_name == "find_references":
+                            symbol = tc_args.get("symbol")
+                            language = tc_args.get("language")
+                            if symbol_index:
+                                refs = symbol_index.find_references(symbol, language)
+                                if not refs:
+                                    res = f"No structural references found for '{symbol}'. Fall back to search_grep if needed."
+                                else:
+                                    # Cap at 30 to protect context
+                                    lines = [f"{r['file']}:{r['line']} [{r['kind']}] {r['context']}" for r in refs[:30]]
+                                    res = f"Found {len(refs)} references for '{symbol}':\n" + "\n".join(lines)
+                                    if len(refs) > 30:
+                                        res += f"\n... (truncated {len(refs)-30} more)"
+                            else:
+                                res = "AST parser unavailable. Please fall back to search_grep."
+                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                        elif tc_name == "get_function":
+                            symbol = tc_args.get("symbol")
+                            file_path = tc_args.get("file")
+                            if symbol_index:
+                                func_data = symbol_index.get_function_body(symbol, file_path)
+                                if func_data:
+                                    res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
+                                else:
+                                    res = f"Function '{symbol}' not found. Check spelling or use search_grep."
+                            else:
+                                res = "AST parser unavailable. Please fall back to read_file."
+                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})                                                  
                         
                         # Reference-only extraction for search_grep
                         elif tname == "search_grep" and len(content) > 500:
@@ -355,6 +418,9 @@ Plan: {steps_text}
                             created_files.add(path)
                         else:
                             modified_files.add(path)
+
+                        if symbol_index:
+                            symbol_index.invalidate(path)
                             
                         res = f"Successfully wrote {len(content)} characters to {path}."
                     except Exception as e:
@@ -384,6 +450,10 @@ Plan: {steps_text}
                                 new_content = content.replace(find_str, replace_str)
                                 fpath.write_text(new_content, encoding='utf-8')
                                 modified_files.add(path)
+                                
+                                if symbol_index:
+                                    symbol_index.invalidate(path)
+                                    
                                 res = f"Success: Replaced {count} occurrence(s) in {path}."
                     except Exception as e:
                         res = f"Error replacing in file: {e}"
