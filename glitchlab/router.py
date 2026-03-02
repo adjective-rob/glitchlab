@@ -232,6 +232,7 @@ class Router:
             "security": config.routing.security,
             "release": config.routing.release,
             "archivist": config.routing.archivist,
+            "testgen": config.routing.testgen,
         }
 
         litellm.suppress_debug_info = True
