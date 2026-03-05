@@ -281,7 +281,7 @@ class Router:
             "implementer": 0.60,
             "debugger": 0.30,
             "auditor": 0.10,
-            "security": 0.10,
+            "security": 0.30,
             "release": 0.10,
             "archivist": 0.10,
         }
