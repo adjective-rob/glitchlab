@@ -89,3 +89,7 @@ boundaries:
 context:
   brain: ~/.glitchlab/brain
   min_version: "1.2.0"
+
+automation:
+  rebase_before_pr: true
+  auto_merge_pr: false

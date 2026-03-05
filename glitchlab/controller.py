@@ -1248,6 +1248,14 @@ class Controller:
             commit_msg = impl.get("commit_message", f"glitchlab: {task.task_id}")
             self._workspace.commit(commit_msg)
 
+            # --- NEW: Rebase Before PR ---
+            if self.config.automation.rebase_before_pr:
+                console.print("[dim]🔄 Rebasing onto origin/main to prevent conflicts...[/]")
+                if not self._workspace.rebase():
+                    result["status"] = "rebase_conflict"
+                    console.print("[red]❌ Rebase conflict detected. PR aborted to protect the remote.[/]")
+                    return result
+
             if self.config.intervention.pause_before_pr:
                 diff = self._workspace.diff_stat()
                 console.print(Panel(diff, title="Diff Summary", border_style="cyan"))
@@ -1256,11 +1264,30 @@ class Controller:
                     return result
 
             try:
-                self._workspace.push()
+                self._workspace.push(force=True)  # Force push required if we just rebased
                 pr_url = self._create_pr(task, impl, rel)
                 result["pr_url"] = pr_url
                 result["status"] = "pr_created"
                 console.print(f"[bold green]✅ PR created: {pr_url}[/]")
+                
+                # --- NEW: Auto-Merge ---
+                if self.config.automation.auto_merge_pr:
+                    console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
+                    merge_res = subprocess.run(
+                        ["gh", "pr", "merge", pr_url, "--squash", "--delete-branch"],
+                        cwd=self.repo_path,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if merge_res.returncode == 0:
+                        result["status"] = "merged"
+                        console.print(f"[bold green]🎉 PR Auto-Merged successfully![/]")
+                    else:
+                        # Graceful degradation: If CI/CD branch protections block the merge, 
+                        # it just stays open as a PR.
+                        console.print(f"[yellow]⚠️ Auto-merge blocked by GitHub (likely awaiting CI). PR remains open.\n{merge_res.stderr.strip()}[/]")
+
             except Exception as e:
                 logger.warning(f"PR creation failed: {e}")
                 result["status"] = "committed"

@@ -27,7 +27,8 @@ def _run_single_task(
     task_file: Path, 
     repo_path: Path, 
     allow_core: bool, 
-    test_command: str | None
+    test_command: str | None,
+    auto_merge: bool = False,
 ) -> dict[str, Any]:
     """
     Transactional Task Worker. 
@@ -39,6 +40,11 @@ def _run_single_task(
         
         # v2.1: Each worker loads its own fresh config and task
         config = load_config(repo_path)
+        
+        # Override worker config if auto-merge is requested via CLI
+        if auto_merge:
+            config.automation.auto_merge_pr = True
+
         task = Task.from_yaml(task_file)
         
         # The Controller's internal Workspace will now handle 
@@ -70,6 +76,7 @@ def run_parallel(
     allow_core: bool = False,
     auto_approve: bool = True,
     test_command: str | None = None,
+    auto_merge: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Orchestrate sandboxed task execution.
@@ -88,7 +95,7 @@ def run_parallel(
     # Git environment variables don't bleed between tasks.
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         future_to_file = {
-            executor.submit(_run_single_task, tf, repo_path, allow_core, test_command): tf
+            executor.submit(_run_single_task, tf, repo_path, allow_core, test_command, auto_merge): tf
             for tf in task_files
         }
 
@@ -117,7 +124,7 @@ def _print_parallel_header(count: int, workers: int):
 def _log_task_completion(result: dict, task_file: Path):
     status = result.get("status", "unknown")
     task_id = result.get("task_id", task_file.stem)
-    color = "green" if status in ("pr_created", "committed") else "red"
+    color = "green" if status in ("pr_created", "committed", "merged") else "red"
     console.print(f"  [{color}]{task_id}: {status}[/]")
 
 def _print_parallel_summary(results: list[dict]) -> None:
@@ -130,7 +137,8 @@ def _print_parallel_summary(results: list[dict]) -> None:
 
     for r in results:
         status = r.get("status", "unknown")
-        color = {"pr_created": "green", "committed": "yellow"}.get(status, "red")
+        # Ensure we recognize the new 'merged' status as a success
+        color = {"pr_created": "green", "committed": "yellow", "merged": "green"}.get(status, "red")
         pr = r.get("pr_url", r.get("branch", "—"))
         budget = r.get("budget", {})
         cost = f"${budget.get('estimated_cost', 0):.4f}"
@@ -140,5 +148,5 @@ def _print_parallel_summary(results: list[dict]) -> None:
     console.print(table)
     
     total_cost = sum(r.get("budget", {}).get("estimated_cost", 0) for r in results)
-    successes = sum(1 for r in results if r.get("status") in ("pr_created", "committed"))
+    successes = sum(1 for r in results if r.get("status") in ("pr_created", "committed", "merged"))
     console.print(f"\n[bold]{successes}/{len(results)} completed | Total cost: ${total_cost:.4f}[/]")

@@ -82,12 +82,13 @@ def _print_banner():
 
 @app.command()
 def run(
-    repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
+repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     issue: Optional[int] = typer.Option(None, "--issue", "-i", help="GitHub issue number"),
     local_task: bool = typer.Option(False, "--local-task", "-l", help="Use local task YAML"),
     task_file: Optional[Path] = typer.Option(None, "--task-file", "-f", help="Path to task YAML"),
     allow_core: bool = typer.Option(False, "--allow-core", help="Allow modifications to protected core paths"),
     auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"), # <-- NEW
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t", help="Test command to run (e.g. 'cargo test')"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ):
@@ -101,6 +102,10 @@ def run(
         raise typer.Exit(1)
 
     config = load_config(repo)
+
+    # --- NEW: Override YAML config if CLI flag is passed ---
+    if auto_merge:
+        config.automation.auto_merge_pr = True
 
     # Resolve task
     if issue:
@@ -360,6 +365,7 @@ def batch(
     tasks_dir: Optional[Path] = typer.Option(None, "--tasks-dir", "-d", help="Directory of task YAMLs"),
     workers: int = typer.Option(3, "--workers", "-w", help="Max concurrent tasks"),
     allow_core: bool = typer.Option(False, "--allow-core"),
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PRs if successful"), # <-- NEW
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):

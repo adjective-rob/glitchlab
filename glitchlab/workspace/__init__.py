@@ -132,6 +132,35 @@ class Workspace:
 
     def _worktree_git(self, *args: str, check: bool = True, capture: bool = False) -> str:
         return self._run_cmd(["git", *args], cwd=self.worktree_path, check=check, capture=capture)
+    
+    def rebase(self, target: str = "origin/main") -> bool:
+        """
+        Safely rebase the worktree branch onto the target branch.
+        Aborts automatically if conflicts occur.
+        """
+        try:
+            self._git("fetch", "origin", "main", check=False)
+            logger.info(f"[WORKSPACE] Rebasing {self.branch_name} onto {target}...")
+            
+            # Use subprocess directly to manage conflict status codes cleanly
+            result = subprocess.run(
+                ["git", "rebase", target],
+                cwd=self.worktree_path,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                logger.warning(f"[WORKSPACE] Rebase conflict detected. Aborting.\n{result.stderr or result.stdout}")
+                # Safety Rail: Instantly abort to clean up the worktree state
+                self._worktree_git("rebase", "--abort", check=False)
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"[WORKSPACE] Rebase exception: {e}")
+            self._worktree_git("rebase", "--abort", check=False)
+            return False
 
     @staticmethod
     def _run_cmd(cmd: list[str], cwd: Path, check: bool = True, capture: bool = False) -> str:

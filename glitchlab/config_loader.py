@@ -60,6 +60,9 @@ class ContextConfig(BaseModel):
     brain: str = "~/.glitchlab/brain"
     min_version: str = "1.2.0"
 
+class AutomationConfig(BaseModel):
+    rebase_before_pr: bool = True
+    auto_merge_pr: bool = False  # Default to False for safety
 
 class GlitchLabConfig(BaseModel):
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
@@ -71,7 +74,7 @@ class GlitchLabConfig(BaseModel):
     blocked_patterns: list[str] = Field(default_factory=list)
     boundaries: BoundaryConfig = Field(default_factory=BoundaryConfig)
     context: ContextConfig = Field(default_factory=ContextConfig)
-
+    automation: AutomationConfig = Field(default_factory=AutomationConfig)
 
 # ---------------------------------------------------------------------------
 # Loader
