@@ -1129,9 +1129,6 @@ class Controller:
                     console.print("[red]❌ Patch retry failed. Aborting.[/]")
                     result["status"] = "implementation_failed"
                     return result
-                
-            # ---> INSERT SHIELD HERE <---
-            self._run_testgen(task, ws_path, is_doc_only)    
 
             # ── Phase routing: doc-only skips test/security/release ──
             if is_doc_only:
@@ -1158,6 +1155,9 @@ class Controller:
                 self._state.test_passing = test_ok
                 self._state.mark_phase("test")
                 self._state.persist(ws_path)
+
+                # ---> INSERT SHIELD HERE <---
+                self._run_testgen(task, ws_path, is_doc_only)
 
                 # --- FAST MODE CHECK ---
                 is_fast_mode = (
