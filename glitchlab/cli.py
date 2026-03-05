@@ -154,6 +154,7 @@ repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target reposito
 def interactive(
     repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     allow_core: bool = typer.Option(False, "--allow-core"),
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
