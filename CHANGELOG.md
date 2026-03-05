@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-03-05
+
+- **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.
+- **Conflict Prevention**: Added `rebase_before_pr` to safely rebase worktrees against `origin/main` before opening PRs.
+- **Self-Healing Batch Queue**: The `glitchlab batch` command now automatically catches rebase conflicts and requeues tasks to run against the newly updated `main` branch.
+- **Task Priority Queue**: Batch tasks are now sorted by risk (High risk runs first when main is cleanest, Low risk runs last).
+- **CLI Automation Flags**: Added `--auto-merge` to `run`, `batch`, and `interactive` commands.
+- **API Resilience**: Added a strict 120-second timeout to the LiteLLM router to prevent silent API hangs.
+
 ## [3.1.1] - 2026-03-04
 
 ### Security
