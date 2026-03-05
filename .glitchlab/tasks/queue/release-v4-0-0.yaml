@@ -1,0 +1,22 @@
+id: release-v4-0-0
+objective: |
+  Bump the project version to `4.0.0` to reflect the massive new automation features we just shipped.
+  
+  1. Update the version string to "4.0.0" in `glitchlab/__init__.py`, `glitchlab/identity.py`, and `pyproject.toml`.
+  2. Update the version references in `README.md` to v4.0.0.
+  3. Add a new `## [4.0.0] - 2026-03-05` section to the top of `CHANGELOG.md` (under `## [Unreleased]`) that includes the following major features:
+     - **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.
+     - **Conflict Prevention**: Added `rebase_before_pr` to safely rebase worktrees against `origin/main` before opening PRs.
+     - **Self-Healing Batch Queue**: The `glitchlab batch` command now automatically catches rebase conflicts and requeues tasks to run against the newly updated `main` branch.
+     - **Task Priority Queue**: Batch tasks are now sorted by risk (High risk runs first when main is cleanest, Low risk runs last).
+     - **CLI Automation Flags**: Added `--auto-merge` to `run`, `batch`, and `interactive` commands.
+     - **API Resilience**: Added a strict 120-second timeout to the LiteLLM router to prevent silent API hangs.
+constraints:
+  - "Use replace_in_file to surgically update the files without deleting existing content."
+  - "Ensure the ASCII banner in identity.py remains perfectly intact."
+acceptance:
+  - "Version is 4.0.0 in all relevant files."
+  - "CHANGELOG.md contains the new feature list."
+  - "Tests pass."
+risk: low
+mode: maintenance

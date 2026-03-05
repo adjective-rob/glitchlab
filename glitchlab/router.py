@@ -246,8 +246,8 @@ class Router:
         return model
 
     @retry(
-        stop=stop_after_attempt(3), 
-        wait=wait_exponential(min=1, max=10),
+        stop=stop_after_attempt(6), 
+        wait=wait_exponential(min=2, max=60),
         retry=retry_if_not_exception_type(BudgetExceededError)
     )
     def complete(

@@ -1,0 +1,10 @@
+id: test-coverage-history
+objective: |
+  Write comprehensive unit tests for `glitchlab/history.py`. Focus specifically on testing the JSONL append-only logic, the `_rotate_file_if_needed` mechanism, and ensuring corrupt JSON lines do not crash the reader.
+constraints:
+  - "Use `pytest`."
+  - "Mock file system operations using `pytest`'s `tmp_path` fixture so we don't write to the real disk."
+acceptance:
+  - "The new tests pass successfully via `pytest`."
+risk: low
+mode: evolution

@@ -1,0 +1,11 @@
+id: lint-fix-workspace
+objective: |
+  Run `python -m ruff check glitchlab/workspace/` and fix all linting and formatting warnings. 
+  Ensure strict type hints are added to any function signatures that are missing them.
+constraints:
+  - "Do not change the underlying business logic."
+  - "If a type is ambiguous, use `typing.Any` but prefer concrete types."
+acceptance:
+  - "ruff check passes with zero warnings for the workspace directory."
+risk: low
+mode: maintenance
