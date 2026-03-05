@@ -97,10 +97,9 @@ class Workspace:
         self._worktree_git(*cmd)
         logger.info(f"[WORKSPACE] Pushed (force={force}): {self.branch_name}")
 
-    def rebase(self, target: str = "origin/main") -> bool:
+    def rebase(self, target: str = "origin/main", auto_abort: bool = True) -> bool:
         """
         Safely rebase the worktree branch onto the target branch.
-        Aborts automatically if conflicts occur.
         """
         try:
             self._git("fetch", "origin", "main", check=False)
@@ -114,14 +113,17 @@ class Workspace:
             )
             
             if result.returncode != 0:
-                logger.warning(f"[WORKSPACE] Rebase conflict detected. Aborting.\n{result.stderr or result.stdout}")
-                self._worktree_git("rebase", "--abort", check=False)
+                logger.warning(f"[WORKSPACE] Rebase conflict detected.\n{result.stderr or result.stdout}")
+                # Only abort if instructed to, otherwise leave the conflict markers for the agent!
+                if auto_abort:
+                    self._worktree_git("rebase", "--abort", check=False)
                 return False
                 
             return True
         except Exception as e:
             logger.error(f"[WORKSPACE] Rebase exception: {e}")
-            self._worktree_git("rebase", "--abort", check=False)
+            if auto_abort:
+                self._worktree_git("rebase", "--abort", check=False)
             return False
 
     def cleanup(self) -> None:

@@ -1251,10 +1251,29 @@ class Controller:
             # --- NEW: Rebase Before PR ---
             if getattr(self.config, "automation", None) and getattr(self.config.automation, "rebase_before_pr", False):
                 console.print("[dim]🔄 Rebasing onto origin/main to prevent conflicts...[/]")
-                if not self._workspace.rebase():
-                    result["status"] = "rebase_conflict"
-                    console.print("[red]❌ Rebase conflict detected. PR aborted to protect the remote.[/]")
-                    return result
+                
+                if not self._workspace.rebase(auto_abort=False):
+                    resolved = False
+                    if self.test_command:
+                        console.print("[yellow]⚠️ Rebase conflict detected. Handing over to Debugger for auto-resolution...[/]")
+                        # The fix loop will naturally detect the conflict markers as syntax errors/test failures!
+                        resolved = self._run_fix_loop(task, ws_path, tools, impl)
+                        
+                    if not resolved:
+                        # Agent couldn't fix it (or no tests available to verify the fix). Clean up.
+                        self._workspace._worktree_git("rebase", "--abort", check=False)
+                        result["status"] = "rebase_conflict"
+                        console.print("[red]❌ Auto-resolution failed or no tests available. PR aborted.[/]")
+                        return result
+                    else:
+                        # Tests passed! The agent successfully removed the markers and fixed the logic.
+                        self._workspace._worktree_git("add", "-A")
+                        
+                        # Tell Git to use 'true' as the editor to automatically accept the rebase commit message
+                        env = os.environ.copy()
+                        env["GIT_EDITOR"] = "true"  
+                        subprocess.run(["git", "rebase", "--continue"], cwd=ws_path, env=env, check=False)
+                        console.print("[bold green]✅ Rebase conflict auto-resolved by agent![/]")
 
             if getattr(self.config.intervention, "pause_before_pr", True):
                 diff = self._workspace.diff_stat()
