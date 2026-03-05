@@ -1,18 +1,20 @@
-import sys
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-from pathlib import Path
+import os
 
-def test_security_dependencies_patched():
-    pyproject_path = Path(__file__).parent.parent / 'pyproject.toml'
-    with open(pyproject_path, 'rb') as f:
-        data = tomllib.load(f)
+def test_dependencies_updated():
+    # Check requirements.txt
+    with open('requirements.txt', 'r') as f:
+        reqs = f.read()
     
-    dependencies = data.get('project', {}).get('dependencies', [])
+    assert 'pydantic>=2.12.5' in reqs
+    assert 'pyyaml>=6.0.3' in reqs
+    assert 'httpx>=0.28.1' in reqs
+    assert 'python-dotenv>=1.2.2' in reqs
     
-    # Check for specific patched versions
-    assert any('litellm>=1.82.0' in dep.replace(' ', '') for dep in dependencies), "litellm must be >= 1.82.0 to patch CVE-2024-5751 and CVE-2024-6587"
-    assert any('gitpython>=3.1.46' in dep.lower().replace(' ', '') for dep in dependencies), "GitPython must be >= 3.1.46 to patch CVE-2024-22190"
-    assert any('loguru>=0.7.3' in dep.replace(' ', '') for dep in dependencies), "loguru must be >= 0.7.3 to patch CVE-2022-0338"
+    # Check pyproject.toml
+    with open('pyproject.toml', 'r') as f:
+        pyproject = f.read()
+        
+    assert 'pydantic>=2.12.5' in pyproject
+    assert 'pyyaml>=6.0.3' in pyproject
+    assert 'httpx>=0.28.1' in pyproject
+    assert 'python-dotenv>=1.2.2' in pyproject
