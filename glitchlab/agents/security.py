@@ -60,6 +60,20 @@ SECURITY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "query_symbol_map",
+            "description": "Query the repository's structural map to find symbols/files. Use this to avoid blind grepping for sensitive modules.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The name of the symbol or file to look for"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "search_grep",
             "description": "Search the codebase for a pattern. Useful for checking if a newly introduced variable shadows a global credential, or finding where a vulnerable function is called.",
             "parameters": {
@@ -355,6 +369,25 @@ FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `r
                             "content": res,
                         }
                     )
+                elif tc_name == "query_symbol_map":
+                    query = tc_args.get("query", "").lower()
+                    repo_index = context.extra.get("repo_index")
+                    
+                    if repo_index:
+                        results = []
+                        for path, entry in repo_index.files.items():
+                            path_match = query in path.lower()
+                            symbol_matches = [s for s in entry.symbols if query in s.lower()]
+                            
+                            if path_match or symbol_matches:
+                                sym_info = f" (Symbols: {', '.join(symbol_matches[:5])})" if symbol_matches else ""
+                                results.append(f"- {path}{sym_info}")
+                        
+                        res = "\n".join(results[:20]) if results else "No matches found in the structural map."
+                    else:
+                        res = "Structural map (RepoIndex) is unavailable."
+                        
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "submit_report":
                     return {

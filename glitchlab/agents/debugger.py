@@ -133,6 +133,20 @@ DEBUGGER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "query_symbol_map",
+            "description": "Query the repository's structural map to find where specific classes, functions, or modules are located. Use this to avoid blind grepping.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The name of the symbol or file to look for (e.g., 'Workspace', 'controller.py')"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "done",
             "description": "Signal that the bug is fixed and verified.",
             "parameters": {
@@ -342,6 +356,20 @@ Investigate and fix. Call `done` when the tests pass."""
                             res = proc.stdout if proc.stdout else "No matches found."
                     except Exception as e:
                         res = f"Search failed: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "query_symbol_map":
+                    query = tc_args.get("query", "").lower()
+                    if self._repo_index: # Ensure repo_index is passed in context.extra
+                        results = []
+                        for path, entry in self._repo_index.files.items():
+                            if query in path.lower() or any(query in s.lower() for s in entry.symbols):
+                                symbol_match = [s for s in entry.symbols if query in s.lower()]
+                                results.append(f"- {path} (Symbols: {', '.join(symbol_match[:5])})")
+                        
+                        res = "\n".join(results[:20]) if results else "No matches found in the structural map."
+                    else:
+                        res = "Structural map (RepoIndex) is unavailable."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":

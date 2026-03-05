@@ -1679,6 +1679,7 @@ Ensure:
                 "diff": diff,
                 "protected_paths": self.config.boundaries.protected_paths,
                 "fast_mode": is_fast_mode,
+                "repo_index": self._repo_index,  # <--- Add this line to enable query_symbol_map
             },
         )
 
