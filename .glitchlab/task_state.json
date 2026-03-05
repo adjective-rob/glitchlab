@@ -1,42 +1,81 @@
 {
-  "task_id": "test-coverage-history",
-  "objective": "Write comprehensive unit tests for `glitchlab/history.py`. Focus specifically on testing the JSONL append-only logic, the `_rotate_file_if_needed` mechanism, and ensuring corrupt JSON lines do not crash the reader.\n",
-  "mode": "evolution",
+  "task_id": "lint-fix-workspace",
+  "objective": "Run `python -m ruff check glitchlab/workspace/` and fix all linting and formatting warnings. \nEnsure strict type hints are added to any function signatures that are missing them.\n",
+  "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Create a new test file for glitchlab/history.py to cover JSONL append logic, file rotation, and corrupt line handling using pytest and tmp_path.",
+      "description": "Fix linting issues and add strict type hints to function signatures in glitchlab/workspace/__init__.py",
       "files": [
-        "tests/test_history.py"
+        "glitchlab/workspace/__init__.py"
       ],
-      "action": "create",
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 2,
+      "description": "Fix linting issues and add strict type hints to function signatures in glitchlab/workspace/tools.py",
+      "files": [
+        "glitchlab/workspace/tools.py"
+      ],
+      "action": "modify",
       "status": "pending",
       "outcome": ""
     }
   ],
   "files_in_scope": [
-    "tests/test_history.py",
-    "tests/test_history.py"
+    "glitchlab/workspace/__init__.py",
+    "glitchlab/workspace/tools.py",
+    "glitchlab/workspace/__init__.py",
+    "glitchlab/workspace/tools.py"
   ],
   "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "tests/test_history.py"
+    "glitchlab/workspace/__init__.py",
+    "glitchlab/workspace/tools.py"
   ],
-  "files_created": [
-    "tests/test_history.py"
+  "files_created": [],
+  "tests_added": [
+    "tests/test_workspace_typing.py"
   ],
-  "tests_added": [],
-  "commit_message": "test: add unit tests for TaskHistory JSONL logic and rotation",
-  "implementation_summary": "Added comprehensive unit tests for `glitchlab/history.py` focusing on JSONL append logic, file rotation (`_rotate_file_if_needed`), and handling of corrupt JSON lines.",
+  "commit_message": "fix: add missing type hints and remove duplicate method",
+  "implementation_summary": "Added `-> None` return type hints to `__init__` methods in `Workspace` and `ToolExecutor` classes. Removed duplicate `rebase` method in `Workspace` class.",
   "test_passing": true,
-  "debug_attempts": 0,
-  "last_error": "",
-  "previous_fixes": [],
-  "security_verdict": "pass",
+  "debug_attempts": 1,
+  "last_error": "The test `test_workspace_typing.py` was failing because `inspect.signature(Workspace.__init__).return_annotation` was returning the string `'None'` instead of the actual `None` object.",
+  "previous_fixes": [
+    {
+      "diagnosis": "The test `test_workspace_typing.py` was failing because `inspect.signature(Workspace.__init__).return_annotation` was returning the string `'None'` instead of the actual `None` object.",
+      "root_cause": "`from __future__ import annotations` causes type hints to be evaluated as strings at runtime. The test was strictly checking `is None` instead of `== 'None'`.",
+      "fix": {
+        "changes": [
+          {
+            "file": "glitchlab/workspace/__init__.py",
+            "action": "modify",
+            "_already_applied": true
+          },
+          {
+            "file": "glitchlab/workspace/tools.py",
+            "action": "modify",
+            "_already_applied": true
+          }
+        ]
+      },
+      "confidence": "high",
+      "should_retry": true,
+      "summary": "Removed `from __future__ import annotations` from `glitchlab/workspace/__init__.py` and `glitchlab/workspace/tools.py`.",
+      "_agent": "debugger",
+      "_model": "gemini/gemini-3.1-pro-preview",
+      "_tokens": 7534,
+      "_cost": 0.4359208
+    }
+  ],
+  "security_verdict": "warn",
   "version_bump": "patch",
-  "changelog_entry": "### Fixed\n- Added comprehensive unit tests for `glitchlab/history.py` covering JSONL logic, file rotation, and corruption handling.",
+  "changelog_entry": "### Fixed\n- Fixed linting and formatting issues across the workspace module.\n- Removed duplicate `rebase` method in `Workspace` class.\n- Added missing `-> None` type hints to `__init__` methods in `Workspace` and `ToolExecutor`.",
   "completed_phases": [
     "plan",
     "implement",
@@ -48,69 +87,86 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-05T03:44:41.926045+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:53:32.082222+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/test-coverage-history"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/lint-fix-workspace"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-05T03:44:41.931462+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:53:32.088537+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
-        "total_files": 36,
+        "total_files": 37,
         "languages": {
-          ".py": 34
+          ".py": 35
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-05T03:44:42.004017+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:53:32.153038+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-05T03:44:47.434131+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:53:38.230677+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
-        "steps": 1,
+        "steps": 2,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-05T03:45:15.105446+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:54:13.290029+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
-        "changes": 1,
+        "changes": 2,
         "tests": 0
       }
     },
     {
-      "type": "tests_passed",
-      "timestamp": "2026-03-05T03:45:15.372348+00:00",
-      "task_id": "test-coverage-history",
+      "type": "testgen_created",
+      "timestamp": "2026-03-05T03:54:17.632306+00:00",
+      "task_id": "lint-fix-workspace",
+      "data": {
+        "file": "tests/test_workspace_typing.py",
+        "description": "Tests that the __init__ methods of Workspace and ToolExecutor have the correct '-> None' return type hint, and that the Workspace class does not have duplicate 'rebase' methods."
+      }
+    },
+    {
+      "type": "tests_failed",
+      "timestamp": "2026-03-05T03:54:17.921336+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "security_review",
-      "timestamp": "2026-03-05T03:45:34.122627+00:00",
-      "task_id": "test-coverage-history",
+      "type": "tests_passed",
+      "timestamp": "2026-03-05T03:56:41.034954+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
-        "verdict": "pass"
+        "attempt": 2
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-03-05T03:56:58.560646+00:00",
+      "task_id": "lint-fix-workspace",
+      "data": {
+        "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-05T03:45:37.882872+00:00",
-      "task_id": "test-coverage-history",
+      "timestamp": "2026-03-05T03:57:02.469126+00:00",
+      "task_id": "lint-fix-workspace",
       "data": {
         "bump": "patch"
       }
