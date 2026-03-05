@@ -328,7 +328,7 @@ risk: low
 
     # Add to .gitignore
     gitignore = repo / ".gitignore"
-    ignore_entries = [".glitchlab/worktrees/", ".glitchlab/logs/"]
+    ignore_entries = [".glitchlab/worktrees/", ".glitchlab/tasks/",".glitchlab/logs/"]
     if gitignore.exists():
         content = gitignore.read_text()
         additions = [e for e in ignore_entries if e not in content]
