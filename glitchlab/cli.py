@@ -371,7 +371,7 @@ def batch(
     tasks_dir: Optional[Path] = typer.Option(None, "--tasks-dir", "-d", help="Directory of task YAMLs"),
     workers: int = typer.Option(3, "--workers", "-w", help="Max concurrent tasks"),
     allow_core: bool = typer.Option(False, "--allow-core"),
-    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PRs if successful"), # <-- NEW
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PRs if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
 ):
@@ -380,22 +380,35 @@ def batch(
     _configure_logging(verbose)
 
     repo = repo.resolve()
-    # Permanent Fix: Default to the 'queue' subfolder used by the Auditor
     td = tasks_dir or (repo / ".glitchlab" / "tasks" / "queue")
 
     if not td.exists():
         console.print(f"[red]Tasks directory not found: {td}[/]")
         raise typer.Exit(1)
 
-    task_files = sorted(td.glob("*.yaml")) + sorted(td.glob("*.yml"))
-    # Exclude example files
-    task_files = [f for f in task_files if "example" not in f.name.lower()]
+    raw_task_files = sorted(td.glob("*.yaml")) + sorted(td.glob("*.yml"))
+    raw_task_files = [f for f in raw_task_files if "example" not in f.name.lower()]
 
-    if not task_files:
+    if not raw_task_files:
         console.print(f"[red]No task files found in {td}[/]")
         raise typer.Exit(1)
 
-    console.print(f"[cyan]Found {len(task_files)} tasks in {td}[/]")
+    # --- NEW: Task Priority Queue ---
+    # Parse and sort tasks by risk so High Risk runs first when main is cleanest.
+    tasks_with_risk = []
+    for tf in raw_task_files:
+        try:
+            t = Task.from_yaml(tf)
+            # High = 0 (first), Medium = 1, Low = 2
+            weight = {"high": 0, "medium": 1, "low": 2}.get(t.risk_level, 3)
+            tasks_with_risk.append((weight, tf))
+        except Exception:
+            tasks_with_risk.append((3, tf)) # Push parsing errors to the end
+            
+    tasks_with_risk.sort(key=lambda x: x[0])
+    task_files = [tf for _, tf in tasks_with_risk]
+
+    console.print(f"[cyan]Found {len(task_files)} tasks in {td} (Sorted by Risk Priority)[/]")
     for tf in task_files:
         console.print(f"  [dim]{tf.name}[/]")
 
@@ -408,10 +421,11 @@ def batch(
         max_workers=workers,
         allow_core=allow_core,
         test_command=test_cmd,
+        auto_merge=auto_merge,
     )
 
     # Exit code based on results
-    failures = sum(1 for r in results if r.get("status") not in ("pr_created", "committed"))
+    failures = sum(1 for r in results if r.get("status") not in ("pr_created", "committed", "merged"))
     if failures:
         raise typer.Exit(1)
 

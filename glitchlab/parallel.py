@@ -79,38 +79,57 @@ def run_parallel(
     auto_merge: bool = False,
 ) -> list[dict[str, Any]]:
     """
-    Orchestrate sandboxed task execution.
+    Orchestrate sandboxed task execution with Auto-Requeue for conflicts.
     """
     repo_path = repo_path.resolve()
 
     _print_parallel_header(len(task_files), max_workers)
 
-    # Policy Override: Parallel mode MUST be transactional
     if not auto_approve:
         auto_approve = True
 
     results: list[dict[str, Any]] = []
+    
+    # --- NEW: Dynamic Queue for Self-Healing ---
+    queue = task_files[:]
+    max_retries = 1
+    retry_counts = {tf: 0 for tf in task_files}
 
-    # Use ProcessPool to ensure that file system locks and 
-    # Git environment variables don't bleed between tasks.
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        future_to_file = {
-            executor.submit(_run_single_task, tf, repo_path, allow_core, test_command, auto_merge): tf
-            for tf in task_files
-        }
+    while queue:
+        current_batch = queue[:]
+        queue.clear()
+        
+        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_file = {
+                executor.submit(_run_single_task, tf, repo_path, allow_core, test_command, auto_merge): tf
+                for tf in current_batch
+            }
 
-        for future in concurrent.futures.as_completed(future_to_file):
-            task_file = future_to_file[future]
-            try:
-                result = future.result()
-                results.append(result)
-                _log_task_completion(result, task_file)
-            except Exception as e:
-                results.append({
-                    "task_id": task_file.stem,
-                    "status": "error",
-                    "error": str(e),
-                })
+            for future in concurrent.futures.as_completed(future_to_file):
+                task_file = future_to_file[future]
+                try:
+                    result = future.result()
+                    
+                    # --- NEW: The Magic Requeue Logic ---
+                    # If a fast task merged and caused a rebase conflict for this task,
+                    # we put it back in the queue. Next time it runs, it will branch off 
+                    # the NEW main branch and resolve the conflict itself natively!
+                    if result.get("status") == "rebase_conflict" and retry_counts[task_file] < max_retries:
+                        retry_counts[task_file] += 1
+                        queue.append(task_file)
+                        console.print(f"  [yellow]🔄 {task_file.stem}: Rebase conflict. Requeueing for fresh run against updated main...[/]")
+                    else:
+                        results.append(result)
+                        _log_task_completion(result, task_file)
+                except Exception as e:
+                    results.append({
+                        "task_id": task_file.stem,
+                        "status": "error",
+                        "error": str(e),
+                    })
+        
+        if queue:
+            console.print(f"\n[bold yellow]🔄 Restarting {len(queue)} tasks due to merge conflicts...[/]")
 
     _print_parallel_summary(results)
     return results
