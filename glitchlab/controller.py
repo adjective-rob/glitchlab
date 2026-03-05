@@ -1249,14 +1249,14 @@ class Controller:
             self._workspace.commit(commit_msg)
 
             # --- NEW: Rebase Before PR ---
-            if self.config.automation.rebase_before_pr:
+            if getattr(self.config, "automation", None) and getattr(self.config.automation, "rebase_before_pr", False):
                 console.print("[dim]🔄 Rebasing onto origin/main to prevent conflicts...[/]")
                 if not self._workspace.rebase():
                     result["status"] = "rebase_conflict"
                     console.print("[red]❌ Rebase conflict detected. PR aborted to protect the remote.[/]")
                     return result
 
-            if self.config.intervention.pause_before_pr:
+            if getattr(self.config.intervention, "pause_before_pr", True):
                 diff = self._workspace.diff_stat()
                 console.print(Panel(diff, title="Diff Summary", border_style="cyan"))
                 if not self._confirm("Create PR?"):
@@ -1271,7 +1271,7 @@ class Controller:
                 console.print(f"[bold green]✅ PR created: {pr_url}[/]")
                 
                 # --- NEW: Auto-Merge ---
-                if self.config.automation.auto_merge_pr:
+                if getattr(self.config, "automation", None) and getattr(self.config.automation, "auto_merge_pr", False):
                     console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
                     merge_res = subprocess.run(
                         ["gh", "pr", "merge", pr_url, "--squash", "--delete-branch"],

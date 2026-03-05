@@ -154,6 +154,7 @@ repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target reposito
 def interactive(
     repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     allow_core: bool = typer.Option(False, "--allow-core"),
+    auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
     auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -164,6 +165,9 @@ def interactive(
 
     repo = repo.resolve()
     config = load_config(repo)
+
+    if auto_merge:
+        config.automation.auto_merge_pr = True
 
     console.print("[bold]Describe what you want GLITCHLAB to do:[/]")
     objective = typer.prompt(">>")
@@ -181,6 +185,7 @@ def interactive(
         repo_path=repo,
         config=config,
         allow_core=allow_core,
+        auto_approve=auto_approve,
         test_command=test_cmd,
     )
 

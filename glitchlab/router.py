@@ -173,6 +173,7 @@ def _build_kwargs(
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
+        "timeout": 120,
     }
 
     if not _is_gpt5_model(model) and not _is_o_series_model(model):

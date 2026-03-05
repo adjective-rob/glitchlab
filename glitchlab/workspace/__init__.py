@@ -99,6 +99,33 @@ class Workspace:
         self._worktree_git(*cmd)
         logger.info(f"[WORKSPACE] Pushed (force={force}): {self.branch_name}")
 
+    def rebase(self, target: str = "origin/main") -> bool:
+        """
+        Safely rebase the worktree branch onto the target branch.
+        Aborts automatically if conflicts occur.
+        """
+        try:
+            self._git("fetch", "origin", "main", check=False)
+            logger.info(f"[WORKSPACE] Rebasing {self.branch_name} onto {target}...")
+            
+            result = subprocess.run(
+                ["git", "rebase", target],
+                cwd=self.worktree_path,
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                logger.warning(f"[WORKSPACE] Rebase conflict detected. Aborting.\n{result.stderr or result.stdout}")
+                self._worktree_git("rebase", "--abort", check=False)
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"[WORKSPACE] Rebase exception: {e}")
+            self._worktree_git("rebase", "--abort", check=False)
+            return False
+
     def cleanup(self) -> None:
         """Hard removal of worktree and pruning of git metadata."""
         # 1. Remove the worktree from git's tracking
