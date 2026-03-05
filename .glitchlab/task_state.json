@@ -1,42 +1,42 @@
 {
-  "task_id": "interactive-20260305-031223",
-  "objective": "Update the hardcoded version string in `glitchlab/identity.py` from \"2.2.0\" to \"3.1.0\" so that the CLI banner correctly reflects the current v3.1.0 version. Do not alter the ASCII banner art or the tagline. Once updated, run the test suite to ensure the CLI and package imports still work correctly.",
+  "task_id": "test-coverage-history",
+  "objective": "Write comprehensive unit tests for `glitchlab/history.py`. Focus specifically on testing the JSONL append-only logic, the `_rotate_file_if_needed` mechanism, and ensuring corrupt JSON lines do not crash the reader.\n",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Update the hardcoded version string from '2.2.0' to '3.1.0' in glitchlab/identity.py, leaving the ASCII banner and tagline intact.",
+      "description": "Create a new test file for glitchlab/history.py to cover JSONL append logic, file rotation, and corrupt line handling using pytest and tmp_path.",
       "files": [
-        "glitchlab/identity.py"
+        "tests/test_history.py"
       ],
-      "action": "modify",
+      "action": "create",
       "status": "pending",
       "outcome": ""
     }
   ],
   "files_in_scope": [
-    "glitchlab/identity.py",
-    "glitchlab/identity.py"
+    "tests/test_history.py",
+    "tests/test_history.py"
   ],
-  "estimated_complexity": "trivial",
+  "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/identity.py"
+    "tests/test_history.py"
   ],
-  "files_created": [],
-  "tests_added": [
-    "tests/test_identity.py"
+  "files_created": [
+    "tests/test_history.py"
   ],
-  "commit_message": "chore: update version to 3.1.0 in identity.py",
-  "implementation_summary": "Updated the hardcoded version string in glitchlab/identity.py from 2.2.0 to 3.1.0.",
+  "tests_added": [],
+  "commit_message": "test: add unit tests for TaskHistory JSONL logic and rotation",
+  "implementation_summary": "Added comprehensive unit tests for `glitchlab/history.py` focusing on JSONL append logic, file rotation (`_rotate_file_if_needed`), and handling of corrupt JSON lines.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
   "security_verdict": "pass",
   "version_bump": "patch",
-  "changelog_entry": "### Fixed\n- Updated hardcoded version string in `glitchlab/identity.py` to correctly reflect v3.1.0 in the CLI banner.",
+  "changelog_entry": "### Fixed\n- Added comprehensive unit tests for `glitchlab/history.py` covering JSONL logic, file rotation, and corruption handling.",
   "completed_phases": [
     "plan",
     "implement",
@@ -48,35 +48,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-05T03:12:24.017667+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:44:41.926045+00:00",
+      "task_id": "test-coverage-history",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260305-031223"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/test-coverage-history"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-05T03:12:24.023068+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:44:41.931462+00:00",
+      "task_id": "test-coverage-history",
       "data": {
-        "total_files": 35,
+        "total_files": 36,
         "languages": {
-          ".py": 33
+          ".py": 34
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-05T03:12:24.087449+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:44:42.004017+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-05T03:12:35.673376+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:44:47.434131+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "steps": 1,
         "risk": "low"
@@ -84,42 +84,33 @@
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-05T03:13:03.897443+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:45:15.105446+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "changes": 1,
         "tests": 0
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-05T03:13:28.309978+00:00",
-      "task_id": "interactive-20260305-031223",
-      "data": {
-        "file": "tests/test_identity.py",
-        "description": "Tests that the version string is correctly set to 3.1.0"
-      }
-    },
-    {
       "type": "tests_passed",
-      "timestamp": "2026-03-05T03:13:28.967215+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:45:15.372348+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-03-05T03:13:38.624162+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:45:34.122627+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "verdict": "pass"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-05T03:13:44.757698+00:00",
-      "task_id": "interactive-20260305-031223",
+      "timestamp": "2026-03-05T03:45:37.882872+00:00",
+      "task_id": "test-coverage-history",
       "data": {
         "bump": "patch"
       }
