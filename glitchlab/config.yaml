@@ -66,6 +66,8 @@ allowed_tools:
   - "make"
   - "prelude export"
   - "prelude update"
+  - "python -c"
+  - "pip install"
 
 # Blocked patterns — these are never allowed regardless of allowlist.
 blocked_patterns:
