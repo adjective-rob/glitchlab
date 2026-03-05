@@ -1274,7 +1274,7 @@ class Controller:
                 if getattr(self.config, "automation", None) and getattr(self.config.automation, "auto_merge_pr", False):
                     console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
                     merge_res = subprocess.run(
-                        ["gh", "pr", "merge", pr_url, "--squash", "--delete-branch"],
+                        ["gh", "pr", "merge", pr_url, "--squash"],
                         cwd=self.repo_path,
                         capture_output=True,
                         text=True
