@@ -5,8 +5,6 @@ Agents do NOT run arbitrary commands. The controller exposes
 a constrained set of safe tools. Everything else is blocked.
 """
 
-from __future__ import annotations
-
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,7 +43,7 @@ class ToolExecutor:
         allowed_tools: list[str],
         blocked_patterns: list[str],
         working_dir: Path,
-    ):
+    ) -> None:
         self.allowed_tools = allowed_tools
         self.blocked_patterns = blocked_patterns
         self.working_dir = working_dir
