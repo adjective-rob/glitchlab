@@ -234,6 +234,7 @@ class Router:
             "release": config.routing.release,
             "archivist": config.routing.archivist,
             "testgen": config.routing.testgen,
+            "scout": config.routing.scout,
         }
 
         litellm.suppress_debug_info = True
@@ -281,6 +282,7 @@ class Router:
             "implementer": 0.60,
             "debugger": 0.30,
             "auditor": 0.10,
+            "scout": 0.20,
             "security": 0.30,
             "release": 0.10,
             "archivist": 0.10,
