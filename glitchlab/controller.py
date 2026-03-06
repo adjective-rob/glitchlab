@@ -25,6 +25,7 @@ It never writes code. It only coordinates.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import re
@@ -1153,7 +1154,17 @@ class Controller:
                     "changelog_entry": "- Documentation updates",
                 }
             else:
-                # ── 5. Test + Debug Loop ──
+                # ── 5+6. Parallel: Test+Debug || Security ──
+                # Security only reads the diff (pure LLM call) and is independent
+                # of the test loop. Run them concurrently to save wall-clock time.
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+
+                console.print("\n[bold dim]⚡ [PARALLEL] Launching Security scan alongside Test loop...[/]")
+                security_future = executor.submit(
+                    self._run_security, task, impl, ws_path
+                )
+
+                # Test + Debug Loop runs in the main thread
                 if self.test_command:
                     test_ok = self._run_fix_loop(task, ws_path, tools, impl)
 
@@ -1161,6 +1172,9 @@ class Controller:
                         result["status"] = "tests_failed"
                         console.print("[red]❌ Fix loop exhausted. Tests still failing.[/]")
                         if not self._confirm("Continue to PR anyway?"):
+                            # Still wait for security future to avoid dangling threads
+                            security_future.cancel()
+                            executor.shutdown(wait=False)
                             return result
                 else:
                     test_ok = True
@@ -1174,14 +1188,25 @@ class Controller:
 
                 # --- FAST MODE CHECK ---
                 is_fast_mode = (
-                    len(self._state.files_modified) <= 2 
+                    len(self._state.files_modified) <= 2
                     and self._state.estimated_complexity in ("trivial", "small")
                 )
                 if is_fast_mode:
                     console.print("  [dim]Trivial change detected. Forcing downstream agents into Fast Mode.[/]")
 
-                # ── 6. Security Review ──
-                sec = self._run_security(task, impl, ws_path)
+                # ── 7. Release Assessment (parallel with Security wait) ──
+                # Release is also a pure LLM call independent of Security.
+                # Start it now while we wait for Security to complete.
+                release_future = executor.submit(
+                    self._run_release, task, impl, ws_path, is_fast_mode
+                )
+
+                # ── Collect Security result ──
+                try:
+                    sec = security_future.result(timeout=120)
+                except Exception as e:
+                    logger.warning(f"[PARALLEL] Security scan failed: {e}")
+                    sec = {"verdict": "error", "issues": [], "error": str(e)}
 
                 self._state.security_verdict = sec.get("verdict", "")
                 self._state.mark_phase("security")
@@ -1204,14 +1229,24 @@ class Controller:
                     if self.auto_approve:
                         console.print("[red]❌ Auto-approve enabled. Aborting dangerous PR.[/]")
                         result["status"] = "security_blocked"
+                        release_future.cancel()
+                        executor.shutdown(wait=False)
                         return result
 
                     if not self._confirm("Override security block?"):
                         result["status"] = "security_blocked"
+                        release_future.cancel()
+                        executor.shutdown(wait=False)
                         return result
 
-                # ── 7. Release Assessment ──
-                rel = self._run_release(task, impl, ws_path, is_fast_mode)
+                # ── Collect Release result ──
+                try:
+                    rel = release_future.result(timeout=60)
+                except Exception as e:
+                    logger.warning(f"[PARALLEL] Release assessment failed: {e}")
+                    rel = {"version_bump": "unknown", "changelog_entry": "N/A", "reasoning": f"Error: {e}"}
+
+                executor.shutdown(wait=False)
 
                 self._state.version_bump = rel.get("version_bump", "")
                 self._state.changelog_entry = rel.get("changelog_entry", "")

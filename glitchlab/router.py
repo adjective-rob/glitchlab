@@ -8,6 +8,7 @@ retries, structured logging, and automatic 503 failover.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,11 +40,12 @@ class UsageRecord:
 
 @dataclass
 class BudgetTracker:
-    """Tracks token + dollar spend per task."""
+    """Tracks token + dollar spend per task. Thread-safe for parallel agent phases."""
     max_tokens: int = 150_000
     max_dollars: float = 10.0
     usage: UsageRecord = field(default_factory=UsageRecord)
     role_usage: dict[str, int] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
     def tokens_remaining(self) -> int:
@@ -58,31 +60,34 @@ class BudgetTracker:
         return self.usage.total_tokens >= self.max_tokens or self.usage.estimated_cost >= self.max_dollars
 
     def record(self, response: Any, role: str) -> None:
-        """Record usage from a LiteLLM response."""
+        """Record usage from a LiteLLM response. Thread-safe."""
         usage = getattr(response, "usage", None)
         total_tokens = getattr(usage, "total_tokens", 0) if usage else 0
-        if usage:
-            self.usage.prompt_tokens += getattr(usage, "prompt_tokens", 0)
-            self.usage.completion_tokens += getattr(usage, "completion_tokens", 0)
-            self.usage.total_tokens += total_tokens
 
-        try:
-            cost = litellm.completion_cost(completion_response=response)
-            self.usage.estimated_cost += cost
-        except Exception:
-            pass
+        with self._lock:
+            if usage:
+                self.usage.prompt_tokens += getattr(usage, "prompt_tokens", 0)
+                self.usage.completion_tokens += getattr(usage, "completion_tokens", 0)
+                self.usage.total_tokens += total_tokens
 
-        self.usage.call_count += 1
-        self.role_usage[role] = self.role_usage.get(role, 0) + total_tokens
+            try:
+                cost = litellm.completion_cost(completion_response=response)
+                self.usage.estimated_cost += cost
+            except Exception:
+                pass
+
+            self.usage.call_count += 1
+            self.role_usage[role] = self.role_usage.get(role, 0) + total_tokens
 
     def summary(self) -> dict:
-        return {
-            "total_tokens": self.usage.total_tokens,
-            "estimated_cost": round(self.usage.estimated_cost, 4),
-            "call_count": self.usage.call_count,
-            "tokens_remaining": self.tokens_remaining,
-            "dollars_remaining": round(self.dollars_remaining, 4),
-        }
+        with self._lock:
+            return {
+                "total_tokens": self.usage.total_tokens,
+                "estimated_cost": round(self.usage.estimated_cost, 4),
+                "call_count": self.usage.call_count,
+                "tokens_remaining": self.tokens_remaining,
+                "dollars_remaining": round(self.dollars_remaining, 4),
+            }
 
 
 # ---------------------------------------------------------------------------
