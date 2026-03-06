@@ -54,6 +54,7 @@ from glitchlab.agents.testgen import TestGenAgent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 from glitchlab.history import TaskHistory, extract_patterns_from_messages
+from glitchlab.memory_graph import CausalMemoryGraph
 from glitchlab.indexer import build_index
 from glitchlab.prelude import PreludeContext
 from glitchlab.router import BudgetExceededError, Router
@@ -850,6 +851,9 @@ class Controller:
         # History tracking
         self._history = TaskHistory(self.repo_path)
 
+        # Causal memory graph — links discoveries, failures, and fixes
+        self._memory = CausalMemoryGraph(self.repo_path)
+
         # Prelude — available as tool context, NOT global prefix
         self._prelude = PreludeContext(self.repo_path)
 
@@ -967,6 +971,15 @@ class Controller:
             failure_context = self._history.build_failure_context()
             if failure_context:
                 console.print("  [dim]Loaded recent failure patterns for planner[/]")
+
+            # ── 1.9. Load causal memory graph context ──
+            memory_context = ""
+            graph_stats = self._memory.get_stats()
+            if graph_stats["total_edges"] > 0:
+                console.print(
+                    f"  [dim]Memory graph: {graph_stats['total_edges']} edges, "
+                    f"{graph_stats['indexed_files']} files[/]"
+                )
 
             # ── 2. Plan ──
             plan = self._run_planner(task, ws_path, failure_context)
@@ -1173,6 +1186,17 @@ class Controller:
                 self._state.security_verdict = sec.get("verdict", "")
                 self._state.mark_phase("security")
 
+                # Record security findings into memory graph
+                for issue in sec.get("issues", []):
+                    flagged_file = issue.get("file", "")
+                    if flagged_file:
+                        self._memory.record_security_flag(
+                            task_id=task.task_id,
+                            file_flagged=flagged_file,
+                            finding=issue.get("description", ""),
+                            severity=issue.get("severity", "medium"),
+                        )
+
                 if sec.get("verdict") == "block":
                     console.print("[red]🚫 Security blocked this change.[/]")
                     self._print_security_issues(sec)
@@ -1361,6 +1385,15 @@ class Controller:
         if failure_context:
             objective_parts.append(failure_context)
 
+        # Inject causal memory graph context for the planner
+        # Uses all files mentioned in the task objective as a rough scope
+        memory_context = self._memory.build_agent_context(
+            files_in_scope=[],  # planner doesn't know files yet; graph uses global patterns
+            for_agent="planner",
+        )
+        if memory_context:
+            objective_parts.append(memory_context)
+
         objective_parts.append(f"TASK:\n{task.objective}")
 
         objective = "\n\n---\n\n".join(objective_parts)
@@ -1410,6 +1443,12 @@ class Controller:
         # --- MEMORY INJECTION ---
         heuristics = self._history.build_heuristics(plan.get("files_likely_affected", []))
 
+        # Causal memory graph context for implementer
+        memory_context = self._memory.build_agent_context(
+            files_in_scope=plan.get("files_likely_affected", []),
+            for_agent="implementer",
+        )
+
         # Pass structured task state AND the tool executor
         context = AgentContext(
             task_id=task.task_id,
@@ -1424,6 +1463,7 @@ class Controller:
                 "tool_executor": tools, # <-- WIRE THE KEYS TO THE SANDBOX HERE
                 "test_command": self.test_command, # Optional: let Patch run the primary test
                 "learned_heuristics": heuristics,
+                "memory_context": memory_context,
                 "symbol_index": symbol_index,
             },
         )
@@ -1437,6 +1477,14 @@ class Controller:
             patterns = extract_patterns_from_messages(messages, outcome)
             if patterns:
                 self._history.record_patterns(task.task_id, patterns)
+                # Record discovery chains into the causal memory graph
+                for p in patterns:
+                    self._memory.record_discovery_chain(
+                        task_id=task.task_id,
+                        files_read=p.get("files_read_first", []),
+                        file_modified=p.get("file_modified", ""),
+                        outcome=outcome,
+                    )
 
         # For doc-comment tasks, use surgical insertion
         for change in impl.get("changes", []):
@@ -1579,6 +1627,17 @@ Ensure:
             if result.success:
                 console.print("[green]✅ Tests pass![/]")
                 self._log_event("tests_passed", {"attempt": attempt})
+                # Record fix resolutions in memory graph (if we debugged before passing)
+                if attempt > 1 and self._state.previous_fixes:
+                    last_fix = self._state.previous_fixes[-1]
+                    for change in last_fix.get("fix", {}).get("changes", []):
+                        if change.get("file"):
+                            self._memory.record_fix_resolution(
+                                task_id=task.task_id,
+                                file_fixed=change["file"],
+                                root_cause_file=change["file"],
+                                fix_description=last_fix.get("root_cause", "Debug loop fix"),
+                            )
                 return True
 
             error_output = result.stderr or result.stdout
@@ -1591,6 +1650,12 @@ Ensure:
             # 2. Invoke Debugger (Agentic Loop)
             console.print(f"\n[bold yellow]🐛 [REROUTE] Debugging (attempt {attempt})...[/]")
 
+            # Build causal memory context for the debugger
+            debug_memory = self._memory.build_agent_context(
+                files_in_scope=self._state.files_modified,
+                for_agent="debugger",
+            )
+
             context = AgentContext(
                 task_id=task.task_id,
                 objective=task.objective,
@@ -1601,6 +1666,7 @@ Ensure:
                     "error_output": (error_output or "")[:1000],
                     "test_command": self.test_command,
                     "tool_executor": tools, # Hand over the keys to the sandbox
+                    "memory_context": debug_memory,
                 },
             )
 
@@ -1621,6 +1687,13 @@ Ensure:
                         file_modified=change["file"],
                         error_type=self._state.last_error,
                         resolution=debug_result.get("root_cause", "Fixed in debug loop")
+                    )
+                    # Record causal edges into the memory graph
+                    self._memory.record_modification_failure(
+                        task_id=task.task_id,
+                        file_modified=change["file"],
+                        error_type=self._state.last_error[:200],
+                        error_detail=(error_output or "")[:500],
                     )
             
             # Sync TaskState with files written by the debugger's tools
@@ -1668,6 +1741,12 @@ Ensure:
 
         diff = self._workspace.diff_full() if self._workspace else ""
 
+        # Causal memory context for security (past flags on these files)
+        security_memory = self._memory.build_agent_context(
+            files_in_scope=self._state.files_modified,
+            for_agent="security",
+        )
+
         # v2: Structured state, not raw impl blob
         context = AgentContext(
             task_id=task.task_id,
@@ -1680,6 +1759,7 @@ Ensure:
                 "protected_paths": self.config.boundaries.protected_paths,
                 "fast_mode": is_fast_mode,
                 "repo_index": self._repo_index,  # <--- Add this line to enable query_symbol_map
+                "memory_context": security_memory,
             },
         )
 

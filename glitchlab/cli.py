@@ -30,6 +30,7 @@ from glitchlab.identity import __codename__, __tagline__, __version__, BANNER
 from glitchlab.config_loader import load_config, validate_api_keys
 from glitchlab.controller import Controller, Task
 from glitchlab.history import TaskHistory
+from glitchlab.memory_graph import CausalMemoryGraph
 from glitchlab.parallel import run_parallel
 from glitchlab.prelude import PreludeContext
 
@@ -272,6 +273,19 @@ def status(
                 "[dim]Install Prelude for richer agent context: "
                 "npm install -g prelude-context[/]"
             )
+
+        # Memory Graph stats
+        memory = CausalMemoryGraph(repo.resolve())
+        mem_stats = memory.get_stats()
+        if mem_stats["total_edges"] > 0:
+            mem_table = Table(title="Memory Graph", border_style="green")
+            mem_table.add_column("Property")
+            mem_table.add_column("Value")
+            mem_table.add_row("Causal edges", str(mem_stats["total_edges"]))
+            mem_table.add_row("Indexed files", str(mem_stats["indexed_files"]))
+            for rel, count in mem_stats.get("relations", {}).items():
+                mem_table.add_row(f"  {rel}", str(count))
+            console.print(mem_table)
 
 
 @app.command()

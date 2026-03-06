@@ -187,6 +187,9 @@ The test command you are debugging is: {test_command}
 
         sys_prompt = self.system_prompt.format(test_command=test_cmd)
 
+        # Causal memory from previous runs
+        memory_context = context.extra.get("memory_context", "")
+
         user_content = f"""FAILURE DETECTED
 Objective: {context.objective}
 Failing Command: {test_cmd}
@@ -195,8 +198,11 @@ Initial Error Output:
 {error_log}
 
 Modified Files: {state.get('files_modified', [])}
+"""
+        if memory_context:
+            user_content += f"\n{memory_context}\n"
 
-Investigate and fix. Call `done` when the tests pass."""
+        user_content += "\nInvestigate and fix. Call `done` when the tests pass."
 
         return [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}]
 
