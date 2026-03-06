@@ -194,6 +194,9 @@ Rules:
         files_created = state.get("files_created", [])
         impl_summary = state.get("implementation_summary", "No summary available")
 
+        # Causal memory from previous security flags
+        memory_context = context.extra.get("memory_context", "")
+
         user_content = f"""Review these recent code changes for security and policy compliance.
 
 Task: {context.objective}
@@ -206,8 +209,11 @@ Protected paths: {context.extra.get('protected_paths', [])}
 
 Diff Preview:
 {diff_text}
+"""
+        if memory_context:
+            user_content += f"\n{memory_context}\n"
 
-Investigate the modified files using your tools. When satisfied, call `submit_report`."""
+        user_content += "\nInvestigate the modified files using your tools. When satisfied, call `submit_report`."
 
         if context.extra.get("fast_mode"):
             user_content += """

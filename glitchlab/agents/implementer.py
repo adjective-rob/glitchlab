@@ -223,6 +223,11 @@ Plan: {steps_text}
         if heuristics:
             user_content += f"\n\n{heuristics}"
 
+        # --- ADD CAUSAL MEMORY ---
+        memory_context = context.extra.get("memory_context")
+        if memory_context:
+            user_content += f"\n\n{memory_context}"
+
         user_content += "\n\nUse your tools to explore, implement, and verify this plan. When finished, call `done`."
 
         return [self._system_msg(), self._user_msg(user_content)]  
