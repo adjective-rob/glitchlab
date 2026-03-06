@@ -510,73 +510,160 @@ def history(
 @app.command()
 def audit(
     repo: Path = typer.Option(..., help="Path to the repository to audit"),
-    kind: str = typer.Option(None, help="Filter by finding kind: missing_doc, todo, complex_function"),
+    kind: str = typer.Option(None, help="Filter by finding kind (e.g. missing_doc, todo, dead_code, dependency_vuln, test_gap, code_smell, error_handling, feature_opportunity, bug_risk)"),
+    category: str = typer.Option(None, help="Filter by category: security, bug, test, refactor, cleanup, docs, feature"),
+    scout: bool = typer.Option(False, "--scout", "-s", help="Enable Scout Brain (Layer 3) — LLM-powered creative analysis for feature ideas and implicit bugs"),
+    no_deps: bool = typer.Option(False, "--no-deps", help="Skip dependency vulnerability scanning (Layer 2)"),
     dry_run: bool = typer.Option(False, help="Print findings without generating task files"),
     output_dir: Path = typer.Option(None, help="Directory to write task YAMLs (default: .glitchlab/tasks/queue)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ):
     """
-    Scan a repository for actionable findings and generate GLITCHLAB task files.
+    Scout — Autonomous codebase analysis engine.
+
+    Scans your repository across multiple layers and generates
+    prioritized, batch-ready GLITCHLAB task files.
+
+    Layer 1 (always): Static analysis — dead code, error handling, code smells, test gaps, TODOs, complexity
+    Layer 2 (default): Dependency vulnerabilities via OSV.dev — no API key needed
+    Layer 3 (--scout): LLM-powered creative analysis — feature ideas, bug risks, architecture improvements
     """
-    from glitchlab.auditor import Scanner, TaskWriter
+    from glitchlab.auditor import Scanner, TaskWriter, FINDING_KINDS
     from glitchlab.router import Router
+
+    _configure_logging(verbose)
 
     repo_path = repo.resolve()
     if not repo_path.exists():
         console.print(f"[red]Repository not found: {repo_path}[/]")
         raise typer.Exit(1)
 
-    console.print(f"\n[bold dim]🔍 [AUDITOR] Scanning {repo_path.name}...[/]")
+    # Determine active layers
+    layers = ["static"]
+    if not no_deps:
+        layers.append("deps")
+
+    layer_desc = ", ".join(layers)
+    console.print(f"\n[bold cyan]SCOUT[/] [dim]Scanning {repo_path.name} [layers: {layer_desc}]...[/]")
+
     scanner = Scanner(repo_path)
-    result = scanner.scan()
+    result = scanner.scan(layers=layers)
+
+    # Layer 3: Scout Brain (LLM-powered creative analysis)
+    if scout:
+        console.print(f"[bold cyan]SCOUT[/] [dim]Activating Scout Brain (Layer 3)...[/]")
+        config = load_config(repo_path)
+        router = Router(config)
+        brain_findings = scanner.scout_brain(router)
+        result.findings.extend(brain_findings)
+        console.print(f"  [dim]Scout Brain identified {len(brain_findings)} creative findings[/]")
 
     summary = result.summary()
-    console.print(f"  [dim]Scanned {summary['files_scanned']} files, found {summary['total']} findings[/]")
 
+    # Summary panel
+    summary_lines = [
+        f"Files scanned: {summary['files_scanned']}",
+        f"Total findings: {summary['total']}",
+    ]
+    if summary.get("dependency_count"):
+        summary_lines.append(f"Dependencies checked: {summary['dependency_count']}")
+
+    if summary.get("by_severity"):
+        sev_parts = []
+        for s in ("high", "medium", "low"):
+            count = summary["by_severity"].get(s, 0)
+            if count:
+                color = {"high": "red", "medium": "yellow", "low": "dim"}[s]
+                sev_parts.append(f"[{color}]{s}: {count}[/]")
+        summary_lines.append("Severity: " + "  ".join(sev_parts))
+
+    if summary.get("by_category"):
+        cat_parts = [f"{k}: {v}" for k, v in sorted(summary["by_category"].items(), key=lambda x: -x[1])]
+        summary_lines.append("Categories: " + ", ".join(cat_parts))
+
+    console.print(Panel(
+        "\n".join(summary_lines),
+        title="[bold cyan]Scout Scan Results[/]",
+        border_style="cyan",
+    ))
+
+    # Apply filters
     findings = result.findings
     if kind:
         findings = [f for f in findings if f.kind == kind]
         console.print(f"  [dim]Filtered to {len(findings)} findings of kind '{kind}'[/]")
+    if category:
+        findings = [f for f in findings if f.category == category]
+        console.print(f"  [dim]Filtered to {len(findings)} findings in category '{category}'[/]")
 
     if not findings:
-        console.print("[green]✅ No findings. Codebase looks clean![/]")
+        console.print("[green]No findings. Codebase looks clean![/]")
         return
 
+    # Findings table — grouped by category
     table = Table(title="Findings", border_style="yellow")
-    table.add_column("Kind", style="dim")
-    table.add_column("File")
-    table.add_column("Line", style="dim")
+    table.add_column("Cat", style="dim", width=8)
+    table.add_column("Kind", style="dim", width=18)
+    table.add_column("File", width=35)
+    table.add_column("Line", style="dim", width=5)
     table.add_column("Description")
-    table.add_column("Severity")
+    table.add_column("Sev", width=6)
+    table.add_column("Effort", style="dim", width=6)
 
-    for f in findings[:50]:
-        color = {"high": "red", "medium": "yellow", "low": "dim"}.get(f.severity, "dim")
-        table.add_row(f.kind, f.file, str(f.line), f.description[:80], f"[{color}]{f.severity}[/]")
+    # Sort for display: severity desc, then category priority
+    display_findings = sorted(
+        findings,
+        key=lambda f: (
+            {"high": 0, "medium": 1, "low": 2}.get(f.severity, 3),
+            {"security": 0, "bug": 1, "test": 2, "refactor": 3, "cleanup": 4, "docs": 5, "feature": 6}.get(f.category, 7),
+        )
+    )
+
+    for f in display_findings[:80]:
+        sev_color = {"high": "red", "medium": "yellow", "low": "dim"}.get(f.severity, "dim")
+        cat_color = {"security": "red", "bug": "yellow", "feature": "green", "test": "cyan"}.get(f.category, "dim")
+        table.add_row(
+            f"[{cat_color}]{f.category}[/]",
+            f.kind,
+            f.file,
+            str(f.line),
+            f.description[:80],
+            f"[{sev_color}]{f.severity}[/]",
+            f.effort,
+        )
 
     console.print(table)
 
-    if len(findings) > 50:
-        console.print(f"[dim]... and {len(findings) - 50} more[/]")
+    if len(findings) > 80:
+        console.print(f"[dim]... and {len(findings) - 80} more findings[/]")
 
     if dry_run:
         console.print("\n[yellow]Dry run — no task files written.[/]")
         return
 
+    # Generate task files
     out_dir = output_dir or (repo_path / ".glitchlab" / "tasks" / "queue")
-    console.print(f"\n[bold dim]📝 [AUDITOR] Generating task files → {out_dir}[/]")
+    console.print(f"\n[bold cyan]SCOUT[/] [dim]Generating prioritized task files → {out_dir}[/]")
 
-    config = load_config(repo_path)
-    router = Router(config)
-    writer = TaskWriter(router, out_dir)
+    if not scout:
+        # Router needed for task generation even without Scout Brain
+        config = load_config(repo_path)
+        router = Router(config)
 
     result.findings = findings
+    writer = TaskWriter(router, out_dir)
     written = writer.write_tasks(result)
 
     console.print(Panel(
         "\n".join(f"  {p.name}" for p in written),
-        title=f"✅ {len(written)} task files written",
+        title=f"[bold green]{len(written)} task files written[/]",
         border_style="green",
     ))
-    console.print(f"\nRun tasks with: [bold]glitchlab batch --repo {repo_path} --tasks-dir {out_dir}[/]")
+
+    console.print(f"\n[bold]Next steps:[/]")
+    console.print(f"  1. Review manifest:  [cyan]cat {out_dir}/_scout_manifest.yaml[/]")
+    console.print(f"  2. Run batch:        [cyan]glitchlab batch --repo {repo_path} --tasks-dir {out_dir}[/]")
+    console.print(f"  3. Monitor:          [cyan]glitchlab history --repo {repo_path} --stats[/]")
 
 # ---------------------------------------------------------------------------
 # Helpers
