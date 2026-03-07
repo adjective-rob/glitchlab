@@ -1425,6 +1425,7 @@ class Controller:
                 "test_command": self.test_command, # Optional: let Patch run the primary test
                 "learned_heuristics": heuristics,
                 "symbol_index": symbol_index,
+                "prelude": self._prelude,
             },
         )
 
@@ -1601,6 +1602,7 @@ Ensure:
                     "error_output": (error_output or "")[:1000],
                     "test_command": self.test_command,
                     "tool_executor": tools, # Hand over the keys to the sandbox
+                    "prelude": self._prelude,
                 },
             )
 
@@ -1680,6 +1682,7 @@ Ensure:
                 "protected_paths": self.config.boundaries.protected_paths,
                 "fast_mode": is_fast_mode,
                 "repo_index": self._repo_index,  # <--- Add this line to enable query_symbol_map
+                "prelude": self._prelude,
             },
         )
 

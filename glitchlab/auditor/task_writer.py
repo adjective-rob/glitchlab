@@ -2,16 +2,17 @@
 GLITCHLAB Auditor — Task Writer
 
 Takes structured findings from the scanner and generates
-well-scoped GLITCHLAB task YAML files using the OpenAI API.
+well-scoped GLITCHLAB task YAML files using an Agentic Loop.
 
-One finding group → one task file.
-Hard limit: max 3 files per task.
+Now features 'think', 'read_file', 'search_grep', 'create_task', and 'done' tools.
+It chunks work effectively, creatively considers new features, and prunes irrelevant tasks.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -23,76 +24,92 @@ from glitchlab.router import Router
 from glitchlab.controller import Task  # Import the strict Pydantic schema
 from .scanner import Finding, ScanResult
 
+AUDITOR_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "think",
+            "description": "Brainstorm new features, evaluate findings, and plan tasks to create or prune.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "evaluation": {"type": "string", "description": "Analysis of the findings and potential new features."},
+                    "plan": {"type": "string", "description": "List of tasks you intend to create."}
+                },
+                "required": ["evaluation", "plan"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read the contents of a file from the workspace to get context.",
+            "parameters": {
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_grep",
+            "description": "Search the codebase for a pattern.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string"},
+                    "file_type": {"type": "string", "default": "*"}
+                },
+                "required": ["pattern"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_task",
+            "description": "Create and save a new GLITCHLAB task YAML.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Unique task ID (e.g. audit-feature-001)"},
+                    "objective": {"type": "string", "description": "Clear, specific, actionable objective"},
+                    "constraints": {"type": "array", "items": {"type": "string"}},
+                    "acceptance": {"type": "array", "items": {"type": "string"}},
+                    "risk": {"type": "string", "enum": ["low", "medium", "high"]}
+                },
+                "required": ["id", "objective", "constraints", "acceptance", "risk"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "done",
+            "description": "Signal that you have finished creating all necessary tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "summary": {"type": "string", "description": "Summary of tasks created and findings pruned."}
+                },
+                "required": ["summary"]
+            }
+        }
+    }
+]
 
-# ---------------------------------------------------------------------------
-# Task Sizing
-# ---------------------------------------------------------------------------
-
-MAX_FILES_PER_TASK = 2
-MAX_FINDINGS_PER_TASK = 5
-
-
+# Preserved for backward compatibility in case other scripts import it
 def group_findings_into_tasks(result: ScanResult) -> list[list[Finding]]:
-    """
-    Group findings into task-sized chunks.
-
-    Rules:
-    - Max 3 files per task
-    - Max 10 findings per task
-    - Same kind of finding grouped together
-    - High severity findings get their own task
-    """
-    tasks: list[list[Finding]] = []
-
-    # Separate high severity findings — each gets its own task
-    high_sev = [f for f in result.findings if f.severity == "high"]
-    for finding in high_sev:
-        tasks.append([finding])
-
-    # Group remaining findings by kind, then by file
-    remaining = [f for f in result.findings if f.severity != "high"]
-
-    # Group by kind first
-    by_kind: dict[str, list[Finding]] = {}
-    for f in remaining:
-        by_kind.setdefault(f.kind, []).append(f)
-
-    for kind, findings in by_kind.items():
-        # Further group by file batches of MAX_FILES_PER_TASK
-        by_file: dict[str, list[Finding]] = {}
-        for f in findings:
-            by_file.setdefault(f.file, []).append(f)
-
-        file_groups: list[list[str]] = []
-        current_group: list[str] = []
-        for file_path in by_file:
-            current_group.append(file_path)
-            if len(current_group) >= MAX_FILES_PER_TASK:
-                file_groups.append(current_group)
-                current_group = []
-        if current_group:
-            file_groups.append(current_group)
-
-        for file_group in file_groups:
-            group_findings = []
-            for fp in file_group:
-                group_findings.extend(by_file[fp])
-            # Chunk by MAX_FINDINGS_PER_TASK
-            for i in range(0, len(group_findings), MAX_FINDINGS_PER_TASK):
-                tasks.append(group_findings[i:i + MAX_FINDINGS_PER_TASK])
-
-    return tasks
-
-
-# ---------------------------------------------------------------------------
-# Task YAML Generator
-# ---------------------------------------------------------------------------
+    """Legacy finding chunking"""
+    return [result.findings]
 
 class TaskWriter:
     """
-    Generates GLITCHLAB task YAML files from scanner findings.
-    Uses the router to call the model for task description generation
-    and validates them against the Pydantic Task schema.
+    Generates GLITCHLAB task YAML files from scanner findings and ideation.
+    Operates as an agentic loop to explore, plan, and write tasks.
     """
 
     def __init__(self, router: Router, output_dir: Path):
@@ -101,141 +118,158 @@ class TaskWriter:
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def write_tasks(self, result: ScanResult) -> list[Path]:
-        """Generate task YAML files for all findings. Returns list of written paths."""
-        task_groups = group_findings_into_tasks(result)
-        written = []
-
-        logger.info(f"[AUDITOR] {len(result.findings)} findings → {len(task_groups)} tasks")
-
-        for i, findings in enumerate(task_groups, 1):
-            try:
-                task_data = self._generate_task(findings, i)
-                path = self._write_task_yaml(task_data, i)
-                written.append(path)
-                logger.info(f"[AUDITOR] Task {i}/{len(task_groups)}: {path.name}")
-            except Exception as e:
-                logger.error(f"[AUDITOR] Failed to generate task {i}: {e}")
-
-        return written
-
-    def _generate_task(self, findings: list[Finding], index: int) -> dict[str, Any]:
-        """Ask the model to generate a well-scoped task, strictly validating as JSON."""
+        """Generate task YAML files for all findings using agent loop. Returns list of written paths."""
+        written_paths: list[Path] = []
+        
+        # We only pass top 50 findings to avoid blowing up the context window
         findings_text = "\n".join(
             f"- [{f.kind}] {f.file}:{f.line} — {f.description}"
-            for f in findings
+            for f in result.findings[:50]
         )
+        if len(result.findings) > 50:
+            findings_text += f"\n... and {len(result.findings) - 50} more."
 
-        files = list({f.file for f in findings})
-        kind = findings[0].kind
-        default_id = f"audit-{kind}-{index:03d}"
+        system_prompt = """You are the GLITCHLAB Auditor & Ideation Agent.
+You operate in a tool-calling loop to generate high-quality development tasks.
 
-        prompt = f"""You are generating a GLITCHLAB task definition.
+Your responsibilities:
+1. Evaluate static scanner findings. Prune irrelevant ones, and group the real issues into cohesive tasks (max 2-3 files per task).
+2. Creatively consider NEW features, refactors, or architectural improvements that would benefit the codebase.
+3. Break these ideas down into small, actionable tasks.
+4. Use `read_file` and `search_grep` to validate your ideas and understand the codebase before writing a task.
+5. Use `create_task` to write each task. Give them meaningful IDs (e.g., 'feature-xyz-001', 'refactor-auth-002').
+6. Call `done` when finished.
 
-You MUST return ONLY a valid JSON object matching this exact schema:
-{{
-  "id": "{default_id}",
-  "objective": "Clear, specific, actionable objective in one or two sentences",
-  "constraints": ["constraint 1", "constraint 2"],
-  "acceptance": ["criterion 1", "criterion 2"],
-  "risk": "low"
-}}
-
-The following findings were detected in the codebase:
-{findings_text}
-
-Files affected: {', '.join(files)}
-Finding type: {kind}
-
-Rules for writing the task:
-- The objective must be specific and actionable — tell the agent exactly what to do.
-- Do not ask for more than what the findings show.
-- Constraints must protect existing behavior (no logic changes for doc tasks, etc.).
-- Acceptance criteria must be verifiable (e.g., "cargo test passes").
-- Risk MUST BE exactly one of: "low", "medium", or "high". 
-  Use "low" for doc/comment tasks, "medium" for refactors, "high" for core logic.
-- Keep scope EXTREMELY tight — maximum {MAX_FILES_PER_TASK} files per task.
+Make sure tasks are DEPENDABLE and HIGH QUALITY. Don't create vague tasks. 
+A good task tells the implementer exactly what files to touch and what behavior to achieve.
 """
-        try:
-            # Force the LLM to output a JSON object to eliminate YAML formatting hallucinations
-            response = self.router.complete(
-                role="planner",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=1024,
-                response_format={"type": "json_object"}
-            )
 
-            content = response.content.strip()
+        user_content = f"""Scanner Findings:
+{findings_text if result.findings else "No static findings. Focus on ideating new features!"}
 
-            # Strip markdown fences if the LLM leaked them despite json_object mode
-            if content.startswith("```"):
-                lines = content.split("\n")
-                lines = [l for l in lines if not l.strip().startswith("```") and not l.strip().lower() == "json"]
-                content = "\n".join(lines)
+Repo: {result.repo_path}
+Output Dir: {self.output_dir}
 
-            raw_data = json.loads(content)
-            
-            # Ensure the ID matches our required pattern if the LLM strayed
-            if "id" not in raw_data or not raw_data["id"].startswith("audit-"):
-                raw_data["id"] = default_id
+Plan your work, read necessary files, write the tasks, and call `done`.
+"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+
+        logger.info("[AUDITOR] Starting agentic task generation loop...")
+
+        max_steps = 20
+        think_count = 0
+
+        for step in range(max_steps):
+            logger.debug(f"[AUDITOR] Loop Step {step+1}/{max_steps}...")
+
+            step_kwargs = {}
+            if step == 0:
+                step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
+
+            try:
+                response = self.router.complete(
+                    role="planner",  # Use planner budget/model limits
+                    messages=messages,
+                    tools=AUDITOR_TOOLS,
+                    **step_kwargs
+                )
+            except Exception as e:
+                logger.error(f"[AUDITOR] LLM generation failed: {e}")
+                break
+
+            assist_msg = {"role": "assistant"}
+            if response.content:
+                assist_msg["content"] = response.content
+            if response.tool_calls:
+                assist_msg["tool_calls"] = [
+                    tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
+                    for tc in response.tool_calls
+                ]
+            messages.append(assist_msg)
+
+            if not response.tool_calls:
+                messages.append({"role": "user", "content": "Please use your tools to create tasks or call `done`."})
+                continue
+
+            for tool_call in response.tool_calls:
+                tc_name = tool_call.function.name
+                tc_id = tool_call.id
+                try:
+                    tc_args = json.loads(tool_call.function.arguments or "{}")
+                except Exception:
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Invalid JSON args"})
+                    continue
+
+                if tc_name == "think":
+                    think_count += 1
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Thought logged. Proceed with reading files or creating tasks."})
                 
-            raw_data["source"] = "auditor"
+                elif tc_name == "read_file":
+                    path = result.repo_path / tc_args.get("path", "")
+                    try:
+                        content = path.read_text(encoding="utf-8", errors="ignore")[:3000] # Limit read size
+                        res = f"Read from {path.name}:\n{content}"
+                    except Exception as e:
+                        res = f"Error reading file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                
+                elif tc_name == "search_grep":
+                    pattern = tc_args.get("pattern")
+                    file_type = tc_args.get("file_type", "*")
+                    try:
+                        cmd = [
+                            "grep", "-rn",
+                            f"--include={file_type}",
+                            "--exclude-dir=.glitchlab",
+                            "--exclude-dir=__pycache__",
+                            "--exclude-dir=.git",
+                            pattern, "."
+                        ]
+                        proc = subprocess.run(cmd, cwd=result.repo_path, capture_output=True, text=True, timeout=10)
+                        out = proc.stdout if proc.stdout else "No matches found."
+                        res = "\n".join(out.splitlines()[:50])
+                    except Exception as e:
+                        res = f"Search error: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-            # STRICT VALIDATION: This passes the raw JSON through the Pydantic model.
-            # If the LLM hallucinates an invalid risk level or misses a field, it throws a ValidationError.
-            task_obj = Task(**raw_data)
-            
-            # Dump the validated object back to a dict using aliases (e.g. 'acceptance' instead of 'acceptance_criteria')
-            task_data = task_obj.model_dump(by_alias=True, exclude_none=True)
+                elif tc_name == "create_task":
+                    task_id = tc_args.get("id", "audit-001")
+                    safe_id = re.sub(r"[^\w\-]", "-", task_id)
+                    path = self.output_dir / f"{safe_id}.yaml"
+                    
+                    try:
+                        risk = tc_args.get("risk", "low")
+                        if risk not in ("low", "medium", "high"): risk = "medium"
 
-        except (json.JSONDecodeError, ValidationError) as e:
-            logger.warning(f"[AUDITOR] JSON/Validation parse failed, using safe fallback: {e}")
-            task_data = self._fallback_task(findings, index)
-        except Exception as e:
-            logger.warning(f"[AUDITOR] Unexpected error generating task, using fallback: {e}")
-            task_data = self._fallback_task(findings, index)
+                        task_data = {
+                            "id": safe_id,
+                            "objective": tc_args.get("objective", "Generated task"),
+                            "constraints": tc_args.get("constraints", []),
+                            "acceptance": tc_args.get("acceptance", []),
+                            "risk": risk,
+                            "source": "auditor"
+                        }
+                        
+                        # Validate via Pydantic model implicitly
+                        Task(**task_data) 
 
-        return task_data
+                        with open(path, "w") as f:
+                            yaml.dump(task_data, f, sort_keys=False)
+                        written_paths.append(path)
+                        res = f"Successfully created task at {path.name}"
+                        logger.info(f"[AUDITOR] Created task: {path.name}")
+                    except Exception as e:
+                        res = f"Failed to create task: {e}"
+                        
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-    def _fallback_task(self, findings: list[Finding], index: int) -> dict[str, Any]:
-        """Generate a safe fallback task if model output fails strict Pydantic validation."""
-        files = list({f.file for f in findings})
-        kind = findings[0].kind
+                elif tc_name == "done":
+                    logger.info(f"[AUDITOR] Agent finished: {tc_args.get('summary', '')}")
+                    return written_paths
 
-        objectives = {
-            "missing_doc": f"Add /// doc comments to public functions missing them in: {', '.join(files)}",
-            "todo": f"Address TODO/FIXME comments in: {', '.join(files)}",
-            "complex_function": f"Refactor complex functions in: {', '.join(files)}",
-        }
-
-        # This dictionary is guaranteed to pass `Task` validation
-        return {
-            "id": f"audit-{kind}-{index:03d}",
-            "objective": objectives.get(kind, f"Fix {kind} issues in {', '.join(files)}"),
-            "constraints": [
-                "Do not modify function signatures",
-                "Do not modify any logic unless explicitly required",
-            ],
-            "acceptance": ["cargo test passes", "Clean diff"],
-            "risk": "low" if kind == "missing_doc" else "medium",
-            "source": "auditor",
-        }
-
-    def _write_task_yaml(self, task_data: dict[str, Any], index: int) -> Path:
-        """Write validated task data to a YAML file in the output directory."""
-        task_id = task_data.get("id", f"audit-{index:03d}")
-        
-        # Sanitize filename to prevent path traversal or weird characters
-        safe_id = re.sub(r"[^\w\-]", "-", task_id)
-        path = self.output_dir / f"{safe_id}.yaml"
-
-        # Write to disk as YAML for easy human review/editing
-        with open(path, "w") as f:
-            yaml.dump(
-                task_data, 
-                f, 
-                default_flow_style=False, 
-                allow_unicode=True, 
-                sort_keys=False
-            )
-
-        return path
+        logger.warning("[AUDITOR] Hit max steps without calling done.")
+        return written_paths

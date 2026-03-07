@@ -169,6 +169,20 @@ IMPLEMENTER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "query_project_context",
+            "description": "Query the project's architectural decisions, constraints, and stack info.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "e.g., 'authentication', 'database'"},
+                    "scope": {"type": "string", "description": "Directory path to filter rules by"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_function",
             "description": "Get the complete body of a function or method by name. Returns the full implementation including signature. Use this instead of read_file when you only need one function from a large file to save context window.",
             "parameters": {
@@ -294,6 +308,18 @@ Plan: {steps_text}
                                     res = f"Function '{symbol}' not found. Check spelling or use search_grep."
                             else:
                                 res = "AST parser unavailable. Please fall back to read_file."
+                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                        elif tc_name == "query_project_context":
+                            topic = tc_args.get("topic", "")
+                            scope = tc_args.get("scope", "")
+                            prelude = context.extra.get("prelude")
+                    
+                            if prelude:
+                                res = prelude.query(topic=topic, scope=scope)
+                            else:
+                                res = "Error: Prelude context not wired up."
+                        
                             messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})                                                  
                         
                         # Reference-only extraction for search_grep

@@ -96,6 +96,20 @@ SECURITY_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "query_project_context",
+            "description": "Query the project's architectural decisions, constraints, and stack info.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {"type": "string", "description": "e.g., 'authentication', 'database'"},
+                    "scope": {"type": "string", "description": "Directory path to filter rules by"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "submit_report",
             "description": "Signal that the security audit is complete and submit your final verdict.",
             "parameters": {
@@ -386,6 +400,18 @@ FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `r
                         res = "\n".join(results[:20]) if results else "No matches found in the structural map."
                     else:
                         res = "Structural map (RepoIndex) is unavailable."
+                        
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                
+                elif tc_name == "query_project_context":
+                    topic = tc_args.get("topic", "")
+                    scope = tc_args.get("scope", "")
+                    prelude = context.extra.get("prelude")
+                    
+                    if prelude:
+                        res = prelude.query(topic=topic, scope=scope)
+                    else:
+                        res = "Error: Prelude context not wired up."
                         
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 

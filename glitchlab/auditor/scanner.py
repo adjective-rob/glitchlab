@@ -114,9 +114,9 @@ class Scanner:
     def __init__(self, repo_path: Path, exclude_dirs: list[str] | None = None):
         self.repo_path = repo_path.resolve()
         self.exclude_dirs = set(exclude_dirs or [
-    ".git", "target", "node_modules", ".glitchlab",
-    ".context", "dist", "build", "__pycache__", "venv",
-    "mcp", ".venv", "site-packages",
+            ".git", "target", "node_modules", ".glitchlab",
+            ".context", "dist", "build", "__pycache__", "venv",
+            "mcp", ".venv", "site-packages",
         ])
 
     def scan(self) -> ScanResult:
@@ -142,6 +142,8 @@ class Scanner:
             result.findings.extend(self._check_missing_docs(file_path, rel, source, lang))
             result.findings.extend(self._check_todos(file_path, rel, source))
             result.findings.extend(self._check_complex_functions(file_path, rel, source, lang))
+            result.findings.extend(self._check_hardcoded_secrets(file_path, rel, source))
+            result.findings.extend(self._check_large_files(file_path, rel, source))
 
         return result
 
@@ -330,4 +332,45 @@ class Scanner:
                     fn_start = None
                     fn_name = None
 
+        return findings
+
+    # -----------------------------------------------------------------------
+    # Check: Hardcoded Secrets
+    # -----------------------------------------------------------------------
+
+    def _check_hardcoded_secrets(self, file_path: Path, rel: str, source: str) -> list[Finding]:
+        findings = []
+        lines = source.splitlines()
+        # Basic heuristic for secrets
+        pattern = re.compile(r"(api_key|secret|password|token)\s*=\s*['\"][A-Za-z0-9_\-]{16,}['\"]", re.IGNORECASE)
+        for i, line in enumerate(lines):
+            match = pattern.search(line)
+            if match:
+                findings.append(Finding(
+                    kind="hardcoded_secret",
+                    file=rel,
+                    line=i + 1,
+                    symbol=match.group(1),
+                    description="Potential hardcoded secret or credential detected.",
+                    severity="high",
+                    context=line.strip()
+                ))
+        return findings
+
+    # -----------------------------------------------------------------------
+    # Check: Large Files
+    # -----------------------------------------------------------------------
+
+    def _check_large_files(self, file_path: Path, rel: str, source: str) -> list[Finding]:
+        findings = []
+        lines = source.splitlines()
+        if len(lines) > 400:
+            findings.append(Finding(
+                kind="large_file",
+                file=rel,
+                line=1,
+                symbol="file",
+                description=f"File is {len(lines)} lines long. Consider breaking it down.",
+                severity="medium"
+            ))
         return findings
