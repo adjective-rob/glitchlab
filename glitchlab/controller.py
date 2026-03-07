@@ -30,6 +30,7 @@ import os
 import re
 import subprocess
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Any
@@ -60,6 +61,7 @@ from glitchlab.router import BudgetExceededError, Router
 from glitchlab.workspace import Workspace
 from glitchlab.workspace.tools import ToolExecutor, ToolViolationError
 from glitchlab.symbols import SymbolIndex
+from glitchlab.event_bus import bus
 
 console = Console()
 
@@ -856,6 +858,14 @@ class Controller:
     def run(self, task: Task) -> dict[str, Any]:
         """Execute the full agent pipeline for a task."""
 
+        # --- NEW: Generate Session Identity for Zephyr ---
+        self.run_id = str(uuid.uuid4())
+        bus.emit(
+            event_type="run.started",
+            payload={"task_id": task.task_id, "objective": task.objective},
+            run_id=self.run_id
+        )
+
         # Ensure we plan against the most recent code.
         # Soft-fail to avoid breaking offline/CI scenarios.
         self._pre_task_git_fetch()
@@ -1042,6 +1052,7 @@ class Controller:
 
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
+                    self._attest_controller_action(entry)
 
             # ── 4B. Standard Execution Path ──
             else:
@@ -1091,6 +1102,7 @@ class Controller:
 
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
+                    self._attest_controller_action(entry)
 
             # ── Patch & Surgical failure retry (one attempt) ──
             # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
@@ -1101,6 +1113,7 @@ class Controller:
 
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
+                    self._attest_controller_action(entry)
 
                 if any("FAIL" in a or "PATCH_FAILED" in a for a in applied):
                     console.print("[red]❌ Auto-repair failed. Aborting to prevent corrupted PR.[/]")
@@ -1124,6 +1137,7 @@ class Controller:
 
                 for entry in applied:
                     console.print(f"  [cyan]{entry}[/]")
+                    self._attest_controller_action(entry)
 
                 if any(a.startswith("PATCH_FAILED") for a in applied):
                     console.print("[red]❌ Patch retry failed. Aborting.[/]")
@@ -1203,6 +1217,7 @@ class Controller:
                     adr_applied = self._write_adr(ws_path, nova_result["adr"])
                     if adr_applied:
                         console.print(f"  [cyan]{adr_applied}[/]")
+                        self._attest_controller_action(adr_applied)
 
                 # Maintenance mode: forbid file create/delete and out-of-scope edits
                 if is_maintenance:
@@ -1342,7 +1357,60 @@ class Controller:
                     pass
             self._history.record(result)
 
+        # --- NEW: Zephyr Quality Scoring & Run Completion ---
+        quality_score = self._calculate_quality_score()
+        result["quality_score"] = quality_score
+
+        bus.emit(
+            event_type="run.completed",
+            payload=result,
+            run_id=self.run_id,
+            metadata={"quality_score": quality_score}
+        )
+
         return result
+
+    def _calculate_quality_score(self) -> dict[str, Any]:
+        """Calculate a run quality score out of 100 based on efficiency and convergence."""
+        score = 100
+        budget_summary = self.router.budget.summary()
+        
+        # 1. Time & Efficiency (Penalize excessive token usage)
+        total_tokens = budget_summary.get("total_tokens", 0)
+        if total_tokens > 50000:
+            score -= min(30, (total_tokens - 50000) // 5000) # Max penalty 30
+        
+        # 2. Convergence (Did it struggle in the fix loop?)
+        debug_attempts = 0
+        if self._state:
+            debug_attempts = self._state.debug_attempts
+            if debug_attempts > 0:
+                score -= (debug_attempts * 10) # Heavy penalty for needing multiple fix attempts
+
+        return {
+            "score": max(0, score),
+            "tokens_used": total_tokens,
+            "debug_attempts": debug_attempts
+        }
+    
+    def _attest_controller_action(self, action_summary: str) -> None:
+        """Emit an SBOF attestation for direct controller file writes."""
+        if action_summary.startswith("FAIL") or "ERROR" in action_summary:
+            return
+            
+        bus.emit(
+            event_type="action.completed",
+            payload={
+                "command": "controller.write_file",
+                "stdout": action_summary,
+                "stderr": "",
+                "returncode": 0,
+                "allowed": True
+            },
+            agent_id="controller",
+            run_id=self.run_id,
+            action_id=f"act-{uuid.uuid4()}"
+        )
 
     # -----------------------------------------------------------------------
     # Agent Runners — v2: Surgical context via TaskState + ScopeResolver
@@ -1367,6 +1435,7 @@ class Controller:
 
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1413,6 +1482,7 @@ class Controller:
         # Pass structured task state AND the tool executor
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1490,6 +1560,7 @@ class Controller:
         # Create a hyper-focused sub-context for the delegated colleague
         sub_context = AgentContext(
             task_id=f"{task.task_id}-delegate-{target}",
+            run_id=self.run_id,
             objective=f"Your colleague needs your expertise on a specific sub-task:\n\n{request}",
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1564,6 +1635,7 @@ Ensure:
 
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective + "\n\n" + retry_prompt,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1600,6 +1672,7 @@ Ensure:
         
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1626,6 +1699,7 @@ Ensure:
             self._log_event("testgen_created", {"file": test_file, "description": desc})
             console.print(f"  [cyan]TESTGEN {test_file}[/]")
             console.print(f"  [dim]Generated: {desc}[/]")
+            self._attest_controller_action(f"TESTGEN {test_file}")
         except Exception as e:
             console.print(f"  [red]Failed to write test file: {e}[/]")
 
@@ -1665,6 +1739,7 @@ Ensure:
 
             context = AgentContext(
                 task_id=task.task_id,
+                run_id=self.run_id,
                 objective=task.objective,
                 repo_path=str(self.repo_path),
                 working_dir=str(ws_path),
@@ -1724,6 +1799,7 @@ Ensure:
 
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1745,6 +1821,7 @@ Ensure:
         # v2: Structured state, not raw impl blob
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1769,6 +1846,7 @@ Ensure:
 
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),
@@ -1799,6 +1877,7 @@ Ensure:
 
         context = AgentContext(
             task_id=task.task_id,
+            run_id=self.run_id,
             objective=task.objective,
             repo_path=str(self.repo_path),
             working_dir=str(ws_path),

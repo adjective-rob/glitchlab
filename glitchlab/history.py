@@ -50,6 +50,7 @@ class TaskHistory:
             "branch": result.get("branch"),
             "error": result.get("error"),
             "budget": result.get("budget", {}),
+            "quality_score": result.get("quality_score", {}),  # NEW: Persist the score
             "events_summary": self._summarize_events(result.get("events", [])),
         }
 
@@ -96,6 +97,8 @@ class TaskHistory:
         statuses = {}
         total_cost = 0.0
         total_tokens = 0
+        total_quality = 0    # NEW
+        scored_runs = 0      # NEW
 
         for entry in entries:
             s = entry.get("status", "unknown")
@@ -104,6 +107,12 @@ class TaskHistory:
             budget = entry.get("budget", {})
             total_cost += budget.get("estimated_cost", 0)
             total_tokens += budget.get("total_tokens", 0)
+
+            # --- NEW: Aggregate quality ---
+            q_score = entry.get("quality_score", {}).get("score")
+            if q_score is not None:
+                total_quality += q_score
+                scored_runs += 1
 
         return {
             "total_runs": total,
@@ -114,6 +123,7 @@ class TaskHistory:
             "total_cost": round(total_cost, 4),
             "total_tokens": total_tokens,
             "avg_cost_per_run": round(total_cost / total, 4) if total > 0 else 0,
+            "avg_quality_score": round(total_quality / scored_runs, 1) if scored_runs > 0 else 0, # NEW
         }
 
     def get_all(self) -> list[dict]:
@@ -295,7 +305,7 @@ class TaskHistory:
             pass
 
 def extract_patterns_from_messages(messages: list[dict], outcome: str) -> list[dict]:
-    """Pure function to extract discovery patterns from a tool-loop message history."""
+    """Pure function to extract discovery patterns and score tool sequences."""
     patterns = []
     files_read = set()
     tools_used = []
@@ -308,20 +318,32 @@ def extract_patterns_from_messages(messages: list[dict], outcome: str) -> list[d
                     args = json.loads(tc.get("function", {}).get("arguments", "{}"))
                     tools_used.append(name)
                     
-                    if name in ("read_file", "search_grep"):
-                        # search_grep might not have 'path', handle gracefully
-                        path = args.get("path") or args.get("pattern")
+                    if name in ("read_file", "search_grep", "find_references", "get_function"):
+                        path = args.get("path") or args.get("pattern") or args.get("symbol")
                         if path:
                             files_read.add(path)
                             
                     elif name in ("write_file", "replace_in_file"):
                         file_modified = args.get("path")
                         if file_modified:
+                            # --- NEW: Evaluate the "Right or Wrong" Sequence ---
+                            seq_score = 100
+                            
+                            if not tools_used or tools_used[0] != "think":
+                                seq_score -= 30  # Heavy penalty for acting without planning
+                            
+                            if not files_read:
+                                seq_score -= 40  # Massive penalty for blind writes
+                                
+                            if "run_check" in tools_used:
+                                seq_score += 10  # Reward for verifying changes
+                                
                             patterns.append({
                                 "file_modified": file_modified,
                                 "files_read_first": list(files_read),
                                 "tools_used": list(tools_used),
-                                "outcome": outcome
+                                "outcome": outcome,
+                                "sequence_score": max(0, min(100, seq_score)) # Constrain 0-100
                             })
                             # Reset discovery state after a write
                             files_read.clear()

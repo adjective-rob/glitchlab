@@ -576,8 +576,12 @@ Plan: {steps_text}
                     cmd = tc_args.get("command")
                     if tool_executor:
                         try:
-                            # Use the sandboxed executor
-                            tool_res = tool_executor.execute(cmd)
+                            # Use the sandboxed executor, passing IDs for Zephyr attestation
+                            tool_res = tool_executor.execute(
+                                command=cmd,
+                                run_id=context.run_id,
+                                agent_id=self.role
+                            )
                             res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
                             if tool_res.returncode != 0:
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."

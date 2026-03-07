@@ -22,6 +22,7 @@ from glitchlab.router import Router, RouterResponse
 class AgentContext(BaseModel):
     """Shared context passed to every agent invocation."""
     task_id: str
+    run_id: str = ""
     objective: str
     repo_path: str
     working_dir: str

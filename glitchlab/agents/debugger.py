@@ -479,7 +479,12 @@ Investigate and fix. Call `done` when the tests pass."""
                 elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
                     if tool_executor:
                         try:
-                            tres = tool_executor.execute(test_cmd)
+                            # Use the sandboxed executor, passing IDs for Zephyr attestation
+                            tres = tool_executor.execute(
+                                command=test_cmd,
+                                run_id=context.run_id,
+                                agent_id=self.role
+                            )
                             res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
                             if tres.returncode != 0:
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
@@ -493,9 +498,14 @@ Investigate and fix. Call `done` when the tests pass."""
                     cmd = tc_args.get("command")
                     if tool_executor:
                         try:
-                            tres = tool_executor.execute(cmd)
-                            res = f"Exit {tres.returncode}\nSTDOUT: {tres.stdout}\nSTDERR: {tres.stderr}"
-                            if tres.returncode != 0:
+                            # Use the sandboxed executor, passing IDs for Zephyr attestation
+                            tool_res = tool_executor.execute(
+                                command=cmd,
+                                run_id=context.run_id,
+                                agent_id=self.role
+                            )
+                            res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
+                            if tool_res.returncode != 0:
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
