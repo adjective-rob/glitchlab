@@ -228,7 +228,7 @@ Plan: {steps_text}
         if memory_context:
             user_content += f"\n\n{memory_context}"
 
-        user_content += "\n\nUse your tools to explore, implement, and verify this plan. When finished, call `done`."
+        user_content += "\n\nThe files you need are provided above. Implement the plan using `replace_in_file` or `write_file`. Only use `read_file` or `search_grep` if a file you need was NOT provided. When finished, call `done`."
 
         return [self._system_msg(), self._user_msg(user_content)]  
 
