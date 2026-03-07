@@ -966,7 +966,7 @@ class Controller:
             # ── 1.6. Initialize ScopeResolver (Layer 1) ──
             self._scope = ScopeResolver(ws_path, self._repo_index)
 
-            # ── 1.7. Prelude: load constraints only (not global prefix) ──
+            # ── 1.7. Prelude: load constraints via scoped query ──
             if self._prelude.available:
                 console.print("[bold dim]📋 [PRELUDE] Loading constraints...[/]")
                 self._prelude.refresh()
@@ -1502,8 +1502,28 @@ class Controller:
         # Keep the user's task constraints, but DROP the JSON formatting constraints
         impl_constraints = list(task.constraints)
 
+        # --- SCOPED PRELUDE CONTEXT ---
+        # Controller decides the scope — agents never query Prelude directly.
+        scoped_arch_context = ""
+        affected_files = plan.get("files_likely_affected", [])
+        if self._prelude.available and affected_files:
+            scope_dir = self._infer_scope_dir(affected_files)
+            if scope_dir:
+                # Scoped constraints (narrower than the global set loaded at startup)
+                scoped_constraints = self._prelude.query_constraints_for_scope(scope_dir)
+                if scoped_constraints:
+                    impl_constraints = list(set(impl_constraints + scoped_constraints))
+
+                # Scoped architecture context for the implementer
+                scoped_arch_context = self._prelude.query_architecture_for_scope(scope_dir)
+                if scoped_arch_context:
+                    logger.debug(
+                        f"[PRELUDE] Scoped architecture for {scope_dir}: "
+                        f"{len(scoped_arch_context)} chars"
+                    )
+
         # --- MEMORY INJECTION ---
-        heuristics = self._history.build_heuristics(plan.get("files_likely_affected", []))
+        heuristics = self._history.build_heuristics(affected_files)
 
         # Causal memory graph context for implementer
         memory_context = self._memory.build_agent_context(
@@ -1527,6 +1547,7 @@ class Controller:
                 "learned_heuristics": heuristics,
                 "memory_context": memory_context,
                 "symbol_index": symbol_index,
+                "scoped_architecture": scoped_arch_context,
             },
         )
 
@@ -2156,6 +2177,28 @@ Summary: {critic_result.get('summary', '')}
         if self.auto_approve:
             return True
         return Confirm.ask(f"[bold]{prompt}[/]")
+
+    @staticmethod
+    def _infer_scope_dir(files: list[str]) -> str | None:
+        """
+        Find the common directory prefix from a list of file paths.
+
+        Returns the shared parent directory (e.g. "src/api" from
+        ["src/api/routes.py", "src/api/auth.py"]), or None if files
+        span the repo root.
+        """
+        if not files:
+            return None
+        parts = [Path(f).parent.parts for f in files]
+        common = []
+        for level in zip(*parts):
+            if len(set(level)) == 1:
+                common.append(level[0])
+            else:
+                break
+        if not common or common == ["."] or common == ["/"]:
+            return None
+        return str(Path(*common))
 
     def _log_event(self, event_type: str, data: dict | None = None) -> None:
         event = {
