@@ -45,6 +45,7 @@ from rich.table import Table
 
 from glitchlab.agents import AgentContext
 from glitchlab.agents.archivist import ArchivistAgent
+from glitchlab.agents.critic import CriticAgent
 from glitchlab.agents.debugger import DebuggerAgent
 from glitchlab.agents.implementer import ImplementerAgent
 from glitchlab.agents.planner import PlannerAgent
@@ -153,6 +154,15 @@ class TaskState(BaseModel):
                 "estimated_complexity": self.estimated_complexity,
             }
         
+        elif for_agent == "critic":
+            return {
+                **base,
+                "plan_steps": [s.model_dump() for s in self.plan_steps],
+                "files_modified": self.files_modified,
+                "files_created": self.files_created,
+                "implementation_summary": self.implementation_summary,
+            }
+
         elif for_agent == "testgen":
             return {
                 **base,
@@ -839,6 +849,7 @@ class Controller:
         self.security = SecurityAgent(self.router)
         self.release = ReleaseAgent(self.router)
         self.archivist = ArchivistAgent(self.router)
+        self.critic = CriticAgent(self.router)
         self.testgen = TestGenAgent(self.router)
 
         # Run state (reset per-task)
@@ -1142,6 +1153,35 @@ class Controller:
                     console.print("[red]❌ Patch retry failed. Aborting.[/]")
                     result["status"] = "implementation_failed"
                     return result
+
+            # ── 4C. Adversarial Critic Review ──
+            if not is_doc_only:
+                critic_result = self._run_critic(task, plan, ws_path)
+                critic_verdict = critic_result.get("verdict", "pass")
+
+                if critic_verdict == "revise":
+                    console.print("[yellow]⚠ Critic found critical issues. Feeding back to implementer for one repair pass...[/]")
+                    for issue in critic_result.get("issues", []):
+                        console.print(f"  [yellow]• [{issue.get('severity', '?')}] {issue.get('file', '?')}: {issue.get('description', '')}[/]")
+
+                    # Re-run implementer with critic feedback
+                    repair_impl = self._retry_with_critic_feedback(task, plan, ws_path, tools, critic_result)
+                    if not repair_impl.get("parse_error"):
+                        # Update state with repaired output
+                        self._state.files_modified = [
+                            c.get("file", "") for c in repair_impl.get("changes", [])
+                            if c.get("action") in ("modify", "create")
+                        ]
+                        self._state.implementation_summary = repair_impl.get("summary", "")
+                        impl = repair_impl
+
+                elif critic_verdict == "warn":
+                    console.print("[dim]  Critic flagged warnings (non-blocking). Proceeding to test.[/]")
+                    for issue in critic_result.get("issues", []):
+                        console.print(f"  [dim]• [{issue.get('severity', '?')}] {issue.get('file', '?')}: {issue.get('description', '')}[/]")
+
+                self._state.mark_phase("critic")
+                self._state.persist(ws_path)
 
             # ── Phase routing: doc-only skips test/security/release ──
             if is_doc_only:
@@ -1551,6 +1591,87 @@ Ensure:
 
         return self.implementer.run(context, max_tokens=8192)
     
+    def _run_critic(self, task: Task, plan: dict, ws_path: Path) -> dict:
+        """Run the Nitpick critic agent to find flaws before test cycles."""
+        console.print("\n[bold yellow]🔍 [NITPICK] Adversarial review...[/]")
+
+        # Resolve the actual written code for the critic to analyze
+        file_context = self._scope.resolve_for_files(
+            self._state.files_modified + self._state.files_created,
+            include_deps=False,
+        )
+
+        context = AgentContext(
+            task_id=task.task_id,
+            objective=task.objective,
+            repo_path=str(self.repo_path),
+            working_dir=str(ws_path),
+            previous_output=self._state.to_agent_summary("critic"),
+            file_context=file_context,
+        )
+
+        result = self.critic.run(context)
+
+        verdict = result.get("verdict", "pass")
+        issue_count = len(result.get("issues", []))
+        self._log_event("critic_review", {"verdict": verdict, "issues": issue_count})
+
+        console.print(f"  [dim]Verdict: {verdict} ({issue_count} issue(s))[/]")
+        if result.get("summary"):
+            console.print(f"  [dim]{result['summary']}[/]")
+
+        return result
+
+    def _retry_with_critic_feedback(
+        self,
+        task: Task,
+        plan: dict,
+        ws_path: Path,
+        tools: ToolExecutor,
+        critic_result: dict,
+    ) -> dict:
+        """Re-run implementer with critic feedback to fix flagged issues."""
+        issues_text = ""
+        for issue in critic_result.get("issues", []):
+            issues_text += (
+                f"- [{issue.get('severity', '?')}] {issue.get('file', '?')}: "
+                f"{issue.get('description', '')}"
+            )
+            if issue.get("suggestion"):
+                issues_text += f"\n  Fix: {issue['suggestion']}"
+            issues_text += "\n"
+
+        feedback_objective = f"""{task.objective}
+
+CRITIC FEEDBACK — Fix these issues before proceeding:
+{issues_text}
+Summary: {critic_result.get('summary', '')}
+"""
+        symbol_index = SymbolIndex(ws_path)
+
+        file_context = self._scope.resolve_for_files(
+            plan.get("files_likely_affected", []),
+            include_deps=True,
+        )
+
+        context = AgentContext(
+            task_id=task.task_id,
+            objective=feedback_objective,
+            repo_path=str(self.repo_path),
+            working_dir=str(ws_path),
+            constraints=list(task.constraints),
+            acceptance_criteria=task.acceptance_criteria,
+            file_context=file_context,
+            previous_output=self._state.to_agent_summary("implementer"),
+            extra={
+                "tool_executor": tools,
+                "test_command": self.test_command,
+                "symbol_index": symbol_index,
+            },
+        )
+
+        return self.implementer.run(context, max_tokens=8192)
+
     def _run_testgen(self, task: Task, ws_path: Path, is_doc_only: bool) -> None:
         """Run the Shield agent to generate a regression test if none exists."""
         if is_doc_only:
