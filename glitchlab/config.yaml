@@ -68,6 +68,7 @@ allowed_tools:
   - "prelude update"
   - "python -c"
   - "pip install"
+  - "ls"
 
 # Blocked patterns — these are never allowed regardless of allowlist.
 blocked_patterns:
