@@ -510,73 +510,128 @@ def history(
 @app.command()
 def audit(
     repo: Path = typer.Option(..., help="Path to the repository to audit"),
-    kind: str = typer.Option(None, help="Filter by finding kind: missing_doc, todo, complex_function"),
+    kind: str = typer.Option(None, help="Filter by finding kind (e.g. missing_doc, todo, dead_code, dependency_vuln)"),
+    category: str = typer.Option(None, help="Filter by category: security, bug, test, refactor, cleanup, docs, feature"),
+    scout: bool = typer.Option(False, "--scout", "-s", help="Enable Scout Brain — LLM-powered creative analysis for feature ideas"),
     dry_run: bool = typer.Option(False, help="Print findings without generating task files"),
     output_dir: Path = typer.Option(None, help="Directory to write task YAMLs (default: .glitchlab/tasks/queue)"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ):
     """
-    Scan a repository for actionable findings and generate GLITCHLAB task files.
+    Scout — Autonomous codebase analysis engine.
+
+    Scans your repository across multiple layers and generates
+    prioritized, batch-ready GLITCHLAB task files.
     """
     from glitchlab.auditor import Scanner, TaskWriter
     from glitchlab.router import Router
+
+    _configure_logging(verbose)
 
     repo_path = repo.resolve()
     if not repo_path.exists():
         console.print(f"[red]Repository not found: {repo_path}[/]")
         raise typer.Exit(1)
 
-    console.print(f"\n[bold dim]🔍 [AUDITOR] Scanning {repo_path.name}...[/]")
+    layer_desc = "static + scout" if scout else "static"
+    console.print(f"\n[bold cyan]SCOUT[/] [dim]Scanning {repo_path.name} [layers: {layer_desc}]...[/]")
+
     scanner = Scanner(repo_path)
     result = scanner.scan()
 
     summary = result.summary()
-    console.print(f"  [dim]Scanned {summary['files_scanned']} files, found {summary['total']} findings[/]")
 
+    # Summary panel
+    summary_lines = [
+        f"Files scanned: {summary['files_scanned']}",
+        f"Total findings: {summary['total']}",
+    ]
+
+    console.print(Panel(
+        "\n".join(summary_lines),
+        title="[bold cyan]Scout Scan Results[/]",
+        border_style="cyan",
+    ))
+
+    # Apply filters
     findings = result.findings
     if kind:
-        findings = [f for f in findings if f.kind == kind]
+        findings = [f for f in findings if getattr(f, "kind", None) == kind]
         console.print(f"  [dim]Filtered to {len(findings)} findings of kind '{kind}'[/]")
+    if category:
+        findings = [f for f in findings if getattr(f, "category", None) == category]
+        console.print(f"  [dim]Filtered to {len(findings)} findings in category '{category}'[/]")
 
-    if not findings:
-        console.print("[green]✅ No findings. Codebase looks clean![/]")
+    if not findings and not scout:
+        console.print("[green]No findings. Codebase looks clean![/]")
         return
 
-    table = Table(title="Findings", border_style="yellow")
-    table.add_column("Kind", style="dim")
-    table.add_column("File")
-    table.add_column("Line", style="dim")
-    table.add_column("Description")
-    table.add_column("Severity")
+    # Findings table
+    if findings:
+        table = Table(title="Findings", border_style="yellow")
+        table.add_column("Cat", style="dim", width=8)
+        table.add_column("Kind", style="dim", width=18)
+        table.add_column("File", width=35)
+        table.add_column("Line", style="dim", width=5)
+        table.add_column("Description")
+        table.add_column("Sev", width=6)
 
-    for f in findings[:50]:
-        color = {"high": "red", "medium": "yellow", "low": "dim"}.get(f.severity, "dim")
-        table.add_row(f.kind, f.file, str(f.line), f.description[:80], f"[{color}]{f.severity}[/]")
+        # Sort for display: severity desc
+        display_findings = sorted(
+            findings,
+            key=lambda f: {"high": 0, "medium": 1, "low": 2}.get(getattr(f, "severity", "low"), 3)
+        )
 
-    console.print(table)
+        for f in display_findings[:80]:
+            sev_color = {"high": "red", "medium": "yellow", "low": "dim"}.get(getattr(f, "severity", "low"), "dim")
+            cat_color = {"security": "red", "bug": "yellow", "feature": "green", "test": "cyan"}.get(getattr(f, "category", "refactor"), "dim")
+            table.add_row(
+                f"[{cat_color}]{getattr(f, 'category', 'refactor')}[/]",
+                getattr(f, "kind", "unknown"),
+                getattr(f, "file", "unknown"),
+                str(getattr(f, "line", "?")),
+                getattr(f, "description", "")[:80],
+                f"[{sev_color}]{getattr(f, 'severity', 'low')}[/]",
+            )
 
-    if len(findings) > 50:
-        console.print(f"[dim]... and {len(findings) - 50} more[/]")
+        console.print(table)
 
-    if dry_run:
+        if len(findings) > 80:
+            console.print(f"[dim]... and {len(findings) - 80} more findings[/]")
+
+    if dry_run and not scout:
         console.print("\n[yellow]Dry run — no task files written.[/]")
         return
 
+    # Generate task files
     out_dir = output_dir or (repo_path / ".glitchlab" / "tasks" / "queue")
-    console.print(f"\n[bold dim]📝 [AUDITOR] Generating task files → {out_dir}[/]")
+    console.print(f"\n[bold cyan]SCOUT[/] [dim]Generating prioritized task files → {out_dir}[/]")
 
     config = load_config(repo_path)
     router = Router(config)
-    writer = TaskWriter(router, out_dir)
+
+    # In scout mode, we let the LLM generate tasks even if static findings are empty
+    if scout:
+        console.print(f"[bold cyan]SCOUT[/] [dim]Activating Scout Brain (Layer 3)...[/]")
 
     result.findings = findings
+    writer = TaskWriter(router, out_dir)
     written = writer.write_tasks(result)
 
-    console.print(Panel(
-        "\n".join(f"  {p.name}" for p in written),
-        title=f"✅ {len(written)} task files written",
-        border_style="green",
-    ))
-    console.print(f"\nRun tasks with: [bold]glitchlab batch --repo {repo_path} --tasks-dir {out_dir}[/]")
+    if dry_run and scout:
+         console.print("\n[yellow]Dry run — simulated brain output (no files written).[/]")
+         return
+
+    if written:
+        console.print(Panel(
+            "\n".join(f"  {p.name}" for p in written),
+            title=f"[bold green]{len(written)} task files written[/]",
+            border_style="green",
+        ))
+
+    console.print(f"\n[bold]Next steps:[/]")
+    console.print(f"  1. Run batch:        [cyan]glitchlab batch --repo {repo_path} --tasks-dir {out_dir}[/]")
+    console.print(f"  2. Monitor:          [cyan]glitchlab history --repo {repo_path} --stats[/]")
 
 # ---------------------------------------------------------------------------
 # Helpers
