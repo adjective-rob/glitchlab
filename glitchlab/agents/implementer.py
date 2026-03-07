@@ -271,36 +271,6 @@ Plan: {steps_text}
                             sym_str = "\n".join(symbols[:20])
                             messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
                         
-                        elif tc_name == "find_references":
-                            symbol = tc_args.get("symbol")
-                            language = tc_args.get("language")
-                            if symbol_index:
-                                refs = symbol_index.find_references(symbol, language)
-                                if not refs:
-                                    res = f"No structural references found for '{symbol}'. Fall back to search_grep if needed."
-                                else:
-                                    # Cap at 30 to protect context
-                                    lines = [f"{r['file']}:{r['line']} [{r['kind']}] {r['context']}" for r in refs[:30]]
-                                    res = f"Found {len(refs)} references for '{symbol}':\n" + "\n".join(lines)
-                                    if len(refs) > 30:
-                                        res += f"\n... (truncated {len(refs)-30} more)"
-                            else:
-                                res = "AST parser unavailable. Please fall back to search_grep."
-                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
-
-                        elif tc_name == "get_function":
-                            symbol = tc_args.get("symbol")
-                            file_path = tc_args.get("file")
-                            if symbol_index:
-                                func_data = symbol_index.get_function_body(symbol, file_path)
-                                if func_data:
-                                    res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
-                                else:
-                                    res = f"Function '{symbol}' not found. Check spelling or use search_grep."
-                            else:
-                                res = "AST parser unavailable. Please fall back to read_file."
-                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})                                                  
-                        
                         # Reference-only extraction for search_grep
                         elif tname == "search_grep" and len(content) > 500:
                             lines = content.splitlines()
@@ -330,10 +300,11 @@ Plan: {steps_text}
                                 except Exception:
                                     pass
 
-            # 2. Rolling window search spiral guard
-            # Look at the last 6 tool calls across all messages
-            recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
+            # 2. Rolling window spiral guards
+            # Look at the last 8 tool calls across all messages
+            recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-8:]
             search_count = recent_tools.count("search_grep")
+            read_count = recent_tools.count("read_file")
 
             # 3. Deterministic First Step: Force 'think' on step 0
             step_kwargs = dict(kwargs)
@@ -382,6 +353,11 @@ Plan: {steps_text}
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
+                    if read_count >= 4 and think_count > 0:
+                        res = "You have read many files recently. You have enough context — start making your edits with `replace_in_file`, or call `think` to consolidate before reading more."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
                     path = tc_args.get("path")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
@@ -431,6 +407,35 @@ Plan: {steps_text}
                         res = "\n".join(results[:20]) if results else "No matches found in the structural map."
                     else:
                         res = "Structural map (RepoIndex) is unavailable."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "find_references":
+                    symbol = tc_args.get("symbol")
+                    language = tc_args.get("language")
+                    if symbol_index:
+                        refs = symbol_index.find_references(symbol, language)
+                        if not refs:
+                            res = f"No structural references found for '{symbol}'. Fall back to search_grep if needed."
+                        else:
+                            lines = [f"{r['file']}:{r['line']} [{r['kind']}] {r['context']}" for r in refs[:30]]
+                            res = f"Found {len(refs)} references for '{symbol}':\n" + "\n".join(lines)
+                            if len(refs) > 30:
+                                res += f"\n... (truncated {len(refs)-30} more)"
+                    else:
+                        res = "AST parser unavailable. Please fall back to search_grep."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "get_function":
+                    symbol = tc_args.get("symbol")
+                    file_path = tc_args.get("file")
+                    if symbol_index:
+                        func_data = symbol_index.get_function_body(symbol, file_path)
+                        if func_data:
+                            res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
+                        else:
+                            res = f"Function '{symbol}' not found. Check spelling or use search_grep."
+                    else:
+                        res = "AST parser unavailable. Please fall back to read_file."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":
