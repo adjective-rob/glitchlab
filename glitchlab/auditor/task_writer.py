@@ -15,6 +15,7 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any
+from rich.console import Console
 
 import yaml
 from loguru import logger
@@ -23,6 +24,8 @@ from pydantic import ValidationError
 from glitchlab.router import Router
 from glitchlab.controller import Task  # Import the strict Pydantic schema
 from .scanner import Finding, ScanResult
+
+console = Console()
 
 AUDITOR_TOOLS = [
     {
@@ -112,10 +115,12 @@ class TaskWriter:
     Operates as an agentic loop to explore, plan, and write tasks.
     """
 
-    def __init__(self, router: Router, output_dir: Path):
+    def __init__(self, router: Router, output_dir: Path, dry_run: bool = False):
         self.router = router
         self.output_dir = output_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.dry_run = dry_run
+        if not self.dry_run:
+            self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def write_tasks(self, result: ScanResult) -> list[Path]:
         """Generate task YAML files for all findings using agent loop. Returns list of written paths."""
@@ -257,13 +262,21 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                         # Validate via Pydantic model implicitly
                         Task(**task_data) 
 
-                        with open(path, "w") as f:
-                            yaml.dump(task_data, f, sort_keys=False)
-                        written_paths.append(path)
-                        res = f"Successfully created task at {path.name}"
-                        logger.info(f"[AUDITOR] Created task: {path.name}")
+                        if not self.dry_run:
+                            with open(path, "w") as f:
+                                yaml.dump(task_data, f, sort_keys=False)
+                            written_paths.append(path)
+                            res = f"Successfully created task at {path.name}"
+                            console.print(f"  [bold green]📝 Created task:[/] {path.name}")
+                        else:
+                            written_paths.append(path)
+                            res = f"Dry run: Simulated task creation at {path.name}"
+                            console.print(f"  [bold green]📝 [DRY RUN] Would create task:[/] {path.name}")
+                            console.print(f"    [dim]Objective: {task_data['objective']}[/]")
+                            
                     except Exception as e:
                         res = f"Failed to create task: {e}"
+                        console.print(f"  [red]❌ Task creation failed: {e}[/]")
                         
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 

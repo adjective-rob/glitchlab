@@ -615,8 +615,10 @@ def audit(
         console.print(f"[bold cyan]SCOUT[/] [dim]Activating Scout Brain (Layer 3)...[/]")
 
     result.findings = findings
-    writer = TaskWriter(router, out_dir)
-    written = writer.write_tasks(result)
+    writer = TaskWriter(router, out_dir, dry_run=dry_run)
+
+    with console.status("[bold cyan]Scout Brain is thinking... (this may take 15-30s)[/]", spinner="point"):
+        written = writer.write_tasks(result)
 
     if dry_run and scout:
          console.print("\n[yellow]Dry run — simulated brain output (no files written).[/]")
