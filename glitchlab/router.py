@@ -445,6 +445,17 @@ class Router:
             max_dollars=config.limits.max_dollars_per_task,
         )
         self.context_monitor = ContextMonitor(safe_headroom_tokens=8192)
+        self._role_model_map = {
+            "planner": config.routing.planner,
+            "implementer": config.routing.implementer,
+            "debugger": config.routing.debugger,
+            "security": config.routing.security,
+            "release": config.routing.release,
+            "archivist": config.routing.archivist,
+            "testgen": config.routing.testgen,
+            "scout": config.routing.scout,
+            "critic": config.routing.critic,
+        }
 
     def update_semantic_state(
         self,
@@ -458,18 +469,6 @@ class Router:
             committed_files=committed_files,
             symbol_names=symbol_names,
         )
-        
-        self._role_model_map = {
-            "planner": config.routing.planner,
-            "implementer": config.routing.implementer,
-            "debugger": config.routing.debugger,
-            "security": config.routing.security,
-            "release": config.routing.release,
-            "archivist": config.routing.archivist,
-            "testgen": config.routing.testgen,
-            "scout": config.routing.scout,
-            "critic": config.routing.critic,
-        }
 
         litellm.suppress_debug_info = True
 
