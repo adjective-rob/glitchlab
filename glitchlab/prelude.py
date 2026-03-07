@@ -33,8 +33,8 @@ from typing import Any
 
 from loguru import logger
 
-# Minimum supported Prelude version
-MIN_PRELUDE_VERSION = "1.2.0"
+# Minimum supported Prelude version (1.3.0 adds `prelude query`)
+MIN_PRELUDE_VERSION = "1.3.0"
 
 
 class PreludeVersionError(RuntimeError):
@@ -294,6 +294,99 @@ class PreludeContext:
                 summary["decisions_count"] = len(list(decisions_dir.glob("*.md")))
 
         return summary
+
+    def query(
+        self,
+        *,
+        topic: str | None = None,
+        scope: str | None = None,
+        context_type: str | None = None,
+        max_tokens: int | None = None,
+        format: str = "md",
+    ) -> str:
+        """
+        Run `prelude query` for scoped context lookup. Controller-only — never
+        exposed to agents as a callable tool.
+
+        At least one of topic, scope, or context_type must be provided.
+
+        Args:
+            topic:        Deep-search keyword (e.g. "error handling").
+            scope:        Directory path to filter architecture/constraints to.
+            context_type: One of: project, stack, architecture, constraints, decisions.
+            max_tokens:   Truncate output to fit a token budget.
+            format:       Output format — "md" (default) or "json".
+
+        Returns:
+            Query result as a string, or empty string on failure.
+        """
+        if not self.cli_available:
+            # Fallback: if query needs constraints and we have the file, read directly
+            if context_type == "constraints":
+                return "\n".join(self.get_constraints())
+            return ""
+
+        args: list[str] = ["query"]
+
+        if topic:
+            args.append(topic)
+        if scope:
+            args.extend(["--scope", scope])
+        if context_type:
+            args.extend(["--type", context_type])
+        if max_tokens:
+            args.extend(["--max-tokens", str(max_tokens)])
+        if format != "md":
+            args.extend(["--format", format])
+
+        result = self._run(*args, use_cwd=True)
+        if result.returncode == 0 and result.stdout.strip():
+            logger.debug(
+                f"[PRELUDE] Query returned {len(result.stdout.strip())} chars "
+                f"(topic={topic}, scope={scope}, type={context_type})"
+            )
+            return result.stdout.strip()
+
+        logger.debug(
+            f"[PRELUDE] Query returned nothing "
+            f"(topic={topic}, scope={scope}, type={context_type}, "
+            f"stderr={result.stderr.strip()})"
+        )
+        return ""
+
+    def query_constraints_for_scope(self, scope: str | None = None) -> list[str]:
+        """
+        Get constraints relevant to a specific directory scope.
+
+        Uses `prelude query --type constraints --scope <path>` when CLI is available,
+        falls back to reading constraints.json directly.
+        """
+        if self.cli_available and scope:
+            raw = self.query(scope=scope, context_type="constraints")
+            if raw:
+                return [line.strip() for line in raw.splitlines() if line.strip()]
+
+        # Fallback: return all constraints (no scope filtering without CLI)
+        return self.get_constraints()
+
+    def query_architecture_for_scope(self, scope: str | None = None) -> str:
+        """
+        Get architecture context relevant to a specific directory scope.
+
+        Returns markdown describing the architecture for the given path.
+        Falls back to reading architecture files directly.
+        """
+        if self.cli_available and scope:
+            raw = self.query(scope=scope, context_type="architecture", max_tokens=800)
+            if raw:
+                return raw
+
+        # Fallback: read architecture files directly
+        for fname in ("architecture.md", "architecture.json"):
+            fpath = self.context_dir / fname
+            if fpath.exists():
+                return fpath.read_text().strip()
+        return ""
 
     def get_constraints(self) -> list[str]:
         """Extract project constraints from .context/constraints.json if available."""
