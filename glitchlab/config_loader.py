@@ -18,13 +18,13 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class RoutingConfig(BaseModel):
-    planner: str = "gemini/gemini-3.1-pro-preview"
-    implementer: str = "gemini/gemini-3.1-pro-preview"
-    debugger: str = "gemini/gemini-3.1-pro-preview"
-    security: str = "gemini/gemini-3-flash-preview"
-    release: str = "gemini/gemini-3-flash-preview"
-    archivist: str = "gemini/gemini-3-flash-preview"
-    testgen: str = "gemini/gemini-3.1-pro-preview"
+    planner: str = "anthropic/claude-sonnet-4-6"
+    implementer: str = "anthropic/claude-sonnet-4-6"
+    debugger: str = "anthropic/claude-sonnet-4-6"
+    security: str = "anthropic/claude-haiku-4-5"
+    release: str = "anthropic/claude-haiku-4-5"
+    archivist: str = "anthropic/claude-haiku-4-5"
+    testgen: str = "anthropic/claude-haiku-4-5"
 
 class FallbacksConfig(BaseModel):
     high_tier: str = "openai/gpt-5.2"
