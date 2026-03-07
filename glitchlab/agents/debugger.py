@@ -386,9 +386,10 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 elif tc_name == "query_symbol_map":
                     query = tc_args.get("query", "").lower()
-                    if self._repo_index: # Ensure repo_index is passed in context.extra
+                    repo_index = context.extra.get("repo_index") # <--- FIX IS HERE
+                    if repo_index:
                         results = []
-                        for path, entry in self._repo_index.files.items():
+                        for path, entry in repo_index.files.items():
                             if query in path.lower() or any(query in s.lower() for s in entry.symbols):
                                 symbol_match = [s for s in entry.symbols if query in s.lower()]
                                 results.append(f"- {path} (Symbols: {', '.join(symbol_match[:5])})")

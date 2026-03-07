@@ -1674,6 +1674,7 @@ Ensure:
                     "test_command": self.test_command,
                     "tool_executor": tools, # Hand over the keys to the sandbox
                     "prelude": self._prelude,
+                    "repo_index": self._repo_index,
                 },
             )
 
