@@ -1,32 +1,12 @@
 {
-  "task_id": "release-v4-0-0",
-  "objective": "Bump the project version to `4.0.0` to reflect the massive new automation features we just shipped.\n\n1. Update the version string to \"4.0.0\" in `glitchlab/__init__.py`, `glitchlab/identity.py`, and `pyproject.toml`.\n2. Update the version references in `README.md` to v4.0.0.\n3. Add a new `## [4.0.0] - 2026-03-05` section to the top of `CHANGELOG.md` (under `## [Unreleased]`) that includes the following major features:\n   - **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.\n   - **Conflict Prevention**: Added `rebase_before_pr` to safely rebase worktrees against `origin/main` before opening PRs.\n   - **Self-Healing Batch Queue**: The `glitchlab batch` command now automatically catches rebase conflicts and requeues tasks to run against the newly updated `main` branch.\n   - **Task Priority Queue**: Batch tasks are now sorted by risk (High risk runs first when main is cleanest, Low risk runs last).\n   - **CLI Automation Flags**: Added `--auto-merge` to `run`, `batch`, and `interactive` commands.\n   - **API Resilience**: Added a strict 120-second timeout to the LiteLLM router to prevent silent API hangs.\n",
-  "mode": "maintenance",
+  "task_id": "interactive-20260307-050840",
+  "objective": "Upgrade the project version from 4.0.0 to 4.1.0 in pyproject.toml, glitchlab/__init__.py, and glitchlab/identity.py. Additionally, update README.md to reflect version 4.1.0 and add our two new agents to the Agent Roster table: 'Shield' (TestGen role, Gemini model) and 'Archivist Nova' (Archivist role, Gemini model).",
+  "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Update version string to 4.0.0 in glitchlab/__init__.py",
-      "files": [
-        "glitchlab/__init__.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": ""
-    },
-    {
-      "step_number": 2,
-      "description": "Update version string to 4.0.0 in glitchlab/identity.py while preserving the ASCII banner",
-      "files": [
-        "glitchlab/identity.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": ""
-    },
-    {
-      "step_number": 3,
-      "description": "Update version string to 4.0.0 in pyproject.toml",
+      "description": "Update version from 4.0.0 to 4.1.0 in pyproject.toml",
       "files": [
         "pyproject.toml"
       ],
@@ -35,20 +15,30 @@
       "outcome": ""
     },
     {
-      "step_number": 4,
-      "description": "Update version references to v4.0.0 in README.md",
+      "step_number": 2,
+      "description": "Update version from 4.0.0 to 4.1.0 in glitchlab/__init__.py",
       "files": [
-        "README.md"
+        "glitchlab/__init__.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": ""
     },
     {
-      "step_number": 5,
-      "description": "Add the 4.0.0 release notes to CHANGELOG.md under the [Unreleased] section",
+      "step_number": 3,
+      "description": "Update version from 4.0.0 to 4.1.0 in glitchlab/identity.py",
       "files": [
-        "CHANGELOG.md"
+        "glitchlab/identity.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": ""
+    },
+    {
+      "step_number": 4,
+      "description": "Update README.md to reflect version 4.1.0 and add 'Shield' (TestGen role, Gemini model) and 'Archivist Nova' (Archivist role, Gemini model) to the Agent Roster table",
+      "files": [
+        "README.md"
       ],
       "action": "modify",
       "status": "pending",
@@ -56,59 +46,35 @@
     }
   ],
   "files_in_scope": [
+    "pyproject.toml",
     "glitchlab/__init__.py",
     "glitchlab/identity.py",
-    "pyproject.toml",
     "README.md",
-    "CHANGELOG.md",
+    "pyproject.toml",
     "glitchlab/__init__.py",
     "glitchlab/identity.py",
-    "pyproject.toml",
-    "README.md",
-    "CHANGELOG.md"
+    "README.md"
   ],
-  "estimated_complexity": "small",
+  "estimated_complexity": "trivial",
   "requires_core_change": false,
   "files_modified": [
-    "pyproject.toml",
     "README.md",
-    "glitchlab/identity.py",
+    "pyproject.toml",
     "glitchlab/__init__.py",
-    "CHANGELOG.md",
+    "glitchlab/identity.py",
     "tests/test_identity.py"
   ],
   "files_created": [],
   "tests_added": [],
-  "commit_message": "chore: bump version to 4.0.0 and update changelog",
-  "implementation_summary": "Bumped version to 4.0.0 in glitchlab/__init__.py, glitchlab/identity.py, pyproject.toml, and README.md. Added release notes for 4.0.0 to CHANGELOG.md.",
+  "commit_message": "chore: bump version to 4.1.0 and add Shield & Archivist Nova to agent roster\n\n- pyproject.toml: version 4.0.0 → 4.1.0\n- glitchlab/__init__.py: __version__ 4.0.0 → 4.1.0\n- glitchlab/identity.py: __version__ 4.0.0 → 4.1.0\n- README.md: header + Project Structure label updated to v4.1.0; added Shield (TestGen/Gemini) and Archivist Nova (Archivist/Gemini) to Agent Roster table\n- tests/test_identity.py: version assertion updated to 4.1.0",
+  "implementation_summary": "Upgraded project version from 4.0.0 to 4.1.0 across all version-bearing files, updated README.md header and Project Structure section to v4.1.0, added 'Shield' (TestGen, Gemini) and 'Archivist Nova' (Archivist, Gemini) to the Agent Roster table, and updated the version assertion in tests/test_identity.py to match.",
   "test_passing": true,
-  "debug_attempts": 1,
-  "last_error": "The test `test_identity.py` was failing because it had a hardcoded assertion for version \"3.1.0\".",
-  "previous_fixes": [
-    {
-      "diagnosis": "The test `test_identity.py` was failing because it had a hardcoded assertion for version \"3.1.0\".",
-      "root_cause": "The version string was updated in the source files but the test file `tests/test_identity.py` was not updated to reflect the new version.",
-      "fix": {
-        "changes": [
-          {
-            "file": "tests/test_identity.py",
-            "action": "modify",
-            "_already_applied": true
-          }
-        ]
-      },
-      "confidence": "high",
-      "should_retry": true,
-      "summary": "Updated the version assertion in `tests/test_identity.py` to \"4.0.0\" to match the new version.",
-      "_agent": "debugger",
-      "_model": "gemini/gemini-3.1-pro-preview",
-      "_tokens": 4139,
-      "_cost": 0.15686399999999998
-    }
-  ],
+  "debug_attempts": 0,
+  "last_error": "",
+  "previous_fixes": [],
   "security_verdict": "warn",
-  "version_bump": "major",
-  "changelog_entry": "## [4.0.0] - 2026-03-05\n\n- **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.\n- **Conflict Prevention**: Added `rebase_before_pr` to safely rebase worktrees against `origin/main` before opening PRs.\n- **Self-Healing Batch Queue**: The `glitchlab batch` command now automatically catches rebase conflicts and requeues tasks to run against the newly updated `main` branch.\n- **Task Priority Queue**: Batch tasks are now sorted by risk (High risk runs first when main is cleanest, Low risk runs last).\n- **CLI Automation Flags**: Added `--auto-merge` to `run`, `batch`, and `interactive` commands.\n- **API Resilience**: Added a strict 120-second timeout to the LiteLLM router to prevent silent API hangs.",
+  "version_bump": "minor",
+  "changelog_entry": "## [4.1.0] - 2026-03-06\n\n### Added\n- **New Agents**: Added 'Shield' (TestGen role, Gemini model) and 'Archivist Nova' (Archivist role, Gemini model) to the Agent Roster.\n- **Documentation**: Updated README.md to reflect v4.1.0 and expanded Agent Roster table with new agents.",
   "completed_phases": [
     "plan",
     "implement",
@@ -120,16 +86,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-05T04:39:25.694389+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:08:41.280143+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/release-v4-0-0"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260307-050840"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-05T04:39:25.700440+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:08:41.284788+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
         "total_files": 38,
         "languages": {
@@ -139,60 +105,52 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-05T04:39:25.764480+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:08:41.353185+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
         "count": 0
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-05T04:39:36.481738+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:08:49.634086+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
-        "steps": 5,
+        "steps": 4,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-05T04:40:22.693081+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:10:34.890463+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
         "changes": 5,
         "tests": 0
       }
     },
     {
-      "type": "tests_failed",
-      "timestamp": "2026-03-05T04:40:22.962779+00:00",
-      "task_id": "release-v4-0-0",
+      "type": "tests_passed",
+      "timestamp": "2026-03-07T05:10:35.181885+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "tests_passed",
-      "timestamp": "2026-03-05T04:40:41.988404+00:00",
-      "task_id": "release-v4-0-0",
-      "data": {
-        "attempt": 2
-      }
-    },
-    {
       "type": "security_review",
-      "timestamp": "2026-03-05T04:41:27.559914+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:11:16.520044+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
         "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-05T04:42:00.790938+00:00",
-      "task_id": "release-v4-0-0",
+      "timestamp": "2026-03-07T05:11:39.971984+00:00",
+      "task_id": "interactive-20260307-050840",
       "data": {
-        "bump": "major"
+        "bump": "minor"
       }
     }
   ]

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-03-06
+
+### Added
+- **New Agents**: Added 'Shield' (TestGen role, Gemini model) and 'Archivist Nova' (Archivist role, Gemini model) to the Agent Roster.
+- **Documentation**: Updated README.md to reflect v4.1.0 and expanded Agent Roster table with new agents.
+
 ## [4.0.0] - 2026-03-05
 
 - **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.
