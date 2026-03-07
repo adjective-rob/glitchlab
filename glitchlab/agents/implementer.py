@@ -300,11 +300,11 @@ Plan: {steps_text}
                                 except Exception:
                                     pass
 
-            # 2. Rolling window search/read spiral guard
-            # Look at the last 8 tool calls across all messages
+            # 2. Rolling window exploration spiral guard
+            # Count all read-only operations together to prevent interleaving evasion
             recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-8:]
-            search_count = recent_tools.count("search_grep")
-            read_count = recent_tools.count("read_file")
+            explore_ops = {"search_grep", "read_file", "query_symbol_map", "find_references"}
+            explore_count = sum(1 for t in recent_tools if t in explore_ops)
 
             # 3. Deterministic First Step: Force 'think' on step 0
             step_kwargs = dict(kwargs)
@@ -353,11 +353,11 @@ Plan: {steps_text}
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
-                    # Spiral guard: too many reads without writing
-                    if think_count > 0 and read_count >= 4:
+                    # Combined exploration spiral guard: catches interleaved search/read patterns
+                    if think_count > 0 and explore_count >= 5:
                         res = (
-                            "You have read many files recently without making edits. "
-                            "You should have enough context by now — start using "
+                            "You have spent too many recent steps on exploration (reads + searches) "
+                            "without making edits. You should have enough context by now — start using "
                             "`replace_in_file` or `write_file` to implement the plan."
                         )
                         messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
@@ -372,8 +372,13 @@ Plan: {steps_text}
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "search_grep":
-                    if search_count >= 3:
-                        res = "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."
+                    # Combined exploration spiral guard
+                    if think_count > 0 and explore_count >= 5:
+                        res = (
+                            "You have spent too many recent steps on exploration (reads + searches) "
+                            "without making edits. You should have enough context by now — start using "
+                            "`replace_in_file` or `write_file` to implement the plan."
+                        )
                         messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
                         continue
 
