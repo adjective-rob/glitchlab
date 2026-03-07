@@ -325,6 +325,24 @@ class PreludeContext:
             for md_file in sorted(decisions_dir.glob("*.md")):
                 decisions.append(md_file.read_text())
         return decisions
+    
+    def query(self, topic: str = "", scope: str = "", max_tokens: int = 2000) -> str:
+        """Query the Prelude context engine."""
+        if not self.cli_available:
+            return ""
+            
+        args = ["query"]
+        if topic:
+            args.append(topic)
+        if scope:
+            args.extend(["--scope", scope])
+            
+        args.extend(["--format", "json", "--max-tokens", str(max_tokens)])
+        
+        result = self._run(*args)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        return f"Query failed: {result.stderr}"
 
     # ------------------------------------------------------------------
     # Internal
