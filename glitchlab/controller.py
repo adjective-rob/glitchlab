@@ -1429,7 +1429,36 @@ class Controller:
             },
         )
 
-        impl = self.implementer.run(context, max_tokens=12000)
+        # --- THE SWITCHBOARD DELEGATION LOOP ---
+        while True:
+            impl = self.implementer.run(context, max_tokens=12000)
+            
+            # Did Patch yield to ask for help?
+            if impl.get("_status") == "delegating":
+                target = impl.get("colleague", "unknown")
+                request = impl.get("request", "No specific request provided.")
+                tc_id = impl.get("tc_id")
+                tc_name = impl.get("tc_name")
+                
+                console.print(f"\n[bold magenta]📞 Patch is tagging in {target.upper()}...[/]")
+                console.print(f"  [dim]Request: {request}[/]")
+                
+                # 1. Spin up the requested agent
+                colleague_response = self._run_delegated_agent(target, request, task, ws_path, tools)
+                
+                # 2. Inject the response back into Patch's memory so it can resume seamlessly
+                context.extra["_resume_messages"] = impl.get("_messages", [])
+                context.extra["_resume_messages"].append({
+                    "role": "tool",
+                    "tool_call_id": tc_id,
+                    "name": tc_name,
+                    "content": f"Colleague {target.upper()} responded:\n{colleague_response}"
+                })
+                
+                console.print(f"[bold blue]🔄 Resuming Patch...[/]")
+                continue
+                
+            break  # Exit loop when Patch successfully calls `done` (or hits a hard error)
 
         # --- MEMORY EXTRACTION ---
         messages = impl.get("_messages", [])
@@ -1455,6 +1484,48 @@ class Controller:
         })
 
         return impl
+
+    def _run_delegated_agent(self, target: str, request: str, task: Task, ws_path: Path, tools: ToolExecutor) -> str:
+        """Helper method: Handle mid-flight delegation requests from the Implementer."""
+        # Create a hyper-focused sub-context for the delegated colleague
+        sub_context = AgentContext(
+            task_id=f"{task.task_id}-delegate-{target}",
+            objective=f"Your colleague needs your expertise on a specific sub-task:\n\n{request}",
+            repo_path=str(self.repo_path),
+            working_dir=str(ws_path),
+            extra={
+                "tool_executor": tools,
+                "prelude": self._prelude,
+                "fast_mode": False,
+                "repo_index": getattr(self, "_repo_index", None),
+            }
+        )
+        
+        try:
+            if target == "security":
+                res = self.security.run(sub_context)
+                return f"Verdict: {res.get('verdict')}\nSummary: {res.get('summary')}\nIssues: {res.get('issues', [])}"
+            
+            elif target == "debugger":
+                sub_context.extra["test_command"] = self.test_command
+                res = self.debugger.run(sub_context)
+                return f"Diagnosis: {res.get('diagnosis')}\nRoot Cause: {res.get('root_cause')}\nFixes applied: {res.get('fix_summary', 'None')}"
+            
+            elif target == "testgen":
+                sub_context.extra["test_command"] = self.test_command
+                res = self.testgen.run(sub_context)
+                return f"Test Generated: {res.get('test_file')}\nDescription: {res.get('description')}"
+            
+            elif target == "archivist":
+                res = self.archivist.run(sub_context)
+                return f"Architecture Notes: {res.get('architecture_notes')}\nADR Written: {res.get('should_write_adr')}"
+            
+            else:
+                return f"Error: Unknown colleague '{target}'."
+                
+        except Exception as e:
+            logger.error(f"Delegation to {target} failed: {e}")
+            return f"Colleague {target} encountered an error and could not complete the request: {e}"
 
     def _retry_patch(
         self,

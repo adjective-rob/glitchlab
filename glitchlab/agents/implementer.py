@@ -183,6 +183,28 @@ IMPLEMENTER_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "ask_colleague",
+            "description": "If you lack the expertise or need a specialized review (e.g., security, testing) before finishing, delegate a sub-task to a colleague.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "colleague": {
+                        "type": "string", 
+                        "enum": ["security", "debugger", "testgen", "archivist"],
+                        "description": "The specialized agent to call"
+                    },
+                    "request": {
+                        "type": "string",
+                        "description": "Exactly what you need them to do or figure out for you."
+                    }
+                },
+                "required": ["colleague", "request"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_function",
             "description": "Get the complete body of a function or method by name. Returns the full implementation including signature. Use this instead of read_file when you only need one function from a large file to save context window.",
             "parameters": {
@@ -309,6 +331,17 @@ Plan: {steps_text}
                             else:
                                 res = "AST parser unavailable. Please fall back to read_file."
                             messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                        elif tc_name == "ask_colleague":
+                            # PAUSE THE IMPLEMENTER AND YIELD TO CONTROLLER
+                            return {
+                                "_status": "delegating",
+                                "colleague": tc_args.get("colleague"),
+                                "request": tc_args.get("request"),
+                                "_messages": messages, # Save the brain state!
+                                "tc_id": tc_id,        # Remember which tool call triggered this
+                                "tc_name": tc_name
+                    }
 
                         elif tc_name == "query_project_context":
                             topic = tc_args.get("topic", "")
