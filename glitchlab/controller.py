@@ -1014,6 +1014,18 @@ class Controller:
             self._state.mark_phase("plan")
             self._state.persist(ws_path)
 
+            # Seed semantic context monitor with planned files + symbols
+            _scope_symbols = []
+            if self._repo_index:
+                for f in self._state.files_in_scope:
+                    entry = self._repo_index.files.get(f)
+                    if entry:
+                        _scope_symbols.extend(entry.symbols)
+            self.router.update_semantic_state(
+                active_files=self._state.files_in_scope,
+                symbol_names=_scope_symbols,
+            )
+
             # ── 3. Boundary Validation (Plan-Level) ──
             try:
                 violations = self.boundary.check_plan(plan, self.allow_core)
@@ -1089,6 +1101,11 @@ class Controller:
                 self._state.implementation_summary = impl.get("summary", "")
                 self._state.mark_phase("implement")
                 self._state.persist(ws_path)
+
+                # Refine semantic state: modified files are active, planned-only files deprioritized
+                self.router.update_semantic_state(
+                    active_files=self._state.files_modified + self._state.files_created,
+                )
 
                 is_high_complexity = plan.get("estimated_complexity", "").lower() in ["high", "large"]
                 if is_high_complexity:
@@ -1308,6 +1325,11 @@ class Controller:
             # ── 8. Commit + PR ──
             self._state.mark_phase("commit")
             self._state.persist(ws_path)
+
+            # Mark committed files so semantic snipping deprioritizes them
+            self.router.update_semantic_state(
+                committed_files=self._state.files_modified + self._state.files_created,
+            )
 
             commit_msg = impl.get("commit_message", f"glitchlab: {task.task_id}")
             self._workspace.commit(commit_msg)
