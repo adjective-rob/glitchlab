@@ -446,19 +446,6 @@ class Router:
         )
         self.context_monitor = ContextMonitor(safe_headroom_tokens=8192)
 
-    def update_semantic_state(
-        self,
-        active_files: list[str] | None = None,
-        committed_files: list[str] | None = None,
-        symbol_names: list[str] | None = None,
-    ) -> None:
-        """Forward semantic state to the context monitor for smarter snipping."""
-        self.context_monitor.update_file_state(
-            active_files=active_files,
-            committed_files=committed_files,
-            symbol_names=symbol_names,
-        )
-        
         self._role_model_map = {
             "planner": config.routing.planner,
             "implementer": config.routing.implementer,
@@ -472,6 +459,19 @@ class Router:
         }
 
         litellm.suppress_debug_info = True
+
+    def update_semantic_state(
+        self,
+        active_files: list[str] | None = None,
+        committed_files: list[str] | None = None,
+        symbol_names: list[str] | None = None,
+    ) -> None:
+        """Forward semantic state to the context monitor for smarter snipping."""
+        self.context_monitor.update_file_state(
+            active_files=active_files,
+            committed_files=committed_files,
+            symbol_names=symbol_names,
+        )
 
     def resolve_model(self, role: str) -> str:
         """Resolve agent role → model string."""
