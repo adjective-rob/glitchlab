@@ -8,6 +8,6 @@
 ╚══════════════════════════════════════════════════════════╝
 """
 
-__version__ = "4.0.0"
+__version__ = "4.1.0"
 __codename__ = "GLITCHLAB"
 __tagline__ = "Build Weird. Ship Clean."

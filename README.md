@@ -1,4 +1,4 @@
-# **⚡ GLITCHLAB** v4.0.0
+# **⚡ GLITCHLAB** v4.1.0
 
 **The Agentic Dev Engine — Build Weird. Ship Clean.**  
  A local, repo-agnostic, multi-agent development engine that evolves codebases under strict governance.
@@ -92,7 +92,7 @@ GLITCHLAB is autonomous between checkpoints, but you stay in control:
 
 The **Controller** is the brainstem. It never writes code directly; it only coordinates.
 
-### **Project Structure (v4.0.0)**
+### **Project Structure (v4.1.0)**
 
 `glitchlab/`  
 `├── cli.py              # CLI interface (typer)`  

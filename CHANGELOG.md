@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-03-07
+
+- **Version Bump**: Bump project version from 4.0.0 to 4.1.0.
+
 ## [4.0.0] - 2026-03-05
 
 - **Auto-Merge Pipeline**: Added `auto_merge_pr` capability via `gh pr merge --squash` to enable fully hands-free PR merging.
