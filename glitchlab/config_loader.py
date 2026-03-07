@@ -26,6 +26,7 @@ class RoutingConfig(BaseModel):
     archivist: str = "gemini/gemini-3-flash-preview"
     testgen: str = "gemini/gemini-3.1-pro-preview"
     scout: str = "gemini/gemini-3.1-pro-preview"
+    critic: str = "gemini/gemini-3-flash-preview"
 
 class FallbacksConfig(BaseModel):
     high_tier: str = "openai/gpt-5.2"

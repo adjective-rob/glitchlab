@@ -235,6 +235,7 @@ class Router:
             "archivist": config.routing.archivist,
             "testgen": config.routing.testgen,
             "scout": config.routing.scout,
+            "critic": config.routing.critic,
         }
 
         litellm.suppress_debug_info = True
@@ -286,6 +287,7 @@ class Router:
             "security": 0.30,
             "release": 0.10,
             "archivist": 0.10,
+            "critic": 0.05,
         }
         
         limit_ratio = role_limits.get(role, 0.50)
