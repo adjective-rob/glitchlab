@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-03-08
+
+### Changed
+- **YAML Agent Messaging**: Messages are now communicated across agents in YAML, providing a structured, human-readable interchange format for all inter-agent communication.
 ### Added
 - **Duration Formatting Utility**: New `format_duration(seconds: float) -> str` function in `glitchlab/utils.py` converts seconds into human-readable duration strings (e.g., "2m 30s", "1h 5m 12s"). Includes comprehensive test coverage with 13 test cases.
 
