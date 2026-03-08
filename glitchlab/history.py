@@ -299,7 +299,7 @@ class TaskHistory:
             with open(filepath, "r", encoding="utf-8") as f:
                 lines = f.readlines()
             if len(lines) > max_lines:
-                with open(filepath, "w", encoding="utf-8") as f:
+                with open(filepath, "a", encoding="utf-8") as f:
                     f.writelines(lines[-int(max_lines * 0.8):]) # Keep the most recent 80%
         except Exception:
             pass
