@@ -204,29 +204,22 @@ Rules:
                 + "\n\n... [DIFF TRUNCATED. USE read_file TO SEE FULL CHANGES] ..."
             )
 
-        files_modified = state.get("files_modified", [])
-        files_created = state.get("files_created", [])
-        impl_summary = state.get("implementation_summary", "No summary available")
+        task_data: dict[str, Any] = {
+            "review": "security and policy compliance",
+            "task": context.objective,
+            "mode": state.get("mode", "evolution"),
+            "implementation_summary": state.get("implementation_summary", "No summary available"),
+            "files_modified": state.get("files_modified", []),
+            "files_created": state.get("files_created", []),
+            "protected_paths": context.extra.get("protected_paths", []),
+        }
 
-        user_content = f"""Review these recent code changes for security and policy compliance.
-
-Task: {context.objective}
-Mode: {state.get('mode', 'evolution')}
-
-Implementation summary: {impl_summary}
-Files modified: {files_modified}
-Files created: {files_created}
-Protected paths: {context.extra.get('protected_paths', [])}
-
-Diff Preview:
-{diff_text}
-
-Investigate the modified files using your tools. When satisfied, call `submit_report`."""
+        user_content = self._yaml_block(task_data)
+        user_content += f"\n\nDiff Preview:\n{diff_text}"
+        user_content += "\n\nInvestigate the modified files using your tools. When satisfied, call `submit_report`."
 
         if context.extra.get("fast_mode"):
-            user_content += """
-
-FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_report`)."""
+            user_content += "\n\nFAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_report`)."
 
         return [self._system_msg(), self._user_msg(user_content)]
 

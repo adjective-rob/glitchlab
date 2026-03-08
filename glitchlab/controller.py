@@ -207,12 +207,26 @@ class TaskState(BaseModel):
 
         return base
 
+    def to_yaml_summary(self, for_agent: str) -> str:
+        """Return the agent summary as a YAML string for direct embedding in messages."""
+        return yaml.dump(
+            self.to_agent_summary(for_agent),
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        ).rstrip("\n")
+
     def persist(self, ws_path: Path) -> None:
         """Write current state to workspace for debugging/auditing."""
         state_dir = ws_path / ".glitchlab"
         state_dir.mkdir(parents=True, exist_ok=True)
-        (state_dir / "task_state.json").write_text(
-            self.model_dump_json(indent=2)
+        (state_dir / "task_state.yaml").write_text(
+            yaml.dump(
+                self.model_dump(mode="json"),
+                default_flow_style=False,
+                sort_keys=False,
+                allow_unicode=True,
+            )
         )
 
 class DirtyRepoError(Exception):

@@ -225,6 +225,7 @@ env/
 .glitchlab/worktrees/
 .glitchlab/logs/
 .glitchlab/task_state.json
+.glitchlab/task_state.yaml
 
 # IDE
 .vscode/
