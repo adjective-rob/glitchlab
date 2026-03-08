@@ -239,29 +239,29 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         state = context.previous_output
-        
-        steps_text = ""
-        for step in state.get("plan_steps", []):
-            steps_text += f"\nStep {step.get('step_number')}: {step.get('description')}\n"
 
-        file_context = ""
+        task_data: dict[str, Any] = {
+            "task": context.objective,
+            "plan": [
+                {"step": s.get("step_number"), "description": s.get("description")}
+                for s in state.get("plan_steps", [])
+            ],
+        }
+
+        user_content = self._yaml_block(task_data)
+
         if context.file_context:
-            file_context = "\n\nInitial file contents provided by router:\n"
+            user_content += "\n\nInitial file contents provided by router:\n"
             for fname, content in context.file_context.items():
-                file_context += f"\n--- {fname} ---\n{content}\n"
+                user_content += f"\n--- {fname} ---\n{content}\n"
 
-        user_content = f"""Task: {context.objective}
-Plan: {steps_text}
-{file_context}"""
-
-        # --- ADD HEURISTICS ---
         heuristics = context.extra.get("learned_heuristics")
         if heuristics:
             user_content += f"\n\n{heuristics}"
 
         user_content += "\n\nUse your tools to explore, implement, and verify this plan. When finished, call `done`."
 
-        return [self._system_msg(), self._user_msg(user_content)]  
+        return [self._system_msg(), self._user_msg(user_content)]
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
         """Override run to implement the Agentic Loop with Cognitive Monologue."""

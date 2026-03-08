@@ -151,47 +151,27 @@ Rules:
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
-        # v2: previous_output is TaskState.to_agent_summary("archivist")
-        # Contains: task_id, objective, mode, risk_level,
-        #           plan_steps, files_modified, implementation_summary, version_bump
         state = context.previous_output or {}
 
-        files_modified = state.get("files_modified", [])
-        files_text = "\n".join(f"- {f}" for f in files_modified) if files_modified else "- None"
+        task_data: dict[str, Any] = {
+            "status": "task completed successfully — document it",
+            "task": context.objective,
+            "task_id": context.task_id,
+            "mode": state.get("mode", "evolution"),
+            "risk_level": state.get("risk_level", "unknown"),
+            "version_bump": state.get("version_bump", "unknown"),
+            "implementation_summary": state.get("implementation_summary", "No summary"),
+            "plan_steps": [
+                {"step": s.get("step_number", "?"), "description": s.get("description", "no description")}
+                for s in state.get("plan_steps", [])
+            ],
+            "files_modified": state.get("files_modified", []) or ["None"],
+            "existing_docs": context.extra.get("existing_docs", []) or ["(none provided)"],
+        }
 
-        plan_steps = state.get("plan_steps", [])
-        steps_text = ""
-        for step in plan_steps:
-            steps_text += (
-                f"\n- Step {step.get('step_number', '?')}: "
-                f"{step.get('description', 'no description')}"
-            )
-
-        existing_docs = context.extra.get("existing_docs", [])
-        existing_docs_text = "\n".join(f"- {f}" for f in existing_docs) if existing_docs else "- (none provided)"
-
-        user_content = f"""A task has been successfully completed. Document it.
-
-Task: {context.objective}
-Task ID: {context.task_id}
-Mode: {state.get('mode', 'evolution')}
-Risk level: {state.get('risk_level', 'unknown')}
-Version bump: {state.get('version_bump', 'unknown')}
-
-Implementation summary:
-{state.get('implementation_summary', 'No summary')}
-
-Plan steps:
-{steps_text}
-
-Files modified:
-{files_text}
-
-Existing docs in repo:
-{existing_docs_text}
-
-Use your tools to update/create documentation and ADRs as needed.
-When finished, call `done` with architecture_notes, should_write_adr, adr (or null), and doc_updates."""
+        user_content = self._yaml_block(task_data)
+        user_content += "\n\nUse your tools to update/create documentation and ADRs as needed."
+        user_content += "\nWhen finished, call `done` with architecture_notes, should_write_adr, adr (or null), and doc_updates."
 
         if context.extra.get("fast_mode"):
             user_content += "\n\nFAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `write_file`, `replace_in_file`, or `search_grep`. Rely strictly on the implementation summary and immediately call your final submission tool (`done`)."

@@ -153,16 +153,16 @@ Semver Rules:
             else diff_text
         )
 
-        user_content = f"""Analyze the version impact of these changes.
+        task_data: dict[str, Any] = {
+            "analysis": "version impact",
+            "task": context.objective,
+            "mode": state.get("mode", "evolution"),
+            "implementation_summary": state.get("implementation_summary", "N/A"),
+        }
 
-Task: {context.objective}
-Mode: {state.get('mode', 'evolution')}
-Implementation Summary: {state.get('implementation_summary', 'N/A')}
-
-Diff Preview:
-{diff_preview}
-
-Investigate the modified files, update CHANGELOG.md surgically, and call `submit_verdict`."""
+        user_content = self._yaml_block(task_data)
+        user_content += f"\n\nDiff Preview:\n{diff_preview}"
+        user_content += "\n\nInvestigate the modified files, update CHANGELOG.md surgically, and call `submit_verdict`."
 
         if context.extra.get("fast_mode"):
             user_content += "\n\nFAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_verdict`)."

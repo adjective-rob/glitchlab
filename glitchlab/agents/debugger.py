@@ -201,16 +201,16 @@ The test command you are debugging is: {test_command}
 
         sys_prompt = self.system_prompt.format(test_command=test_cmd)
 
-        user_content = f"""FAILURE DETECTED
-Objective: {context.objective}
-Failing Command: {test_cmd}
+        task_data: dict[str, Any] = {
+            "status": "FAILURE DETECTED",
+            "objective": context.objective,
+            "failing_command": test_cmd,
+            "modified_files": state.get("files_modified", []),
+        }
 
-Initial Error Output:
-{error_log}
-
-Modified Files: {state.get('files_modified', [])}
-
-Investigate and fix. Call `done` when the tests pass."""
+        user_content = self._yaml_block(task_data)
+        user_content += f"\n\nInitial Error Output:\n{error_log}"
+        user_content += "\n\nInvestigate and fix. Call `done` when the tests pass."
 
         return [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}]
 

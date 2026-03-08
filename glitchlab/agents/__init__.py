@@ -14,6 +14,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+import yaml
 from pydantic import BaseModel
 
 from glitchlab.router import Router, RouterResponse
@@ -70,6 +71,20 @@ class BaseAgent(ABC):
     def parse_response(self, response: RouterResponse, context: AgentContext) -> dict[str, Any]:
         """Parse the LLM response into structured output."""
         ...
+
+    @staticmethod
+    def _yaml_block(data: dict | list) -> str:
+        """Serialize data as a compact YAML block for LLM messages.
+
+        Uses block style (no flow), no key sorting, and strips the
+        trailing newline so it can be embedded inline.
+        """
+        return yaml.dump(
+            data,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        ).rstrip("\n")
 
     def _system_msg(self) -> dict[str, str]:
         return {"role": "system", "content": self.system_prompt}
