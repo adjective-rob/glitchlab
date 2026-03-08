@@ -21,6 +21,7 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
+    SearchSpiralGuard,
     build_assistant_message,
     build_tool_message,
     prune_message_history,
@@ -268,6 +269,7 @@ Rules:
         changed_set = set(changed_files) if scoped else set()
 
         think_count = 0
+        search_guard = SearchSpiralGuard()
         max_steps = 15
 
         for step in range(max_steps):
@@ -341,6 +343,11 @@ Rules:
                             res = f"Error reading file: {e}"
 
                 elif tc_name == "search_grep":
+                    block_msg = search_guard.check(messages)
+                    if block_msg:
+                        messages.append(build_tool_message(tc_id, tc_name, block_msg))
+                        continue
+
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:
@@ -376,6 +383,7 @@ Rules:
                             res = proc.stdout if proc.stdout else "No matches found."
                         if len(res.splitlines()) > 50:
                             res = "\n".join(res.splitlines()[:50]) + "\n... (truncated)"
+                        search_guard.record_search_result(res)
                     except Exception as e:
                         res = f"Search failed: {e}"
 

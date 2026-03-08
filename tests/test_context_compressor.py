@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from glitchlab.context_compressor import (
+    SearchSpiralGuard,
     build_assistant_message,
     build_tool_message,
     compress_tool_result,
@@ -295,3 +296,108 @@ class TestPruneMessageHistory:
                 break
         if tail_start and tail_start < len(result):
             assert result[tail_start]["role"] != "tool"
+
+
+# ── SearchSpiralGuard ─────────────────────────────────────────────────
+
+
+class TestSearchSpiralGuard:
+    """Tests for the search spiral detection guard."""
+
+    @staticmethod
+    def _tool_msg(name: str, content: str = "ok") -> dict:
+        return {"role": "tool", "tool_call_id": "tc_1", "name": name, "content": content}
+
+    def test_allows_searches_under_threshold(self):
+        guard = SearchSpiralGuard()
+        messages = [
+            self._tool_msg("search_grep"),
+            self._tool_msg("read_file"),
+            self._tool_msg("search_grep"),
+        ]
+        assert guard.check(messages) is None
+
+    def test_blocks_at_threshold(self):
+        guard = SearchSpiralGuard()
+        messages = [
+            self._tool_msg("search_grep"),
+            self._tool_msg("search_grep"),
+            self._tool_msg("search_grep"),
+        ]
+        result = guard.check(messages)
+        assert result is not None
+        assert "SEARCH BLOCKED" in result
+
+    def test_sliding_window_only_considers_recent(self):
+        """Old search_grep calls outside the window should not count."""
+        guard = SearchSpiralGuard()
+        # 4 old search calls, then 6 non-search calls
+        messages = [self._tool_msg("search_grep") for _ in range(4)]
+        messages += [self._tool_msg("read_file") for _ in range(6)]
+        # Window of 6 sees only read_file calls
+        assert guard.check(messages) is None
+
+    def test_blocks_when_window_has_enough_searches(self):
+        """3 searches within a 6-call window triggers blocking."""
+        guard = SearchSpiralGuard()
+        messages = [
+            self._tool_msg("read_file"),
+            self._tool_msg("search_grep"),
+            self._tool_msg("think"),
+            self._tool_msg("search_grep"),
+            self._tool_msg("read_file"),
+            self._tool_msg("search_grep"),
+        ]
+        result = guard.check(messages)
+        assert result is not None
+        assert "SEARCH BLOCKED" in result
+
+    def test_custom_threshold_and_window(self):
+        guard = SearchSpiralGuard(max_searches=2, window_size=4)
+        messages = [
+            self._tool_msg("search_grep"),
+            self._tool_msg("read_file"),
+            self._tool_msg("search_grep"),
+        ]
+        result = guard.check(messages)
+        assert result is not None
+
+    def test_record_search_result_extracts_paths(self):
+        guard = SearchSpiralGuard()
+        grep_output = (
+            "./src/foo.py:10:def hello():\n"
+            "./src/bar.py:20:class World:\n"
+            "./src/foo.py:30:def goodbye():\n"
+        )
+        guard.record_search_result(grep_output)
+        assert guard.discovered_files == ["src/foo.py", "src/bar.py"]
+
+    def test_block_message_includes_discovered_files(self):
+        guard = SearchSpiralGuard()
+        guard.record_search_result("./lib/utils.py:5:helper\n./lib/core.py:12:main")
+        messages = [self._tool_msg("search_grep") for _ in range(3)]
+        result = guard.check(messages)
+        assert result is not None
+        assert "lib/utils.py" in result
+        assert "lib/core.py" in result
+
+    def test_block_message_instructs_think_and_read(self):
+        guard = SearchSpiralGuard()
+        messages = [self._tool_msg("search_grep") for _ in range(3)]
+        result = guard.check(messages)
+        assert "think" in result.lower()
+        assert "read_file" in result
+
+    def test_discovered_files_are_deduplicated(self):
+        guard = SearchSpiralGuard()
+        guard.record_search_result("./a.py:1:x\n./a.py:5:y\n./b.py:1:z")
+        assert guard.discovered_files == ["a.py", "b.py"]
+
+    def test_no_match_output_records_nothing(self):
+        guard = SearchSpiralGuard()
+        guard.record_search_result("No matches found.")
+        assert guard.discovered_files == []
+
+    def test_empty_messages_allows_search(self):
+        guard = SearchSpiralGuard()
+        assert guard.check([]) is None
