@@ -183,8 +183,16 @@ def prune_message_history(
             ),
         })
 
-    # 4. Keep the tail.
-    tail = messages[-keep_last_n:]
+    # 4. Keep the tail — must start at a valid message boundary.
+    # The Anthropic API requires every tool_result to have a corresponding
+    # tool_use in the previous message.  If messages[-keep_last_n] is a
+    # "tool" role message, walk backwards to include the preceding
+    # "assistant" message that contains the tool_calls.
+    tail_start = len(messages) - keep_last_n
+    min_start = len(prefix)
+    while tail_start > min_start and messages[tail_start].get("role") == "tool":
+        tail_start -= 1
+    tail = messages[tail_start:]
 
     pruned = prefix + tail
     dropped = len(messages) - len(pruned)
