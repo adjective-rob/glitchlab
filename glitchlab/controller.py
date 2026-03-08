@@ -220,13 +220,8 @@ class TaskState(BaseModel):
         """Write current state to workspace for debugging/auditing."""
         state_dir = ws_path / ".glitchlab"
         state_dir.mkdir(parents=True, exist_ok=True)
-        (state_dir / "task_state.yaml").write_text(
-            yaml.dump(
-                self.model_dump(mode="json"),
-                default_flow_style=False,
-                sort_keys=False,
-                allow_unicode=True,
-            )
+        (state_dir / "task_state.json").write_text(
+            self.model_dump_json(indent=2)
         )
 
 class DirtyRepoError(Exception):
@@ -1926,19 +1921,7 @@ Ensure:
             # Debugger now runs its own 10-step loop internally
             debug_result = self.debugger.run(context)
             
-            # Record compact debug summary for TaskHistory
-            compact_fix = {
-                "attempt": attempt,
-                "diagnosis": (debug_result.get("diagnosis") or "")[:200],
-                "root_cause": (debug_result.get("root_cause") or "")[:200],
-                "files_changed": [
-                    c.get("file")
-                    for c in debug_result.get("fix", {}).get("changes", [])
-                    if c.get("file")
-                ],
-                "should_retry": debug_result.get("should_retry", False),
-            }
-            self._state.previous_fixes.append(compact_fix)
+            self._state.previous_fixes.append(debug_result)
             self._state.last_error = debug_result.get("diagnosis", "Unknown error")
             self._state.debug_attempts = attempt
 
