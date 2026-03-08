@@ -1185,7 +1185,12 @@ class Controller:
                 self._state.persist(ws_path)
 
                 # ---> INSERT SHIELD HERE <---
-                self._run_testgen(task, ws_path, is_doc_only)
+                skip_testgen, testgen_reason = self._should_skip_testgen(ws_path)
+                if skip_testgen:
+                    console.print(f"  [dim]Skipping Shield (test generation): {testgen_reason}[/]")
+                    self._log_event("agent_skipped", {"agent": "testgen", "reason": testgen_reason})
+                else:
+                    self._run_testgen(task, ws_path, is_doc_only)
 
                 # --- FAST MODE CHECK ---
                 is_fast_mode = (
@@ -1196,7 +1201,13 @@ class Controller:
                     console.print("  [dim]Trivial change detected. Forcing downstream agents into Fast Mode.[/]")
 
                 # ── 6. Security Review ──
-                sec = self._run_security(task, impl, ws_path)
+                skip_security, security_reason = self._should_skip_security(plan)
+                if skip_security:
+                    console.print(f"  [dim]Skipping Frankie (security): {security_reason}[/]")
+                    self._log_event("agent_skipped", {"agent": "security", "reason": security_reason})
+                    sec = {"verdict": "pass", "issues": [], "skipped": True}
+                else:
+                    sec = self._run_security(task, impl, ws_path)
 
                 self._state.security_verdict = sec.get("verdict", "")
                 self._state.mark_phase("security")
@@ -1215,14 +1226,30 @@ class Controller:
                         return result
 
                 # ── 7. Release Assessment ──
-                rel = self._run_release(task, impl, ws_path, is_fast_mode)
+                skip_release, release_reason = self._should_skip_release()
+                if skip_release:
+                    console.print(f"  [dim]Skipping Semver Sam (release): {release_reason}[/]")
+                    self._log_event("agent_skipped", {"agent": "release", "reason": release_reason})
+                    rel = {
+                        "version_bump": "none",
+                        "reasoning": f"Skipped: {release_reason}",
+                        "changelog_entry": "",
+                    }
+                else:
+                    rel = self._run_release(task, impl, ws_path, is_fast_mode)
 
                 self._state.version_bump = rel.get("version_bump", "")
                 self._state.changelog_entry = rel.get("changelog_entry", "")
                 self._state.mark_phase("release")
 
                 # ── 7.5. Archivist (Governed Documentation) ──
-                nova_result = self._run_archivist(task, impl, plan, rel, ws_path, is_fast_mode)
+                skip_archivist, archivist_reason = self._should_skip_archivist(plan)
+                if skip_archivist:
+                    console.print(f"  [dim]Skipping Nova (archivist): {archivist_reason}[/]")
+                    self._log_event("agent_skipped", {"agent": "archivist", "reason": archivist_reason})
+                    nova_result = {"should_write_adr": False, "doc_updates": [], "architecture_notes": ""}
+                else:
+                    nova_result = self._run_archivist(task, impl, plan, rel, ws_path, is_fast_mode)
 
                 if is_maintenance:
                     nova_result["should_write_adr"] = False
@@ -1660,7 +1687,136 @@ Ensure:
         )
 
         return self.implementer.run(context, max_tokens=8192)
-    
+
+    # ---------------------------------------------------------------------------
+    # Conditional Agent Activation — Event-driven skip rules
+    # ---------------------------------------------------------------------------
+
+    _VERSION_SENTINELS = frozenset({
+        "pyproject.toml", "setup.cfg", "setup.py", "Cargo.toml",
+        "package.json", "version.py", "__version__.py", "VERSION",
+        "build.gradle", "build.gradle.kts", "pom.xml",
+    })
+
+    _DOC_EXTENSIONS = frozenset({
+        ".md", ".rst", ".txt", ".adoc", ".wiki",
+    })
+
+    _DOC_DIRECTORIES = ("docs/", "doc/", "documentation/", ".context/decisions/")
+
+    _ARCHITECTURE_SIGNALS = frozenset({
+        "architecture", "design", "adr", "rfc", "migration",
+        "refactor", "restructure", "reorganize",
+    })
+
+    def _should_skip_security(self, plan: dict) -> tuple[bool, str]:
+        """Skip security review when risk is low AND fewer than 5 files changed."""
+        risk_level = self._state.risk_level
+        files_changed = self._state.files_modified + self._state.files_created
+        file_count = len(set(files_changed))
+
+        if risk_level == "low" and file_count < 5:
+            return True, (
+                f"risk_level={risk_level}, files_changed={file_count} (<5)"
+            )
+        return False, ""
+
+    def _should_skip_release(self) -> tuple[bool, str]:
+        """Skip release analysis when no version-bearing file was modified."""
+        all_changed = set(self._state.files_modified + self._state.files_created)
+
+        for fpath in all_changed:
+            basename = Path(fpath).name
+            if basename in self._VERSION_SENTINELS:
+                return False, ""
+            # Also catch paths like src/identity.py that contain __version__
+            if "__version__" in basename or "version" in basename.lower():
+                return False, ""
+
+        return True, "no version-bearing files modified"
+
+    def _should_skip_archivist(self, plan: dict) -> tuple[bool, str]:
+        """Skip archivist when no documentation files modified and no architectural changes."""
+        all_changed = set(self._state.files_modified + self._state.files_created)
+
+        # Check 1: Were any documentation files touched?
+        has_doc_changes = False
+        for fpath in all_changed:
+            p = Path(fpath)
+            if p.suffix.lower() in self._DOC_EXTENSIONS:
+                has_doc_changes = True
+                break
+            if any(fpath.startswith(d) for d in self._DOC_DIRECTORIES):
+                has_doc_changes = True
+                break
+
+        # Check 2: Do the plan or objective signal architectural changes?
+        has_arch_changes = False
+        objective_lower = self._state.objective.lower()
+        for signal in self._ARCHITECTURE_SIGNALS:
+            if signal in objective_lower:
+                has_arch_changes = True
+                break
+
+        if not has_arch_changes:
+            # Also check plan step descriptions for architectural signals
+            for step in self._state.plan_steps:
+                desc_lower = step.description.lower()
+                for signal in self._ARCHITECTURE_SIGNALS:
+                    if signal in desc_lower:
+                        has_arch_changes = True
+                        break
+                if has_arch_changes:
+                    break
+
+        # Check 3: Does the plan flag requires_core_change?
+        if self._state.requires_core_change:
+            has_arch_changes = True
+
+        if not has_doc_changes and not has_arch_changes:
+            return True, "no documentation files modified, no architectural changes"
+        return False, ""
+
+    def _should_skip_testgen(self, ws_path: Path) -> tuple[bool, str]:
+        """Skip test generation when tests already exist for the modified files."""
+        # Already has inline check in _run_testgen, but we can pre-check here
+        # to avoid even printing the agent header.
+        modified_src = [
+            f for f in self._state.files_modified
+            if not ("test_" in f.lower() or "_test" in f.lower() or f.startswith("tests/"))
+        ]
+
+        if not modified_src:
+            return True, "no non-test source files modified"
+
+        for src_file in modified_src:
+            p = Path(src_file)
+            stem = p.stem
+            parent = p.parent
+
+            # Common test naming patterns
+            candidates = [
+                parent / f"test_{p.name}",
+                parent / f"{stem}_test{p.suffix}",
+                Path("tests") / f"test_{p.name}",
+                Path("tests") / parent / f"test_{p.name}",
+                parent / "__tests__" / p.name,
+                parent / "tests" / f"test_{p.name}",
+            ]
+
+            found = False
+            for candidate in candidates:
+                full = ws_path / candidate
+                if full.exists():
+                    found = True
+                    break
+
+            if not found:
+                # At least one modified file has no tests — don't skip
+                return False, ""
+
+        return True, "tests already exist for all modified files"
+
     def _run_testgen(self, task: Task, ws_path: Path, is_doc_only: bool) -> None:
         """Run the Shield agent to generate a regression test if none exists."""
         if is_doc_only:
