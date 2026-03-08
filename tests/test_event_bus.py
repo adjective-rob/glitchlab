@@ -14,8 +14,11 @@ def test_event_bus_pub_sub():
     # Emit an event
     test_bus.emit(
         event_type="TEST_EVENT", 
-        agent_name="test_agent", 
-        payload={"key": "value"}
+        agent_id="test_agent", 
+        payload={"key": "value"},
+        run_id="run-001",
+        action_id="action-001",
+        metadata={"source": "test"}
     )
 
     # Verify the event was received and formatted correctly
@@ -23,8 +26,11 @@ def test_event_bus_pub_sub():
     
     event = received_events[0]
     assert event.event_type == "TEST_EVENT"
-    assert event.agent_name == "test_agent"
+    assert event.agent_id == "test_agent"
     assert event.payload == {"key": "value"}
+    assert event.run_id == "run-001"
+    assert event.action_id == "action-001"
+    assert event.metadata == {"source": "test"}
     
     # Verify auto-generated fields
     assert event.event_id is not None
