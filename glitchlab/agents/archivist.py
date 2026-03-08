@@ -19,6 +19,11 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.context_compressor import (
+    compress_tool_result,
+    compress_write_file_args,
+    prune_message_history,
+)
 from glitchlab.router import RouterResponse
 
 
@@ -192,14 +197,17 @@ Rules:
         for step in range(max_steps):
             logger.debug(f"[NOVA] Loop Step {step+1}/{max_steps}...")
 
-            # Context compression for long tool outputs
-            for i in range(len(messages)):
-                if messages[i].get("role") == "tool":
-                    consumed = any(m.get("role") == "assistant" for m in messages[i + 1 :])
-                    if consumed:
-                        content = str(messages[i].get("content", ""))
-                        if len(content) > 1200 and "... [Content compressed" not in content:
-                            messages[i]["content"] = content[:600] + "\n... [Content compressed for context window]"
+            # Sliding-window context pruning
+            if len(messages) > 14:
+                messages = prune_message_history(
+                    messages,
+                    keep_last_n=6,
+                    checkpoint={
+                        "files_modified": sorted(modified_files),
+                        "files_created": sorted(created_files),
+                        "step": step,
+                    },
+                )
 
             # Force 'think' on step 0
             step_kwargs = dict(kwargs)
@@ -221,6 +229,7 @@ Rules:
                     tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
                     for tc in response.tool_calls
                 ]
+                compress_write_file_args(assist_msg["tool_calls"])
             messages.append(assist_msg)
 
             if not response.tool_calls:
@@ -342,7 +351,7 @@ Rules:
                 else:
                     res = f"Error: Unknown tool '{tc_name}'."
 
-                messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": str(res)})
+                messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, str(res))})
 
         logger.warning("[NOVA] Loop exhausted without calling `done`.")
         return {
