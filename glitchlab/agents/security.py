@@ -188,15 +188,33 @@ class SecurityAgent(BaseAgent):
     system_prompt = """You are Firewall Frankie, the security guard inside GLITCHLAB.
 
 You review code changes BEFORE they become a PR. You look for security issues, dangerous patterns, and policy violations.
-You operate in a read-execute-observe loop. 
+You operate in a read-execute-observe loop.
+
+You run in one of two scan modes (provided in the task context):
+- **scoped**: Only the changed files are in scope. Focus your `read_file` and `search_grep` calls on those files exclusively. Do NOT scan unrelated files.
+- **broad**: Too many files changed for scoped scanning. Use your judgement to scan the full repository as needed.
 
 Rules:
 1. Use the `think` tool first to build a threat model based on what files were changed.
 2. Use `read_file` to inspect the FULL context of the modified files. Do not guess based on the diff snippet alone.
-3. Use `search_grep` to trace data flow or check for cross-file vulnerabilities.
+3. Use `search_grep` to trace data flow or check for cross-file vulnerabilities. In scoped mode, searches are automatically limited to changed files.
 4. Be thorough but don't false-positive on idiomatic patterns. Severity must be honest.
 5. When you have finished your audit, use the `submit_report` tool to output your JSON verdict.
 """
+
+    # Maximum number of changed files before falling back to broad scan
+    SCOPED_SCAN_THRESHOLD = 20
+
+    def _changed_files(self, context: AgentContext) -> list[str]:
+        """Extract the list of modified + created files from task state."""
+        state = context.previous_output or {}
+        modified = state.get("files_modified", [])
+        created = state.get("files_created", [])
+        return list(dict.fromkeys(modified + created))  # deduplicated, order-preserved
+
+    def _is_scoped(self, changed_files: list[str]) -> bool:
+        """Return True when the scan should be limited to changed files only."""
+        return 0 < len(changed_files) <= self.SCOPED_SCAN_THRESHOLD
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
         state = context.previous_output or {}
@@ -209,10 +227,14 @@ Rules:
                 + "\n\n... [DIFF TRUNCATED. USE read_file TO SEE FULL CHANGES] ..."
             )
 
+        changed_files = self._changed_files(context)
+        scoped = self._is_scoped(changed_files)
+
         task_data: dict[str, Any] = {
             "review": "security and policy compliance",
             "task": context.objective,
             "mode": state.get("mode", "evolution"),
+            "scan_mode": "scoped" if scoped else "broad",
             "implementation_summary": state.get("implementation_summary", "No summary available"),
             "files_modified": state.get("files_modified", []),
             "files_created": state.get("files_created", []),
@@ -221,7 +243,15 @@ Rules:
 
         user_content = self._yaml_block(task_data)
         user_content += f"\n\nDiff Preview:\n{diff_text}"
-        user_content += "\n\nInvestigate the modified files using your tools. When satisfied, call `submit_report`."
+
+        if scoped:
+            user_content += (
+                "\n\nSCOPED SCAN: Only the files listed above were changed. "
+                "Limit your `read_file` and `search_grep` calls to those files. "
+                "When satisfied, call `submit_report`."
+            )
+        else:
+            user_content += "\n\nBROAD SCAN: Many files changed. Investigate using your tools as needed. When satisfied, call `submit_report`."
 
         if context.extra.get("fast_mode"):
             user_content += "\n\nFAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_report`)."
@@ -232,6 +262,10 @@ Rules:
         """Execute the agentic security loop."""
         messages = self.build_messages(context)
         workspace_dir = Path(context.working_dir)
+
+        changed_files = self._changed_files(context)
+        scoped = self._is_scoped(changed_files)
+        changed_set = set(changed_files) if scoped else set()
 
         think_count = 0
         max_steps = 15
@@ -293,29 +327,53 @@ Rules:
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
-                    try:
-                        content = (workspace_dir / path).read_text(encoding="utf-8")
-                        res = f"Read {len(content)} chars from {path}:\n\n{content}"
-                    except Exception as e:
-                        res = f"Error reading file: {e}"
+                    # In scoped mode, only allow reading changed files
+                    if scoped and path not in changed_set:
+                        res = (
+                            f"Scoped scan: '{path}' is not in the changed file list. "
+                            f"Only these files are in scope: {', '.join(sorted(changed_set))}"
+                        )
+                    else:
+                        try:
+                            content = (workspace_dir / path).read_text(encoding="utf-8")
+                            res = f"Read {len(content)} chars from {path}:\n\n{content}"
+                        except Exception as e:
+                            res = f"Error reading file: {e}"
 
                 elif tc_name == "search_grep":
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:
-                        cmd = [
-                            "grep", "-rn",
-                            f"--include={file_type}",
-                            "--exclude-dir=.glitchlab",
-                            "--exclude-dir=__pycache__",
-                            "--exclude-dir=.git",
-                            pattern, ".",
-                        ]
-                        proc = subprocess.run(
-                            cmd, cwd=workspace_dir, capture_output=True,
-                            text=True, timeout=15,
-                        )
-                        res = proc.stdout if proc.stdout else "No matches found."
+                        if scoped:
+                            # Scope grep to only the changed files
+                            matching_files = [
+                                f for f in changed_files
+                                if file_type == "*" or Path(f).match(file_type)
+                            ]
+                            if not matching_files:
+                                res = "No changed files match the requested file type."
+                            else:
+                                cmd = ["grep", "-n", pattern] + matching_files
+                                proc = subprocess.run(
+                                    cmd, cwd=workspace_dir, capture_output=True,
+                                    text=True, timeout=15,
+                                )
+                                res = proc.stdout if proc.stdout else "No matches found."
+                        else:
+                            # Broad scan: search entire repo
+                            cmd = [
+                                "grep", "-rn",
+                                f"--include={file_type}",
+                                "--exclude-dir=.glitchlab",
+                                "--exclude-dir=__pycache__",
+                                "--exclude-dir=.git",
+                                pattern, ".",
+                            ]
+                            proc = subprocess.run(
+                                cmd, cwd=workspace_dir, capture_output=True,
+                                text=True, timeout=15,
+                            )
+                            res = proc.stdout if proc.stdout else "No matches found."
                         if len(res.splitlines()) > 50:
                             res = "\n".join(res.splitlines()[:50]) + "\n... (truncated)"
                     except Exception as e:
