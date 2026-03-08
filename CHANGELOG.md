@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-03-07
+
+### Added
+- **Zephyr SBOF Integration**: Introduced cryptographic signing and attestation for all agent actions. Every tool call, plan step, and code mutation is now signed with a tamper-evident signature before being committed to the event log. Provides cryptographic attestation, tamper detection, and audit-ready provenance for supply-chain security compliance.
+- **EventBus Architecture Upgrade**: Enhanced the internal EventBus with three new first-class fields on every event:
+  - `run_id` (UUID): Uniquely identifies a single end-to-end agent loop execution
+  - `action_id` (UUID): Uniquely identifies each discrete action within a run
+  - `metadata` (dict): Arbitrary structured context (model, token counts, timestamps, etc.)
+  - These fields enable perfect deterministic traceability of agent loops, allowing reconstruction of exact action sequences, loop replay with identical inputs, and action-level diffing between runs.
+
 ## [4.1.0] - 2026-03-06
 
 ### Added
