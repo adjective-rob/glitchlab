@@ -16,8 +16,8 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
-    compress_tool_result,
-    compress_write_file_args,
+    build_assistant_message,
+    build_tool_message,
     prune_message_history,
 )
 from glitchlab.router import RouterResponse
@@ -314,19 +314,8 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                 **step_kwargs
             )
 
-            # Append assistant message
-            assist_msg = {"role": "assistant"}
-            if response.content:
-                assist_msg["content"] = response.content
-            if response.tool_calls:
-                # Format litellm tool_calls to dict for the chat history
-                assist_msg["tool_calls"] = [
-                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc)
-                    for tc in response.tool_calls
-                ]
-                # Compress write_file content immediately (not after consumption)
-                compress_write_file_args(assist_msg["tool_calls"])
-            messages.append(assist_msg)
+            # Append assistant message (write_file args compressed automatically)
+            messages.append(build_assistant_message(response))
 
             if not response.tool_calls:
                 # If the LLM just talks without using tools, nudge it.
@@ -336,11 +325,11 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
             for tool_call in response.tool_calls:
                 tc_id = tool_call.id
                 tc_name = tool_call.function.name
-                
+
                 try:
                     tc_args = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON in arguments."})
+                    messages.append(build_tool_message(tc_id, tc_name, "Error: Invalid JSON in arguments."))
                     continue
 
                 logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
@@ -348,7 +337,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                 if tc_name == "think":
                     think_count += 1
                     res = "Strategy noted. Proceed with your plan."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
@@ -357,12 +345,10 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "search_grep":
                     if search_count >= 3:
-                        res = "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."))
                         continue
 
                     pattern = tc_args.get("pattern")
@@ -370,9 +356,9 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                     try:
                         # Direct subprocess call for read-only universal search
                         cmd = [
-                            "grep", "-rn", 
+                            "grep", "-rn",
                             f"--include={file_type}",
-                            "--exclude-dir=.glitchlab", 
+                            "--exclude-dir=.glitchlab",
                             "--exclude-dir=__pycache__",
                             "--exclude-dir=node_modules",
                             "--exclude-dir=.git",
@@ -386,7 +372,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = proc.stdout if proc.stdout else "No matches found."
                     except Exception as e:
                         res = f"Search failed: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_symbol_map":
                     query = tc_args.get("query", "").lower()
@@ -401,12 +386,10 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         res = "\n".join(results[:20]) if results else "No matches found in the structural map."
                     else:
                         res = "Structural map (RepoIndex) is unavailable."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":
                     if think_count == 0:
-                        res = "Access Denied: You must use the `think` tool to explain your modifications before calling `write_file`."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "Access Denied: You must use the `think` tool to explain your modifications before calling `write_file`."))
                         continue
 
                     path = tc_args.get("path")
@@ -416,7 +399,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         is_new = not fpath.exists()
                         fpath.parent.mkdir(parents=True, exist_ok=True)
                         fpath.write_text(content, encoding='utf-8')
-                        
+
                         if is_new:
                             created_files.add(path)
                         else:
@@ -424,22 +407,20 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 
                         if symbol_index:
                             symbol_index.invalidate(path)
-                            
+
                         res = f"Successfully wrote {len(content)} characters to {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "replace_in_file":
                     if think_count == 0:
-                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."))
                         continue
-                        
+
                     path = tc_args.get("path")
                     find_str = tc_args.get("find", "")
                     replace_str = tc_args.get("replace", "")
-                    
+
                     try:
                         fpath = workspace_dir / path
                         if not fpath.exists():
@@ -453,15 +434,13 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                                 new_content = content.replace(find_str, replace_str)
                                 fpath.write_text(new_content, encoding='utf-8')
                                 modified_files.add(path)
-                                
+
                                 if symbol_index:
                                     symbol_index.invalidate(path)
-                                    
+
                                 res = f"Success: Replaced {count} occurrence(s) in {path}."
                     except Exception as e:
                         res = f"Error replacing in file: {e}"
-                        
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "rollback_file":
                     path = tc_args.get("path")
@@ -486,7 +465,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = f"Error: {path} has not been modified or created by you."
                     except Exception as e:
                         res = f"Error rolling back file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "run_check":
                     cmd = tc_args.get("command")
@@ -505,7 +483,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: Tool executor not wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "find_references":
                     symbol = tc_args.get("symbol")
@@ -521,7 +498,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                                 res += f"\n... (truncated {len(refs)-30} more)"
                     else:
                         res = "AST parser unavailable. Please fall back to search_grep."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "get_function":
                     symbol = tc_args.get("symbol")
@@ -534,7 +510,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = f"Function '{symbol}' not found. Check spelling or use search_grep."
                     else:
                         res = "AST parser unavailable. Please fall back to read_file."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_project_context":
                     topic = tc_args.get("topic", "")
@@ -544,7 +519,6 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         res = prelude.query(topic=topic, scope=scope)
                     else:
                         res = "Error: Prelude context not wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "ask_colleague":
                     return {
@@ -575,7 +549,10 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                     }
 
                 else:
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": f"Error: Unknown tool '{tc_name}'."})
+                    res = f"Error: Unknown tool '{tc_name}'."
+
+                # Append compressed tool message (skip for early-return branches)
+                messages.append(build_tool_message(tc_id, tc_name, res))
 
         # If it hits max steps without calling 'done'
         logger.warning("[PATCH] Loop exhausted without calling `done`.")

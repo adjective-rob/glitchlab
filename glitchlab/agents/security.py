@@ -21,8 +21,8 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
-    compress_tool_result,
-    compress_write_file_args,
+    build_assistant_message,
+    build_tool_message,
     prune_message_history,
 )
 from glitchlab.router import RouterResponse
@@ -263,16 +263,8 @@ Rules:
                 **step_kwargs,
             )
 
-            assist_msg = {"role": "assistant"}
-            if response.content:
-                assist_msg["content"] = response.content
-            if response.tool_calls:
-                assist_msg["tool_calls"] = [
-                    tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
-                    for tc in response.tool_calls
-                ]
-                compress_write_file_args(assist_msg["tool_calls"])
-            messages.append(assist_msg)
+            # Append assistant message (write_file args compressed automatically)
+            messages.append(build_assistant_message(response))
 
             if not response.tool_calls:
                 messages.append(
@@ -290,14 +282,7 @@ Rules:
                 try:
                     tc_args = json.loads(tool_call.function.arguments or "{}")
                 except json.JSONDecodeError:
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": "Error: Invalid JSON.",
-                        }
-                    )
+                    messages.append(build_tool_message(tc_id, tc_name, "Error: Invalid JSON."))
                     continue
 
                 logger.info(f"[FRANKIE] 🛠️ Tool call: {tc_name}")
@@ -305,106 +290,64 @@ Rules:
                 if tc_name == "think":
                     think_count += 1
                     res = "Threat model noted. Proceed with your file investigation."
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": res,
-                        }
-                    )
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
                     try:
-                        content = (workspace_dir / path).read_text(
-                            encoding="utf-8"
-                        )
+                        content = (workspace_dir / path).read_text(encoding="utf-8")
                         res = f"Read {len(content)} chars from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": compress_tool_result(tc_name, res),
-                        }
-                    )
 
                 elif tc_name == "search_grep":
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:
                         cmd = [
-                            "grep",
-                            "-rn",
+                            "grep", "-rn",
                             f"--include={file_type}",
                             "--exclude-dir=.glitchlab",
                             "--exclude-dir=__pycache__",
                             "--exclude-dir=.git",
-                            pattern,
-                            ".",
+                            pattern, ".",
                         ]
                         proc = subprocess.run(
-                            cmd,
-                            cwd=workspace_dir,
-                            capture_output=True,
-                            text=True,
-                            timeout=15,
+                            cmd, cwd=workspace_dir, capture_output=True,
+                            text=True, timeout=15,
                         )
-                        res = (
-                            proc.stdout
-                            if proc.stdout
-                            else "No matches found."
-                        )
+                        res = proc.stdout if proc.stdout else "No matches found."
                         if len(res.splitlines()) > 50:
-                            res = (
-                                "\n".join(res.splitlines()[:50])
-                                + "\n... (truncated)"
-                            )
+                            res = "\n".join(res.splitlines()[:50]) + "\n... (truncated)"
                     except Exception as e:
                         res = f"Search failed: {e}"
 
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc_id,
-                            "name": tc_name,
-                            "content": compress_tool_result(tc_name, res),
-                        }
-                    )
                 elif tc_name == "query_symbol_map":
                     query = tc_args.get("query", "").lower()
                     repo_index = context.extra.get("repo_index")
-                    
+
                     if repo_index:
                         results = []
                         for path, entry in repo_index.files.items():
                             path_match = query in path.lower()
                             symbol_matches = [s for s in entry.symbols if query in s.lower()]
-                            
+
                             if path_match or symbol_matches:
                                 sym_info = f" (Symbols: {', '.join(symbol_matches[:5])})" if symbol_matches else ""
                                 results.append(f"- {path}{sym_info}")
-                        
+
                         res = "\n".join(results[:20]) if results else "No matches found in the structural map."
                     else:
                         res = "Structural map (RepoIndex) is unavailable."
-                        
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
-                
+
                 elif tc_name == "query_project_context":
                     topic = tc_args.get("topic", "")
                     scope = tc_args.get("scope", "")
                     prelude = context.extra.get("prelude")
-                    
+
                     if prelude:
                         res = prelude.query(topic=topic, scope=scope)
                     else:
                         res = "Error: Prelude context not wired up."
-                        
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "submit_report":
                     return {
@@ -423,6 +366,12 @@ Rules:
                         "_tokens": response.tokens_used,
                         "_cost": response.cost,
                     }
+
+                else:
+                    res = f"Error: Unknown tool '{tc_name}'."
+
+                # Append compressed tool message (skip for early-return branches)
+                messages.append(build_tool_message(tc_id, tc_name, res))
 
         return {
             "verdict": "warn",
