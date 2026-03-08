@@ -20,8 +20,8 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
-    compress_tool_result,
-    compress_write_file_args,
+    build_assistant_message,
+    build_tool_message,
     prune_message_history,
 )
 from glitchlab.router import RouterResponse
@@ -221,16 +221,8 @@ Rules:
                 **step_kwargs,
             )
 
-            assist_msg: dict[str, Any] = {"role": "assistant"}
-            if response.content:
-                assist_msg["content"] = response.content
-            if response.tool_calls:
-                assist_msg["tool_calls"] = [
-                    tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
-                    for tc in response.tool_calls
-                ]
-                compress_write_file_args(assist_msg["tool_calls"])
-            messages.append(assist_msg)
+            # Append assistant message (write_file args compressed automatically)
+            messages.append(build_assistant_message(response))
 
             if not response.tool_calls:
                 messages.append(
@@ -245,9 +237,7 @@ Rules:
                 try:
                     tc_args = json.loads(tool_call.function.arguments or "{}")
                 except json.JSONDecodeError:
-                    messages.append(
-                        {"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON in arguments."}
-                    )
+                    messages.append(build_tool_message(tc_id, tc_name, "Error: Invalid JSON in arguments."))
                     continue
 
                 logger.info(f"[NOVA] 🛠️ Tool call: {tc_name}")
@@ -269,15 +259,13 @@ Rules:
                     file_type = tc_args.get("file_type", "*")
                     try:
                         cmd = [
-                            "grep",
-                            "-rn",
+                            "grep", "-rn",
                             f"--include={file_type}",
                             "--exclude-dir=.glitchlab",
                             "--exclude-dir=__pycache__",
                             "--exclude-dir=node_modules",
                             "--exclude-dir=.git",
-                            pattern,
-                            ".",
+                            pattern, ".",
                         ]
                         proc = subprocess.run(cmd, cwd=workspace_dir, capture_output=True, text=True, timeout=20)
                         out = proc.stdout if proc.stdout else "No matches found."
@@ -344,14 +332,14 @@ Rules:
                         "_model": response.model,
                         "_tokens": response.tokens_used,
                         "_cost": response.cost,
-                        # Optional helpful extras without breaking existing deps:
                         "_files_touched": sorted(modified_files | created_files),
                     }
 
                 else:
                     res = f"Error: Unknown tool '{tc_name}'."
 
-                messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, str(res))})
+                # Append compressed tool message (skip for early-return branches)
+                messages.append(build_tool_message(tc_id, tc_name, str(res)))
 
         logger.warning("[NOVA] Loop exhausted without calling `done`.")
         return {

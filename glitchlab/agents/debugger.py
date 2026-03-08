@@ -16,8 +16,8 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
-    compress_tool_result,
-    compress_write_file_args,
+    build_assistant_message,
+    build_tool_message,
     prune_message_history,
 )
 from glitchlab.router import RouterResponse
@@ -264,17 +264,8 @@ The test command you are debugging is: {test_command}
                 **step_kwargs
             )
 
-            # Append assistant message
-            assist_msg = {"role": "assistant"}
-            if response.content:
-                assist_msg["content"] = response.content
-            if response.tool_calls:
-                assist_msg["tool_calls"] = [
-                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc)
-                    for tc in response.tool_calls
-                ]
-                compress_write_file_args(assist_msg["tool_calls"])
-            messages.append(assist_msg)
+            # Append assistant message (write_file args compressed automatically)
+            messages.append(build_assistant_message(response))
 
             if not response.tool_calls:
                 messages.append({"role": "user", "content": "Please use a tool to investigate or call `done`."})
@@ -287,7 +278,7 @@ The test command you are debugging is: {test_command}
                 try:
                     tc_args = json.loads(tool_call.function.arguments or "{}")
                 except json.JSONDecodeError:
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": "Error: Invalid JSON."})
+                    messages.append(build_tool_message(tc_id, tc_name, "Error: Invalid JSON."))
                     continue
 
                 logger.info(f"[REROUTE] 🛠️ Tool call: {tc_name}")
@@ -295,7 +286,6 @@ The test command you are debugging is: {test_command}
                 if tc_name == "think":
                     think_count += 1
                     res = "Hypothesis noted. Proceed with your investigation plan."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
@@ -304,7 +294,6 @@ The test command you are debugging is: {test_command}
                         res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_project_context":
                     topic = tc_args.get("topic", "")
@@ -316,12 +305,9 @@ The test command you are debugging is: {test_command}
                     else:
                         res = "Error: Prelude context not wired up."
 
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
-
                 elif tc_name == "search_grep":
                     if search_count >= 3:
-                        res = "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."))
                         continue
 
                     pattern = tc_args.get("pattern")
@@ -344,29 +330,26 @@ The test command you are debugging is: {test_command}
                             res = proc.stdout if proc.stdout else "No matches found."
                     except Exception as e:
                         res = f"Search failed: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_symbol_map":
                     query = tc_args.get("query", "").lower()
-                    repo_index = context.extra.get("repo_index") # <--- FIX IS HERE
+                    repo_index = context.extra.get("repo_index")
                     if repo_index:
                         results = []
                         for path, entry in repo_index.files.items():
                             if query in path.lower() or any(query in s.lower() for s in entry.symbols):
                                 symbol_match = [s for s in entry.symbols if query in s.lower()]
                                 results.append(f"- {path} (Symbols: {', '.join(symbol_match[:5])})")
-                        
+
                         res = "\n".join(results[:20]) if results else "No matches found in the structural map."
                     else:
                         res = "Structural map (RepoIndex) is unavailable."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "write_file":
                     if think_count == 0:
-                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."))
                         continue
-                        
+
                     path = tc_args.get("path")
                     content = tc_args.get("content")
                     try:
@@ -374,7 +357,7 @@ The test command you are debugging is: {test_command}
                         is_new = not fpath.exists()
                         fpath.parent.mkdir(parents=True, exist_ok=True)
                         fpath.write_text(content, encoding='utf-8')
-                        
+
                         if is_new:
                             created_files.add(path)
                         else:
@@ -382,18 +365,16 @@ The test command you are debugging is: {test_command}
                         res = f"Successfully updated {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "replace_in_file":
                     if think_count == 0:
-                        res = "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."
-                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        messages.append(build_tool_message(tc_id, tc_name, "Access Denied: You must use the `think` tool to state your hypothesis before modifying code."))
                         continue
-                        
+
                     path = tc_args.get("path")
                     find_str = tc_args.get("find", "")
                     replace_str = tc_args.get("replace", "")
-                    
+
                     try:
                         fpath = workspace_dir / path
                         if not fpath.exists():
@@ -410,9 +391,7 @@ The test command you are debugging is: {test_command}
                                 res = f"Success: Replaced {count} occurrence(s) in {path}."
                     except Exception as e:
                         res = f"Error replacing in file: {e}"
-                        
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
-                    
+
                 elif tc_name == "rollback_file":
                     path = tc_args.get("path")
                     try:
@@ -436,12 +415,10 @@ The test command you are debugging is: {test_command}
                             res = f"Error: {path} has not been modified or created by you."
                     except Exception as e:
                         res = f"Error rolling back file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "get_error" or (tc_name == "run_check" and not tc_args.get("command")):
                     if tool_executor:
                         try:
-                            # Use the sandboxed executor, passing IDs for Zephyr attestation
                             tres = tool_executor.execute(
                                 command=test_cmd,
                                 run_id=context.run_id,
@@ -454,13 +431,11 @@ The test command you are debugging is: {test_command}
                             res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: No executor wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "run_check":
                     cmd = tc_args.get("command")
                     if tool_executor:
                         try:
-                            # Use the sandboxed executor, passing IDs for Zephyr attestation
                             tool_res = tool_executor.execute(
                                 command=cmd,
                                 run_id=context.run_id,
@@ -473,7 +448,6 @@ The test command you are debugging is: {test_command}
                             res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: Tool executor not wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "done":
                     return {
@@ -494,6 +468,12 @@ The test command you are debugging is: {test_command}
                         "_tokens": response.tokens_used,
                         "_cost": response.cost,
                     }
+
+                else:
+                    res = f"Error: Unknown tool '{tc_name}'."
+
+                # Append compressed tool message (skip for early-return branches)
+                messages.append(build_tool_message(tc_id, tc_name, res))
 
         return {
             "diagnosis": "Max steps reached", 
