@@ -1,4 +1,4 @@
-# **⚡ GLITCHLAB** v4.2.0
+# **⚡ GLITCHLAB** v4.3.0
 
 **The Agentic Dev Engine — Build Weird. Ship Clean.**  
  A local, repo-agnostic, multi-agent development engine that evolves codebases under strict governance.
@@ -94,7 +94,7 @@ GLITCHLAB is autonomous between checkpoints, but you stay in control:
 
 The **Controller** is the brainstem. It never writes code directly; it only coordinates.
 
-### **Project Structure (v4.2.0)**
+### **Project Structure (v4.3.0)**
 
 `glitchlab/`  
 `├── cli.py              # CLI interface (typer)`  
@@ -108,6 +108,12 @@ The **Controller** is the brainstem. It never writes code directly; it only coor
 `└── templates/          # Task and config templates`
 
 ---
+
+## **What's New in v4.3.0**
+
+### **YAML Agent Messaging**
+
+Messages are now communicated across agents in **YAML**. All inter-agent messages use a structured YAML format, making communication human-readable, easy to inspect, and straightforward to extend. This replaces the previous ad-hoc serialization and ensures a consistent, well-typed interchange layer across the entire agent roster.
 
 ## **What's New in v4.2.0**
 
