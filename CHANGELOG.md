@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Duration Formatting Utility**: New `format_duration(seconds: float) -> str` function in `glitchlab/utils.py` converts seconds into human-readable duration strings (e.g., "2m 30s", "1h 5m 12s"). Includes comprehensive test coverage with 13 test cases.
+
 ## [4.2.0] - 2026-03-07
 
 ### Added
