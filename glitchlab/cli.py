@@ -32,6 +32,7 @@ from glitchlab.controller import Controller, Task
 from glitchlab.history import TaskHistory
 from glitchlab.parallel import run_parallel
 from glitchlab.prelude import PreludeContext
+from glitchlab.audit_logger import AuditLogger  # <--- NEW: Import the Zephyr subscriber
 
 # Load .env from current directory or home
 load_dotenv()
@@ -82,13 +83,13 @@ def _print_banner():
 
 @app.command()
 def run(
-repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
+    repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     issue: Optional[int] = typer.Option(None, "--issue", "-i", help="GitHub issue number"),
     local_task: bool = typer.Option(False, "--local-task", "-l", help="Use local task YAML"),
     task_file: Optional[Path] = typer.Option(None, "--task-file", "-f", help="Path to task YAML"),
     allow_core: bool = typer.Option(False, "--allow-core", help="Allow modifications to protected core paths"),
     auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
-    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"), # <-- NEW
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t", help="Test command to run (e.g. 'cargo test')"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ):
@@ -103,7 +104,6 @@ repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target reposito
 
     config = load_config(repo)
 
-    # --- NEW: Override YAML config if CLI flag is passed ---
     if auto_merge:
         config.automation.auto_merge_pr = True
 
@@ -128,6 +128,9 @@ repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target reposito
     # Auto-detect test command if not provided
     if not test_cmd:
         test_cmd = _detect_test_command(repo)
+
+    # --- NEW: Initialize the Zephyr Audit Logger subscriber ---
+    audit_logger = AuditLogger(log_file=repo / ".glitchlab" / "logs" / "audit.jsonl")
 
     controller = Controller(
         repo_path=repo,
@@ -180,6 +183,9 @@ def interactive(
 
     if not test_cmd:
         test_cmd = _detect_test_command(repo)
+
+    # --- NEW: Initialize the Zephyr Audit Logger subscriber ---
+    audit_logger = AuditLogger(log_file=repo / ".glitchlab" / "logs" / "audit.jsonl")
 
     controller = Controller(
         repo_path=repo,
@@ -239,7 +245,7 @@ def status(
     tools_table.add_column("Status")
 
     import shutil
-    for tool in ["git", "gh", "cargo", "python3", "node", "prelude"]:
+    for tool in ["git", "gh", "cargo", "python3", "node", "prelude", "zephyr"]:
         found = shutil.which(tool)
         s = f"[green]✓ {found}[/]" if found else "[dim]✗ Not found[/]"
         tools_table.add_row(tool, s)
@@ -414,6 +420,9 @@ def batch(
 
     if not test_cmd:
         test_cmd = _detect_test_command(repo)
+
+    # --- NEW: Initialize the Zephyr Audit Logger subscriber ---
+    audit_logger = AuditLogger(log_file=repo / ".glitchlab" / "logs" / "audit.jsonl")
 
     results = run_parallel(
         repo_path=repo,
