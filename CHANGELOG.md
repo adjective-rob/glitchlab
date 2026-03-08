@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-03-08
+
+### Changed
+- **YAML Agent Messaging**: Messages are now communicated across agents in YAML, providing a structured, human-readable interchange format for all inter-agent communication.
+
 ## [4.2.0] - 2026-03-07
 
 ### Added
