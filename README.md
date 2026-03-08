@@ -1,4 +1,4 @@
-# **⚡ GLITCHLAB** v4.1.0
+# **⚡ GLITCHLAB** v4.2.0
 
 **The Agentic Dev Engine — Build Weird. Ship Clean.**  
  A local, repo-agnostic, multi-agent development engine that evolves codebases under strict governance.
@@ -94,7 +94,7 @@ GLITCHLAB is autonomous between checkpoints, but you stay in control:
 
 The **Controller** is the brainstem. It never writes code directly; it only coordinates.
 
-### **Project Structure (v4.1.0)**
+### **Project Structure (v4.2.0)**
 
 `glitchlab/`  
 `├── cli.py              # CLI interface (typer)`  
@@ -106,6 +106,30 @@ The **Controller** is the brainstem. It never writes code directly; it only coor
 `├── workspace/          # Git worktree isolation & tools`  
 `├── governance/         # Boundary enforcement`  
 `└── templates/          # Task and config templates`
+
+---
+
+## **What's New in v4.2.0**
+
+### **Zephyr SBOF Integration**
+
+GLITCHLAB v4.2.0 introduces **Zephyr SBOF (Signed Bill of Facts)** — cryptographic signing and attestation for every agent action. Every tool call, plan step, and code mutation is now signed with a tamper-evident signature before it is committed to the event log. This gives you:
+
+* **Cryptographic attestation** — each agent action carries a verifiable signature tied to the agent identity and the exact payload it produced.
+* **Tamper detection** — any post-hoc modification to an action record is immediately detectable by signature verification.
+* **Audit-ready provenance** — the full chain of signed facts can be exported and verified by external tooling, satisfying supply-chain security requirements.
+
+### **EventBus Architecture Upgrade**
+
+The internal EventBus has been upgraded with three new first-class fields on every event:
+
+| Field | Type | Purpose |
+| ----- | ----- | ----- |
+| `run_id` | `UUID` | Uniquely identifies a single end-to-end agent loop execution |
+| `action_id` | `UUID` | Uniquely identifies each discrete action within a run |
+| `metadata` | `dict` | Arbitrary structured context (model, token counts, timestamps, etc.) |
+
+Together these fields enable **perfect deterministic traceability** of agent loops: given any event in the log you can reconstruct the exact sequence of actions that produced it, replay the loop with identical inputs, and diff two runs at the action level. The Controller, all agents, and the workspace tooling emit these fields automatically — no configuration required.
 
 ---
 

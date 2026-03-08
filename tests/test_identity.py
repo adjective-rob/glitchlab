@@ -1,4 +1,4 @@
 from glitchlab.identity import __version__
 
 def test_version():
-    assert __version__ == "4.1.0"
+    assert __version__ == "4.2.0"
