@@ -20,6 +20,11 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.context_compressor import (
+    compress_tool_result,
+    compress_write_file_args,
+    prune_message_history,
+)
 from glitchlab.router import RouterResponse
 
 
@@ -234,23 +239,15 @@ Rules:
         for step in range(max_steps):
             logger.debug(f"[FRANKIE] Loop Step {step+1}/{max_steps}...")
 
-            # Context compression for large tool outputs
-            for i in range(len(messages)):
-                if messages[i].get("role") == "tool":
-                    consumed = any(
-                        m.get("role") == "assistant"
-                        for m in messages[i + 1 :]
-                    )
-                    if consumed:
-                        content = str(messages[i].get("content", ""))
-                        if (
-                            len(content) > 1000
-                            and "... [Content compressed" not in content
-                        ):
-                            messages[i]["content"] = (
-                                content[:500]
-                                + "\n... [Content compressed for context window]"
-                            )
+            # Sliding-window context pruning
+            if len(messages) > 12:
+                messages = prune_message_history(
+                    messages,
+                    keep_last_n=6,
+                    checkpoint={
+                        "step": step,
+                    },
+                )
 
             step_kwargs = dict(kwargs)
             if step == 0:
@@ -274,6 +271,7 @@ Rules:
                     tc.model_dump() if hasattr(tc, "model_dump") else dict(tc)
                     for tc in response.tool_calls
                 ]
+                compress_write_file_args(assist_msg["tool_calls"])
             messages.append(assist_msg)
 
             if not response.tool_calls:
@@ -330,7 +328,7 @@ Rules:
                             "role": "tool",
                             "tool_call_id": tc_id,
                             "name": tc_name,
-                            "content": res,
+                            "content": compress_tool_result(tc_name, res),
                         }
                     )
 
@@ -373,7 +371,7 @@ Rules:
                             "role": "tool",
                             "tool_call_id": tc_id,
                             "name": tc_name,
-                            "content": res,
+                            "content": compress_tool_result(tc_name, res),
                         }
                     )
                 elif tc_name == "query_symbol_map":
@@ -406,7 +404,7 @@ Rules:
                     else:
                         res = "Error: Prelude context not wired up."
                         
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "submit_report":
                     return {

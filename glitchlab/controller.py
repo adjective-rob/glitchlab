@@ -1770,8 +1770,19 @@ Ensure:
             # Debugger now runs its own 10-step loop internally
             debug_result = self.debugger.run(context)
             
-            # Record debug Turn for TaskHistory
-            self._state.previous_fixes.append(debug_result)
+            # Record compact debug summary for TaskHistory
+            compact_fix = {
+                "attempt": attempt,
+                "diagnosis": (debug_result.get("diagnosis") or "")[:200],
+                "root_cause": (debug_result.get("root_cause") or "")[:200],
+                "files_changed": [
+                    c.get("file")
+                    for c in debug_result.get("fix", {}).get("changes", [])
+                    if c.get("file")
+                ],
+                "should_retry": debug_result.get("should_retry", False),
+            }
+            self._state.previous_fixes.append(compact_fix)
             self._state.last_error = debug_result.get("diagnosis", "Unknown error")
             self._state.debug_attempts = attempt
 

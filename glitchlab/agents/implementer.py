@@ -15,6 +15,11 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.context_compressor import (
+    compress_tool_result,
+    compress_write_file_args,
+    prune_message_history,
+)
 from glitchlab.router import RouterResponse
 
 
@@ -280,68 +285,17 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
             
-            # 1. Proactive smart context compression
-            for i in range(len(messages)):
-                # Compress tool outputs after they've been consumed by the assistant
-                if messages[i].get("role") == "tool":
-                    consumed = any(m.get("role") == "assistant" for m in messages[i+1:])
-                    if consumed:
-                        content = str(messages[i].get("content", ""))
-                        if "... [Content compressed" in content or "... [Search results compressed" in content:
-                            continue  # Already compressed
-                        
-                        tname = messages[i].get("name")
-                        
-                        # Smart symbol extraction for read_file
-                        if tname == "read_file" and len(content) > 1000:
-                            lines = content.splitlines()
-                            head = "\n".join(lines[:10])
-                            tail = "\n".join(lines[-10:])
-                            # Extract functions, classes, structs, etc.
-                            symbols = [l.strip() for l in lines if l.strip().startswith(("def ", "class ", "async def ", "pub fn ", "struct ", "type ", "export "))]
-                            sym_str = "\n".join(symbols[:20])
-                            messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
-                        
-                        elif tname == "find_references" and len(content) > 500:
-                            lines = content.splitlines()
-                            messages[i]["content"] = "\n".join(lines[:30]) + "\n... [References compressed]"
-
-                        elif tname == "get_function" and len(content) > 1000:
-                            lines = content.splitlines()
-                            head = "\n".join(lines[:20])
-                            messages[i]["content"] = head + "\n... [Function body compressed]"
-
-                        elif tname == "query_project_context" and len(content) > 500:
-                            messages[i]["content"] = content[:500] + "\n... [Context compressed]"                                                  
-                        
-                        # Reference-only extraction for search_grep
-                        elif tname == "search_grep" and len(content) > 500:
-                            lines = content.splitlines()
-                            refs = []
-                            for l in lines:
-                                parts = l.split(":")
-                                if len(parts) >= 2:
-                                    refs.append(f"{parts[0]}:{parts[1]}")
-                            if refs:
-                                messages[i]["content"] = "\n".join(refs[:30]) + "\n... [Search results compressed to references only]"
-                            else:
-                                messages[i]["content"] = content[:500] + "\n... [Search results compressed]"
-                
-                # Compress tool inputs (e.g. massive write_file contents) after consumption
-                if messages[i].get("role") == "assistant" and messages[i].get("tool_calls"):
-                    consumed = any(m.get("role") == "tool" for m in messages[i+1:])
-                    if consumed:
-                        for tc in messages[i]["tool_calls"]:
-                            if tc.get("function", {}).get("name") == "write_file":
-                                try:
-                                    args = json.loads(tc["function"]["arguments"])
-                                    if "content" in args and len(str(args["content"])) > 200:
-                                        lines_written = len(str(args["content"]).splitlines())
-                                        path = args.get("path", "unknown")
-                                        args["content"] = f"... [Content compressed: wrote {lines_written} lines to {path}]"
-                                        tc["function"]["arguments"] = json.dumps(args)
-                                except Exception:
-                                    pass
+            # 1. Sliding-window context pruning
+            if len(messages) > 16:
+                messages = prune_message_history(
+                    messages,
+                    keep_last_n=8,
+                    checkpoint={
+                        "files_modified": sorted(modified_files),
+                        "files_created": sorted(created_files),
+                        "step": step,
+                    },
+                )
 
             # 2. Rolling window search spiral guard
             # Look at the last 6 tool calls across all messages
@@ -367,9 +321,11 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
             if response.tool_calls:
                 # Format litellm tool_calls to dict for the chat history
                 assist_msg["tool_calls"] = [
-                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc) 
+                    tc.model_dump() if hasattr(tc, 'model_dump') else dict(tc)
                     for tc in response.tool_calls
                 ]
+                # Compress write_file content immediately (not after consumption)
+                compress_write_file_args(assist_msg["tool_calls"])
             messages.append(assist_msg)
 
             if not response.tool_calls:
@@ -401,7 +357,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "search_grep":
                     if search_count >= 3:
@@ -430,7 +386,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = proc.stdout if proc.stdout else "No matches found."
                     except Exception as e:
                         res = f"Search failed: {e}"
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_symbol_map":
                     query = tc_args.get("query", "").lower()
@@ -549,7 +505,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: Tool executor not wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "find_references":
                     symbol = tc_args.get("symbol")
@@ -565,7 +521,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                                 res += f"\n... (truncated {len(refs)-30} more)"
                     else:
                         res = "AST parser unavailable. Please fall back to search_grep."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "get_function":
                     symbol = tc_args.get("symbol")
@@ -578,7 +534,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                             res = f"Function '{symbol}' not found. Check spelling or use search_grep."
                     else:
                         res = "AST parser unavailable. Please fall back to read_file."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "query_project_context":
                     topic = tc_args.get("topic", "")
@@ -588,7 +544,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
                         res = prelude.query(topic=topic, scope=scope)
                     else:
                         res = "Error: Prelude context not wired up."
-                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": compress_tool_result(tc_name, res)})
 
                 elif tc_name == "ask_colleague":
                     return {
