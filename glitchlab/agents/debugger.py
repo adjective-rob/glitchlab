@@ -16,6 +16,7 @@ from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.context_compressor import (
+    SearchSpiralGuard,
     build_assistant_message,
     build_tool_message,
     prune_message_history,
@@ -229,8 +230,8 @@ The test command you are debugging is: {test_command}
         modified_files = set()
         created_files = set()
         think_count = 0
-        search_count = 0
-        max_steps = 30 
+        search_guard = SearchSpiralGuard()
+        max_steps = 30
 
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
@@ -247,12 +248,7 @@ The test command you are debugging is: {test_command}
                     },
                 )
 
-            # 2. Rolling window search spiral guard
-            # Look at the last 6 tool calls across all messages
-            recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
-            search_count = recent_tools.count("search_grep")
-
-            # 3. Deterministic First Step: Force 'think' on step 0
+            # 2. Deterministic First Step: Force 'think' on step 0
             step_kwargs = dict(kwargs)
             if step == 0:
                 step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
@@ -306,8 +302,9 @@ The test command you are debugging is: {test_command}
                         res = "Error: Prelude context not wired up."
 
                 elif tc_name == "search_grep":
-                    if search_count >= 3:
-                        messages.append(build_tool_message(tc_id, tc_name, "You have searched multiple times recently. Consider using `think` to consolidate your findings or `read_file` to look closer."))
+                    block_msg = search_guard.check(messages)
+                    if block_msg:
+                        messages.append(build_tool_message(tc_id, tc_name, block_msg))
                         continue
 
                     pattern = tc_args.get("pattern")
@@ -328,6 +325,7 @@ The test command you are debugging is: {test_command}
                             res = "\n".join(lines[:50]) + "\n(truncated, refine your search)"
                         else:
                             res = proc.stdout if proc.stdout else "No matches found."
+                        search_guard.record_search_result(res)
                     except Exception as e:
                         res = f"Search failed: {e}"
 

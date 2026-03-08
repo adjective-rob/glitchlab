@@ -21,6 +21,7 @@ import yaml
 from loguru import logger
 from pydantic import ValidationError
 
+from glitchlab.context_compressor import SearchSpiralGuard
 from glitchlab.router import Router
 from glitchlab.controller import Task  # Import the strict Pydantic schema
 from .scanner import Finding, ScanResult
@@ -167,6 +168,7 @@ Plan your work, read necessary files, write the tasks, and call `done`.
 
         max_steps = 20
         think_count = 0
+        search_guard = SearchSpiralGuard()
 
         for step in range(max_steps):
             logger.debug(f"[AUDITOR] Loop Step {step+1}/{max_steps}...")
@@ -223,6 +225,11 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
                 
                 elif tc_name == "search_grep":
+                    block_msg = search_guard.check(messages)
+                    if block_msg:
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": block_msg})
+                        continue
+
                     pattern = tc_args.get("pattern")
                     file_type = tc_args.get("file_type", "*")
                     try:
@@ -237,6 +244,7 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                         proc = subprocess.run(cmd, cwd=result.repo_path, capture_output=True, text=True, timeout=10)
                         out = proc.stdout if proc.stdout else "No matches found."
                         res = "\n".join(out.splitlines()[:50])
+                        search_guard.record_search_result(res)
                     except Exception as e:
                         res = f"Search error: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})

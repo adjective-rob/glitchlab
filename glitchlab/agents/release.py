@@ -16,6 +16,7 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.context_compressor import SearchSpiralGuard
 from glitchlab.router import RouterResponse
 
 
@@ -181,6 +182,7 @@ Semver Rules:
         workspace_dir = Path(context.working_dir)
 
         think_count = 0
+        search_guard = SearchSpiralGuard()
         max_steps = 10
 
         for step in range(max_steps):
@@ -268,6 +270,18 @@ Semver Rules:
                         res = f"Error reading file: {e}"
 
                 elif tc_name == "search_grep":
+                    block_msg = search_guard.check(messages)
+                    if block_msg:
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tc_id,
+                                "name": tc_name,
+                                "content": block_msg,
+                            }
+                        )
+                        continue
+
                     pattern = tc_args.get("pattern")
                     try:
                         cmd = ["grep", "-rn", pattern, "."]
@@ -283,6 +297,7 @@ Semver Rules:
                             if proc.stdout
                             else "No matches found."
                         )
+                        search_guard.record_search_result(res)
                     except Exception as e:
                         res = f"Search failed: {e}"
 

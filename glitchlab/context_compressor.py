@@ -15,6 +15,10 @@ preserving structural meaning:
    messages beyond a configurable window, substituting a lightweight
    structured checkpoint so the agent retains awareness of prior work.
 
+4. ``SearchSpiralGuard`` — detects repeated ``search_grep`` calls in the
+   recent tool-call window and blocks additional searches, directing the
+   agent to call ``think`` and read previously discovered files instead.
+
 Helper functions ``build_tool_message`` and ``build_assistant_message``
 centralise message construction so agents remain simple.
 """
@@ -336,3 +340,90 @@ def prune_message_history(
             f"(kept {len(prefix)} prefix + {len(tail)} tail)"
         )
     return pruned
+
+
+# ── Search Spiral Guard ──────────────────────────────────────────────
+
+# Regex to extract file paths from grep -rn output (e.g. "./src/foo.py:42:code")
+_GREP_PATH_RE = re.compile(r"^\./?([\w/.\-]+?):\d+", re.MULTILINE)
+
+
+class SearchSpiralGuard:
+    """Detects repeated ``search_grep`` calls and blocks further searches.
+
+    Tracks file paths discovered by previous searches so the blocking
+    message can recommend specific files for the agent to read instead
+    of continuing to grep.
+
+    Usage inside an agent loop::
+
+        guard = SearchSpiralGuard()
+
+        # After each search_grep result:
+        guard.record_search_result(grep_output)
+
+        # Before executing a search_grep call:
+        block_msg = guard.check(messages)
+        if block_msg:
+            messages.append(build_tool_message(tc_id, tc_name, block_msg))
+            continue
+    """
+
+    def __init__(
+        self,
+        *,
+        max_searches: int = 3,
+        window_size: int = 6,
+    ) -> None:
+        self.max_searches = max_searches
+        self.window_size = window_size
+        self._discovered_files: list[str] = []
+
+    def record_search_result(self, grep_output: str) -> None:
+        """Extract and store file paths from a ``grep -rn`` result."""
+        for match in _GREP_PATH_RE.finditer(grep_output):
+            path = match.group(1)
+            if path not in self._discovered_files:
+                self._discovered_files.append(path)
+
+    @property
+    def discovered_files(self) -> list[str]:
+        """Return a copy of discovered file paths (insertion order)."""
+        return list(self._discovered_files)
+
+    def check(self, messages: list[dict[str, Any]]) -> str | None:
+        """Check recent tool-call history for a search spiral.
+
+        Examines the last *window_size* tool-result messages.  If
+        ``search_grep`` appears *max_searches* or more times, returns a
+        blocking message instructing the agent to pause and investigate.
+
+        Returns ``None`` when the search is allowed to proceed.
+        """
+        recent_tools = [
+            m.get("name")
+            for m in messages
+            if m.get("role") == "tool"
+        ][-self.window_size:]
+
+        search_count = recent_tools.count("search_grep")
+        if search_count < self.max_searches:
+            return None
+
+        # Build a helpful suggestion listing discovered files.
+        suggestion = (
+            "SEARCH BLOCKED: You have called search_grep "
+            f"{search_count} times in the last {self.window_size} tool calls. "
+            "Repeated searching is unproductive.\n\n"
+            "Next steps — do these IN ORDER:\n"
+            "1. Call `think` to consolidate what you have learned so far.\n"
+            "2. Call `read_file` on one of the files already discovered"
+        )
+
+        if self._discovered_files:
+            top_files = self._discovered_files[:5]
+            file_list = ", ".join(f"`{f}`" for f in top_files)
+            suggestion += f" (e.g. {file_list})"
+
+        suggestion += ".\n\nDo NOT search again until you have read at least one file."
+        return suggestion
