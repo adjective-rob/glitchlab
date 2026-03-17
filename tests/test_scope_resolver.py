@@ -1,6 +1,6 @@
-"""Tests for ScopeResolver from glitchlab/controller.py."""
+"""Tests for ScopeResolver from glitchlab/scope.py."""
 
-from glitchlab.controller import ScopeResolver
+from glitchlab.scope import ScopeResolver
 
 
 def test_resolve_for_files_reads_content(tmp_path):
