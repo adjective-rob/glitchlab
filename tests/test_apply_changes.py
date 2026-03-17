@@ -2,7 +2,7 @@
 
 import pytest
 
-from glitchlab.controller import apply_changes, _normalize_change
+from glitchlab.task import apply_changes, _normalize_change
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 
 
