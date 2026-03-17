@@ -41,7 +41,7 @@ from rich.prompt import Confirm
 from rich.syntax import Syntax
 from rich.table import Table
 
-from glitchlab.agents import AgentContext
+from glitchlab.agents import AgentContext, AgentResult
 from glitchlab.agents.archivist import ArchivistAgent
 from glitchlab.agents.debugger import DebuggerAgent
 from glitchlab.agents.implementer import ImplementerAgent
@@ -457,10 +457,11 @@ class Controller:
                 console.print("  [dim]Loaded recent failure patterns for planner[/]")
 
             # ── 2. Plan ──
-            plan = self._run_planner(task, ws_path, failure_context)
-            if plan.get("parse_error"):
+            plan_result = self._run_planner(task, ws_path, failure_context)
+            if plan_result.status == "error":
                 result["status"] = "plan_failed"
                 return result
+            plan = plan_result.payload
 
             # Update TaskState with plan output
             self._state.plan_steps = [
@@ -534,11 +535,12 @@ class Controller:
 
             # ── 4B. Standard Execution Path ──
             else:
-                impl = self._run_implementer(task, plan, ws_path, tools)
+                impl_result = self._run_implementer(task, plan, ws_path, tools)
 
-                if impl.get("parse_error"):
+                if impl_result.status == "error":
                     result["status"] = "implementation_failed"
                     return result
+                impl = impl_result.payload
 
                 # Update TaskState with implementation output
                 self._state.files_modified = [
@@ -598,15 +600,15 @@ class Controller:
                     result["status"] = "implementation_failed"
                     return result
 
-                retry_impl = self._retry_patch(task, plan, ws_path, impl, applied)
+                retry_result = self._retry_patch(task, plan, ws_path, impl, applied)
 
-                if retry_impl.get("parse_error"):
+                if retry_result.status == "error":
                     result["status"] = "implementation_failed"
                     return result
 
                 applied = apply_changes(
                     ws_path,
-                    retry_impl.get("changes", []),
+                    retry_result.payload.get("changes", []),
                     boundary=self.boundary,
                     allow_core=self.allow_core,
                     allow_test_modifications=not is_maintenance,
@@ -660,7 +662,8 @@ class Controller:
                     console.print("  [dim]Trivial change detected. Forcing downstream agents into Fast Mode.[/]")
 
                 # ── 6. Security Review ──
-                sec = self._run_security(task, impl, ws_path)
+                sec_result = self._run_security(task, impl, ws_path)
+                sec = sec_result.payload
 
                 self._state.security_verdict = sec.get("verdict", "")
                 self._state.mark_phase("security")
@@ -679,14 +682,16 @@ class Controller:
                         return result
 
                 # ── 7. Release Assessment ──
-                rel = self._run_release(task, impl, ws_path, is_fast_mode)
+                rel_result = self._run_release(task, impl, ws_path, is_fast_mode)
+                rel = rel_result.payload
 
                 self._state.version_bump = rel.get("version_bump", "")
                 self._state.changelog_entry = rel.get("changelog_entry", "")
                 self._state.mark_phase("release")
 
                 # ── 7.5. Archivist (Governed Documentation) ──
-                nova_result = self._run_archivist(task, impl, plan, rel, ws_path, is_fast_mode)
+                nova_ar = self._run_archivist(task, impl, plan, rel, ws_path, is_fast_mode)
+                nova_result = nova_ar.payload
 
                 if is_maintenance:
                     nova_result["should_write_adr"] = False
@@ -894,7 +899,7 @@ class Controller:
     # Agent Runners — v2: Surgical context via TaskState + ScopeResolver
     # -----------------------------------------------------------------------
 
-    def _run_planner(self, task: Task, ws_path: Path, failure_context: str = "") -> dict:
+    def _run_planner(self, task: Task, ws_path: Path, failure_context: str = "") -> AgentResult:
         console.print("\n[bold magenta]🧠 [ZAP] Planning...[/]")
 
         # Planner gets: repo file map + task + failure history
@@ -922,23 +927,23 @@ class Controller:
             risk_level=task.risk_level,
         )
 
-        plan = self.planner.run(context)
+        raw = self.planner.run(context)
         self._log_event("plan_created", {
-            "steps": len(plan.get("steps", [])),
-            "risk": plan.get("risk_level"),
+            "steps": len(raw.get("steps", [])),
+            "risk": raw.get("risk_level"),
         })
 
-        self._print_plan(plan)
+        self._print_plan(raw)
 
         if self.config.intervention.pause_after_plan and not self.auto_approve:
             if not self._confirm("Approve plan?"):
-                plan["_aborted"] = True
-                plan["parse_error"] = True
-                return plan
+                raw["_aborted"] = True
+                raw["parse_error"] = True
+                return AgentResult.from_raw(raw)
 
-        return plan
+        return AgentResult.from_raw(raw)
 
-    def _run_implementer(self, task: Task, plan: dict, ws_path: Path, tools: ToolExecutor) -> dict:
+    def _run_implementer(self, task: Task, plan: dict, ws_path: Path, tools: ToolExecutor) -> AgentResult:
         console.print("\n[bold blue]🔧 [PATCH] Implementing...[/]")
 
         # --- AST LAYER INITIALIZATION ---
@@ -1009,15 +1014,17 @@ class Controller:
             break  # Exit loop when Patch successfully calls `done` (or hits a hard error)
 
         # --- MEMORY EXTRACTION ---
+        # Capture _messages from raw dict before wrapping (from_raw strips _ keys)
         messages = impl.get("_messages", [])
+        impl_result = AgentResult.from_raw(impl)
         if messages:
-            outcome = "fail" if impl.get("parse_error") else "pass"
+            outcome = "fail" if impl_result.status == "error" else "pass"
             patterns = extract_patterns_from_messages(messages, outcome)
             if patterns:
                 self._history.record_patterns(task.task_id, patterns)
 
         # For doc-comment tasks, use surgical insertion
-        for change in impl.get("changes", []):
+        for change in impl_result.payload.get("changes", []):
             if change.get("action") == "modify" and not change.get("_already_applied"):
                 fpath = ws_path / change["file"]
                 if fpath.exists():
@@ -1027,11 +1034,11 @@ class Controller:
                         change["content"] = None
 
         self._log_event("implementation_created", {
-            "changes": len(impl.get("changes", [])),
-            "tests": len(impl.get("tests_added", [])),
+            "changes": len(impl_result.payload.get("changes", [])),
+            "tests": len(impl_result.payload.get("tests_added", [])),
         })
 
-        return impl
+        return impl_result
 
     def _run_delegated_agent(self, target: str, request: str, task: Task, ws_path: Path, tools: ToolExecutor) -> str:
         """Helper method: Handle mid-flight delegation requests from the Implementer."""
@@ -1083,7 +1090,7 @@ class Controller:
         ws_path: Path,
         original_impl: dict,
         applied_entries: list[str],
-    ) -> dict:
+    ) -> AgentResult:
         console.print("[dim]Re-prompting implementer with git error context...[/]")
 
         error_lines = [
@@ -1123,7 +1130,8 @@ Ensure:
             previous_output=self._state.to_agent_summary("implementer"),
         )
 
-        return self.implementer.run(context, max_tokens=8192)
+        raw = self.implementer.run(context, max_tokens=8192)
+        return AgentResult.from_raw(raw)
     
     def _run_testgen(self, task: Task, ws_path: Path, is_doc_only: bool) -> None:
         """Run the Shield agent to generate a regression test if none exists."""
@@ -1159,15 +1167,16 @@ Ensure:
             extra={"test_command": self.test_command}
         )
         
-        result = self.testgen.run(context)
-        
-        if result.get("parse_error") or not result.get("test_file"):
+        raw = self.testgen.run(context)
+        tg_result = AgentResult.from_raw(raw)
+
+        if tg_result.status == "error" or not tg_result.payload.get("test_file"):
             console.print("  [yellow]Shield failed to generate a valid test. Continuing.[/]")
             return
-            
-        test_file = result["test_file"]
-        content = result["content"]
-        desc = result["description"]
+
+        test_file = tg_result.payload["test_file"]
+        content = tg_result.payload["content"]
+        desc = tg_result.payload["description"]
         
         try:
             fpath = ws_path / test_file
@@ -1232,26 +1241,29 @@ Ensure:
             )
 
             # Debugger now runs its own 10-step loop internally
-            debug_result = self.debugger.run(context)
-            
+            raw_debug = self.debugger.run(context)
+            debug_result = AgentResult.from_raw(raw_debug)
+
             # Record debug Turn for TaskHistory
-            self._state.previous_fixes.append(debug_result)
-            self._state.last_error = debug_result.get("diagnosis", "Unknown error")
+            self._state.previous_fixes.append(debug_result.payload)
+            self._state.last_error = debug_result.payload.get("diagnosis", "Unknown error")
             self._state.debug_attempts = attempt
 
             # --- RECORD FAILURE MEMORY ---
-            fix_changes = debug_result.get("fix", {}).get("changes", [])
+            fix_changes = debug_result.payload.get("fix", {}).get("changes", [])
             for change in fix_changes:
                 if change.get("file"):
                     self._history.record_failure_detail(
                         task_id=task.task_id,
                         file_modified=change["file"],
                         error_type=self._state.last_error,
-                        resolution=debug_result.get("root_cause", "Fixed in debug loop")
+                        resolution=debug_result.payload.get(
+                            "root_cause", "Fixed in debug loop"
+                        ),
                     )
-            
+
             # Sync TaskState with files written by the debugger's tools
-            fix_changes = debug_result.get("fix", {}).get("changes", [])
+            fix_changes = debug_result.payload.get("fix", {}).get("changes", [])
             for change in fix_changes:
                 f = change.get("file")
                 if f:
@@ -1260,11 +1272,11 @@ Ensure:
                     elif f not in self._state.files_modified:
                         self._state.files_modified.append(f)
 
-            if debug_result.get("parse_error"):
+            if debug_result.status == "error":
                 console.print("[yellow]⚠ Debugger failed to conclude. Retrying loop...[/]")
                 continue
 
-            if not debug_result.get("should_retry", False):
+            if not debug_result.payload.get("should_retry", False):
                 console.print("[yellow]Debugger suggests abandoning fix.[/]")
                 break
 
@@ -1291,7 +1303,7 @@ Ensure:
         self._log_event("auditor_feedback", {"feedback": result.get("feedback")})
         return result
 
-    def _run_security(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> dict:
+    def _run_security(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> AgentResult:
         console.print("\n[bold red]🔒 [FRANKIE] Security scan...[/]")
 
         diff = self._workspace.diff_full() if self._workspace else ""
@@ -1313,11 +1325,12 @@ Ensure:
             },
         )
 
-        result = self.security.run(context)
-        self._log_event("security_review", {"verdict": result.get("verdict")})
+        raw = self.security.run(context)
+        result = AgentResult.from_raw(raw)
+        self._log_event("security_review", {"verdict": result.payload.get("verdict")})
         return result
 
-    def _run_release(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> dict:
+    def _run_release(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> AgentResult:
         console.print("\n[bold cyan]📦 [SEMVER] Release assessment...[/]")
 
         diff = self._workspace.diff_stat() if self._workspace else ""
@@ -1335,13 +1348,14 @@ Ensure:
             },
         )
 
-        result = self.release.run(context)
-        self._log_event("release_assessment", {"bump": result.get("version_bump")})
+        raw = self.release.run(context)
+        result = AgentResult.from_raw(raw)
+        self._log_event("release_assessment", {"bump": result.payload.get("version_bump")})
         return result
 
     def _run_archivist(
         self, task: Task, impl: dict, plan: dict, release: dict, ws_path: Path, is_fast_mode: bool = False
-    ) -> dict:
+    ) -> AgentResult:
         """Run Archivist Nova with structured state context."""
         console.print("\n[bold dim]📚 [NOVA] Documenting...[/]")
 
@@ -1368,12 +1382,19 @@ Ensure:
 
         # ── THE MISSING PIECE ──
         # Call Nova's new tool-loop and return the dict result
-        result = self.archivist.run(context)
-        
-        if result is None:
-            return {"should_write_adr": False, "doc_updates": [], "architecture_notes": "Archivist failed."}
-            
-        return result
+        raw = self.archivist.run(context)
+
+        if raw is None:
+            return AgentResult(
+                status="error",
+                payload={
+                    "should_write_adr": False,
+                    "doc_updates": [],
+                    "architecture_notes": "Archivist failed.",
+                },
+            )
+
+        return AgentResult.from_raw(raw)
 
     @staticmethod
     def _write_adr(ws_path: Path, adr: dict | str) -> str | None:
