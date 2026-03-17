@@ -41,14 +41,8 @@ from rich.prompt import Confirm
 from rich.syntax import Syntax
 from rich.table import Table
 
-from glitchlab.agents import AgentContext, AgentResult
-from glitchlab.agents.archivist import ArchivistAgent
-from glitchlab.agents.debugger import DebuggerAgent
-from glitchlab.agents.implementer import ImplementerAgent
-from glitchlab.agents.planner import PlannerAgent
-from glitchlab.agents.release import ReleaseAgent
-from glitchlab.agents.security import SecurityAgent
-from glitchlab.agents.testgen import TestGenAgent
+from glitchlab.agents import AgentContext, BaseAgent, AgentResult
+from glitchlab.registry import AGENT_REGISTRY, get_agent
 from glitchlab.config_loader import GlitchLabConfig, load_config
 from glitchlab.doc_inserter import insert_doc_comments
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
@@ -311,14 +305,11 @@ class Controller:
         self.router = Router(self.config)
         self.boundary = BoundaryEnforcer(self.config.boundaries.protected_paths)
 
-        # Agents
-        self.planner = PlannerAgent(self.router)
-        self.implementer = ImplementerAgent(self.router)
-        self.debugger = DebuggerAgent(self.router)
-        self.security = SecurityAgent(self.router)
-        self.release = ReleaseAgent(self.router)
-        self.archivist = ArchivistAgent(self.router)
-        self.testgen = TestGenAgent(self.router)
+        # Agents — instantiated from the central registry
+        self.agents: dict[str, BaseAgent] = {
+            role: get_agent(role, self.router)
+            for role in AGENT_REGISTRY
+        }
 
         # Run state (reset per-task)
         self._state: TaskState | None = None
@@ -927,7 +918,7 @@ class Controller:
             risk_level=task.risk_level,
         )
 
-        raw = self.planner.run(context)
+        raw = self.agents["planner"].run(context)
         self._log_event("plan_created", {
             "steps": len(raw.get("steps", [])),
             "risk": raw.get("risk_level"),
@@ -984,7 +975,7 @@ class Controller:
 
         # --- THE SWITCHBOARD DELEGATION LOOP ---
         while True:
-            impl = self.implementer.run(context, max_tokens=12000)
+            impl = self.agents["implementer"].run(context, max_tokens=12000)
             
             # Did Patch yield to ask for help?
             if impl.get("_status") == "delegating":
@@ -1059,21 +1050,21 @@ class Controller:
         
         try:
             if target == "security":
-                res = self.security.run(sub_context)
+                res = self.agents["security"].run(sub_context)
                 return f"Verdict: {res.get('verdict')}\nSummary: {res.get('summary')}\nIssues: {res.get('issues', [])}"
             
             elif target == "debugger":
                 sub_context.extra["test_command"] = self.test_command
-                res = self.debugger.run(sub_context)
+                res = self.agents["debugger"].run(sub_context)
                 return f"Diagnosis: {res.get('diagnosis')}\nRoot Cause: {res.get('root_cause')}\nFixes applied: {res.get('fix_summary', 'None')}"
             
             elif target == "testgen":
                 sub_context.extra["test_command"] = self.test_command
-                res = self.testgen.run(sub_context)
+                res = self.agents["testgen"].run(sub_context)
                 return f"Test Generated: {res.get('test_file')}\nDescription: {res.get('description')}"
             
             elif target == "archivist":
-                res = self.archivist.run(sub_context)
+                res = self.agents["archivist"].run(sub_context)
                 return f"Architecture Notes: {res.get('architecture_notes')}\nADR Written: {res.get('should_write_adr')}"
             
             else:
@@ -1130,7 +1121,7 @@ Ensure:
             previous_output=self._state.to_agent_summary("implementer"),
         )
 
-        raw = self.implementer.run(context, max_tokens=8192)
+        raw = self.agents["implementer"].run(context, max_tokens=8192)
         return AgentResult.from_raw(raw)
     
     def _run_testgen(self, task: Task, ws_path: Path, is_doc_only: bool) -> None:
@@ -1167,7 +1158,7 @@ Ensure:
             extra={"test_command": self.test_command}
         )
         
-        raw = self.testgen.run(context)
+        raw = self.agents["testgen"].run(context)
         tg_result = AgentResult.from_raw(raw)
 
         if tg_result.status == "error" or not tg_result.payload.get("test_file"):
@@ -1241,7 +1232,7 @@ Ensure:
             )
 
             # Debugger now runs its own 10-step loop internally
-            raw_debug = self.debugger.run(context)
+            raw_debug = self.agents["debugger"].run(context)
             debug_result = AgentResult.from_raw(raw_debug)
 
             # Record debug Turn for TaskHistory
@@ -1325,7 +1316,7 @@ Ensure:
             },
         )
 
-        raw = self.security.run(context)
+        raw = self.agents["security"].run(context)
         result = AgentResult.from_raw(raw)
         self._log_event("security_review", {"verdict": result.payload.get("verdict")})
         return result
@@ -1348,7 +1339,7 @@ Ensure:
             },
         )
 
-        raw = self.release.run(context)
+        raw = self.agents["release"].run(context)
         result = AgentResult.from_raw(raw)
         self._log_event("release_assessment", {"bump": result.payload.get("version_bump")})
         return result
@@ -1382,7 +1373,7 @@ Ensure:
 
         # ── THE MISSING PIECE ──
         # Call Nova's new tool-loop and return the dict result
-        raw = self.archivist.run(context)
+        raw = self.agents["archivist"].run(context)
 
         if raw is None:
             return AgentResult(
