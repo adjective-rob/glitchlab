@@ -12,9 +12,9 @@ Agents are stateless between runs. State lives in the repo.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from glitchlab.router import Router, RouterResponse
 
@@ -76,3 +76,28 @@ class BaseAgent(ABC):
 
     def _user_msg(self, content: str) -> dict[str, str]:
         return {"role": "user", "content": content}
+
+
+class AgentResult(BaseModel):
+    status: Literal["success", "error", "delegating"] = "success"
+    error: str | None = None
+    agent: str = ""
+    model: str = ""
+    tokens_used: int = 0
+    cost: float = 0.0
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_raw(cls, raw: dict[str, Any]) -> "AgentResult":
+        """Wrap a legacy agent return dict into AgentResult."""
+        return cls(
+            status="error" if raw.get("parse_error") else
+                   raw.get("_status", "success"),
+            error=raw.get("_error") or raw.get("raw_response"),
+            agent=raw.get("_agent", ""),
+            model=raw.get("_model", ""),
+            tokens_used=raw.get("_tokens", 0),
+            cost=raw.get("_cost", 0.0),
+            payload={k: v for k, v in raw.items()
+                     if not k.startswith("_")},
+        )
