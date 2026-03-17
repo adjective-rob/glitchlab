@@ -64,6 +64,15 @@ class AutomationConfig(BaseModel):
     rebase_before_pr: bool = True
     auto_merge_pr: bool = False  # Default to False for safety
 
+class PipelineStep(BaseModel):
+    name: str               # unique step identifier
+    agent_role: str          # maps to agent class
+    required: bool = True    # if False, failure doesn't halt pipeline
+    skip_if: list[str] = Field(default_factory=list)   # conditions: "doc_only", "fast_mode", "no_test_command"
+    reads: list[str] = Field(default_factory=list)      # TaskState fields this agent needs
+    writes: list[str] = Field(default_factory=list)     # TaskState fields this agent produces
+
+
 class GlitchLabConfig(BaseModel):
     routing: RoutingConfig = Field(default_factory=RoutingConfig)
     fallbacks: FallbacksConfig = Field(default_factory=FallbacksConfig)
@@ -75,6 +84,7 @@ class GlitchLabConfig(BaseModel):
     boundaries: BoundaryConfig = Field(default_factory=BoundaryConfig)
     context: ContextConfig = Field(default_factory=ContextConfig)
     automation: AutomationConfig = Field(default_factory=AutomationConfig)
+    pipeline: list[PipelineStep] = Field(default_factory=list)
 
 # ---------------------------------------------------------------------------
 # Loader
