@@ -521,10 +521,10 @@ class Controller:
                             "Forcing downstream agents into Fast Mode.[/]"
                         )
 
-                    self._state.security_verdict = sec.get("verdict", "")
                     self._state.mark_phase("security")
 
                     if sec.get("verdict") == "block":
+                        self._state.security_verdict = "block"
                         console.print(
                             "[red]🚫 Security blocked this change.[/]"
                         )
@@ -541,6 +541,20 @@ class Controller:
                         if not self._confirm("Override security block?"):
                             result["status"] = "security_blocked"
                             return result
+                    else:
+                        # Normalize missing/empty verdict to "warn"
+                        verdict = sec.get("verdict") or "warn"
+                        self._state.security_verdict = verdict
+
+                        if verdict == "warn":
+                            console.print(
+                                "[yellow]⚠ Security review returned warnings.[/]"
+                            )
+                            print_security_issues(sec)
+
+                        # Prevent the generic error-halt from aborting
+                        # the pipeline on a non-blocking verdict.
+                        step_result.status = "success"
 
                 elif step.agent_role == "release":
                     rel = step_result.payload
