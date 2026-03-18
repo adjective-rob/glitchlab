@@ -230,13 +230,12 @@ FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `r
 
         return [self._system_msg(), self._user_msg(user_content)]
 
-    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+    def run(self, context: AgentContext, *, max_steps: int = 15, **kwargs) -> dict[str, Any]:
         """Execute the agentic security loop."""
         messages = self.build_messages(context)
         workspace_dir = Path(context.working_dir)
 
         think_count = 0
-        max_steps = 15
 
         for step in range(max_steps):
             logger.debug(f"[FRANKIE] Loop Step {step+1}/{max_steps}...")

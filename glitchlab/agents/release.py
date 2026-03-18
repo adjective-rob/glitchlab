@@ -175,13 +175,12 @@ Investigate the modified files, update CHANGELOG.md surgically, and call `submit
         """Unused in v3.1 Tool-Loop."""
         return {}
 
-    def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
+    def run(self, context: AgentContext, *, max_steps: int = 10, **kwargs) -> dict[str, Any]:
         """Execute the Semver Sam investigation loop."""
         messages = self.build_messages(context)
         workspace_dir = Path(context.working_dir)
 
         think_count = 0
-        max_steps = 10
 
         for step in range(max_steps):
             logger.debug(f"[SEMVER] Loop Step {step+1}/{max_steps}...")

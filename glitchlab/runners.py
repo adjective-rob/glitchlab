@@ -85,7 +85,7 @@ def run_security(
         },
     )
 
-    raw = agent.run(context)
+    raw = agent.run(context, max_steps=5 if is_fast_mode else 15)
     return AgentResult.from_raw(raw)
 
 
@@ -118,7 +118,7 @@ def run_release(
         },
     )
 
-    raw = agent.run(context)
+    raw = agent.run(context, max_steps=5 if is_fast_mode else 10)
     return AgentResult.from_raw(raw)
 
 
