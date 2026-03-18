@@ -31,7 +31,7 @@ import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Literal, Any
+from typing import ClassVar, Literal, Any
 from pydantic import BaseModel, Field
 
 from loguru import logger
@@ -116,6 +116,24 @@ class TaskState(BaseModel):
     completed_phases: list[str] = Field(default_factory=list)
     events: list[dict] = Field(default_factory=list)
 
+    AGENT_FIELDS: ClassVar[dict[str, list[str]]] = {
+        "planner": ["previous_fixes"],
+        "implementer": ["plan_steps", "files_in_scope", "estimated_complexity"],
+        "testgen": ["files_modified", "files_created", "implementation_summary"],
+        "debugger": ["files_modified", "files_created", "last_error",
+                     "debug_attempts", "previous_fixes"],
+        "auditor": ["files_modified", "files_created", "implementation_summary"],
+        "security": ["files_modified", "files_created", "implementation_summary"],
+        "release": ["files_modified", "implementation_summary", "security_verdict"],
+        "archivist": ["plan_steps", "files_modified", "implementation_summary",
+                      "version_bump"],
+    }
+
+    FIELD_CAPS: ClassVar[dict[tuple[str, str], int]] = {
+        ("planner", "previous_fixes"): 3,
+        ("debugger", "previous_fixes"): 2,
+    }
+
     def mark_phase(self, phase: str) -> None:
         if phase not in self.completed_phases:
             self.completed_phases.append(phase)
@@ -125,6 +143,10 @@ class TaskState(BaseModel):
         Return only the fields relevant to a specific agent.
         This is the core of the context-router pattern: agents get
         precisely what they need, not everything.
+
+        Field routing is driven by AGENT_FIELDS (which fields each agent
+        sees) and FIELD_CAPS (optional tail-slice limits for list fields).
+        New agent roles can be added by extending AGENT_FIELDS.
         """
         base = {
             "task_id": self.task_id,
@@ -132,73 +154,17 @@ class TaskState(BaseModel):
             "mode": self.mode,
             "risk_level": self.risk_level,
         }
-
-        if for_agent == "planner":
-            # Planner gets task + history of what failed before
-            return {
-                **base,
-                "previous_fixes": self.previous_fixes[-3:] if self.previous_fixes else [],
-            }
-
-        elif for_agent == "implementer":
-            return {
-                **base,
-                "plan_steps": [s.model_dump() for s in self.plan_steps],
-                "files_in_scope": self.files_in_scope,
-                "estimated_complexity": self.estimated_complexity,
-            }
-        
-        elif for_agent == "testgen":
-            return {
-                **base,
-                "files_modified": self.files_modified,
-                "files_created": self.files_created,
-                "implementation_summary": self.implementation_summary,
-            }
-
-        elif for_agent == "debugger":
-            return {
-                **base,
-                "files_modified": self.files_modified,
-                "files_created": self.files_created,
-                "last_error": self.last_error,
-                "debug_attempts": self.debug_attempts,
-                "previous_fixes": self.previous_fixes[-2:] if self.previous_fixes else [],
-            }
-
-        elif for_agent == "auditor":
-            return {
-                **base,
-                "files_modified": self.files_modified,
-                "files_created": self.files_created,
-                "implementation_summary": self.implementation_summary,
-            }
-
-        elif for_agent == "security":
-            return {
-                **base,
-                "files_modified": self.files_modified,
-                "files_created": self.files_created,
-                "implementation_summary": self.implementation_summary,
-            }
-
-        elif for_agent == "release":
-            return {
-                **base,
-                "files_modified": self.files_modified,
-                "implementation_summary": self.implementation_summary,
-                "security_verdict": self.security_verdict,
-            }
-
-        elif for_agent == "archivist":
-            return {
-                **base,
-                "plan_steps": [s.model_dump() for s in self.plan_steps],
-                "files_modified": self.files_modified,
-                "implementation_summary": self.implementation_summary,
-                "version_bump": self.version_bump,
-            }
-
+        fields = self.AGENT_FIELDS.get(for_agent, [])
+        for field_name in fields:
+            value = getattr(self, field_name, None)
+            cap = self.FIELD_CAPS.get((for_agent, field_name))
+            if cap is not None:
+                value = value[-cap:] if value else []
+            elif isinstance(value, list) and all(
+                hasattr(v, "model_dump") for v in value
+            ):
+                value = [v.model_dump() for v in value]
+            base[field_name] = value
         return base
 
     def persist(self, ws_path: Path) -> None:
