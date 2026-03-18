@@ -9,8 +9,8 @@ from glitchlab.config_loader import GlitchLabConfig, PipelineStep, load_config
 EXPECTED_STEP_NAMES = [
     "planner",
     "implementer",
-    "testgen",
     "debugger",
+    "testgen",
     "security",
     "release",
     "archivist",

@@ -98,7 +98,7 @@ automation:
   auto_merge_pr: false
 
 # DevSecOps pipeline — declarative step sequence.
-# Matches the controller's hardcoded order: Plan → Implement → Test → Debug → Security → Release → Archivist.
+# Matches the controller's hardcoded order: Plan → Implement → Debug → Testgen → Security → Release → Archivist.
 pipeline:
   - name: planner
     agent_role: planner
@@ -112,19 +112,19 @@ pipeline:
     reads: [plan_steps, files_in_scope]
     writes: [files_modified, files_created, commit_message]
 
-  - name: testgen
-    agent_role: testgen
-    required: true
-    skip_if: [doc_only]
-    reads: [files_modified, files_created]
-    writes: [tests_added]
-
   - name: debugger
     agent_role: debugger
     required: true
     skip_if: [doc_only, no_test_command]
     reads: [test_output, files_modified]
     writes: [debug_attempts, test_passing]
+
+  - name: testgen
+    agent_role: testgen
+    required: true
+    skip_if: [doc_only]
+    reads: [files_modified, files_created]
+    writes: [tests_added]
 
   - name: security
     agent_role: security
