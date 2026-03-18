@@ -1142,7 +1142,7 @@ Ensure:
                 working_dir=str(ws_path),
                 previous_output=self._state.to_agent_summary("debugger"),
                 extra={
-                    "error_output": (error_output or "")[:1000],
+                    "error_output": (error_output or "")[-3000:],
                     "test_command": self.test_command,
                     "tool_executor": tools, # Hand over the keys to the sandbox
                     "prelude": self._prelude,
