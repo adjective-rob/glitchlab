@@ -26,25 +26,34 @@ It never writes code. It only coordinates.
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import ClassVar, Literal, Any
-from pydantic import BaseModel, Field
+from typing import Any
 
 from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
-from rich.syntax import Syntax
-from rich.table import Table
 
 from glitchlab.agents import AgentContext, BaseAgent, AgentResult
+from glitchlab.controller_utils import (
+    attest_controller_action,
+    calculate_quality_score,
+    pre_task_git_fetch,
+)
 from glitchlab.registry import AGENT_REGISTRY, get_agent
 from glitchlab.config_loader import GlitchLabConfig, PipelineStep, load_config
-from glitchlab.doc_inserter import insert_doc_comments
+from glitchlab.display import build_pr_body, print_budget_summary, print_plan, print_security_issues
+from glitchlab.doc_inserter import insert_doc_comments, write_adr
+from glitchlab.runners import (
+    run_archivist,
+    run_auditor,
+    run_delegated_agent,
+    run_release,
+    run_security,
+)
 from glitchlab.governance import BoundaryEnforcer, BoundaryViolation
 from glitchlab.history import TaskHistory, extract_patterns_from_messages
 from glitchlab.indexer import build_index
@@ -56,131 +65,9 @@ from glitchlab.symbols import SymbolIndex
 from glitchlab.task import Task, apply_changes, apply_tests
 from glitchlab.event_bus import bus
 from glitchlab.scope import ScopeResolver
+from glitchlab.task_state import TaskState, StepState, DirtyRepoError  # re-export
 
 console = Console()
-
-
-# ---------------------------------------------------------------------------
-# Task State — Structured Working Memory (Layer 3)
-# ---------------------------------------------------------------------------
-
-class StepState(BaseModel):
-    """Tracks the status of an individual planned step."""
-    step_number: int
-    description: str = ""
-    files: list[str] = Field(default_factory=list)
-    action: str = ""
-    status: Literal["pending", "completed", "failed", "skipped"] = "pending"
-    outcome: str = ""
-
-
-class TaskState(BaseModel):
-    """
-    Structured working memory that flows between agents.
-
-    Replaces the old pattern of passing raw `previous_output` blobs.
-    Each agent reads what it needs and writes its contribution.
-    The Controller owns this object and persists it per-run.
-    """
-
-    task_id: str
-    objective: str
-    mode: str = "evolution"
-    risk_level: str = "low"
-
-    # Planner output (consumed by Implementer, Debugger, Security)
-    plan_steps: list[StepState] = Field(default_factory=list)
-    files_in_scope: list[str] = Field(default_factory=list)
-    estimated_complexity: str = "medium"
-    requires_core_change: bool = False
-
-    # Implementer output (consumed by Debugger, Security, Release)
-    files_modified: list[str] = Field(default_factory=list)
-    files_created: list[str] = Field(default_factory=list)
-    tests_added: list[str] = Field(default_factory=list)
-    commit_message: str = ""
-    implementation_summary: str = ""
-
-    # Debug loop state
-    test_passing: bool = False
-    debug_attempts: int = 0
-    last_error: str = ""
-    previous_fixes: list[dict] = Field(default_factory=list)
-
-    # Security + Release
-    security_verdict: str = ""
-    version_bump: str = ""
-    changelog_entry: str = ""
-
-    # Tracking
-    completed_phases: list[str] = Field(default_factory=list)
-    events: list[dict] = Field(default_factory=list)
-
-    AGENT_FIELDS: ClassVar[dict[str, list[str]]] = {
-        "planner": ["previous_fixes"],
-        "implementer": ["plan_steps", "files_in_scope", "estimated_complexity"],
-        "testgen": ["files_modified", "files_created", "implementation_summary"],
-        "debugger": ["files_modified", "files_created", "last_error",
-                     "debug_attempts", "previous_fixes"],
-        "auditor": ["files_modified", "files_created", "implementation_summary"],
-        "security": ["files_modified", "files_created", "implementation_summary"],
-        "release": ["files_modified", "implementation_summary", "security_verdict"],
-        "archivist": ["plan_steps", "files_modified", "implementation_summary",
-                      "version_bump"],
-    }
-
-    FIELD_CAPS: ClassVar[dict[tuple[str, str], int]] = {
-        ("planner", "previous_fixes"): 3,
-        ("debugger", "previous_fixes"): 2,
-    }
-
-    def mark_phase(self, phase: str) -> None:
-        if phase not in self.completed_phases:
-            self.completed_phases.append(phase)
-
-    def to_agent_summary(self, for_agent: str) -> dict:
-        """
-        Return only the fields relevant to a specific agent.
-        This is the core of the context-router pattern: agents get
-        precisely what they need, not everything.
-
-        Field routing is driven by AGENT_FIELDS (which fields each agent
-        sees) and FIELD_CAPS (optional tail-slice limits for list fields).
-        New agent roles can be added by extending AGENT_FIELDS.
-        """
-        base = {
-            "task_id": self.task_id,
-            "objective": self.objective,
-            "mode": self.mode,
-            "risk_level": self.risk_level,
-        }
-        fields = self.AGENT_FIELDS.get(for_agent, [])
-        for field_name in fields:
-            value = getattr(self, field_name, None)
-            cap = self.FIELD_CAPS.get((for_agent, field_name))
-            if cap is not None:
-                value = value[-cap:] if value else []
-            elif isinstance(value, list) and all(
-                hasattr(v, "model_dump") for v in value
-            ):
-                value = [v.model_dump() for v in value]
-            base[field_name] = value
-        return base
-
-    def persist(self, ws_path: Path) -> None:
-        """Write current state to workspace for debugging/auditing."""
-        state_dir = ws_path / ".glitchlab"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        (state_dir / "task_state.json").write_text(
-            self.model_dump_json(indent=2)
-        )
-
-class DirtyRepoError(Exception):
-    """Raised when the main repository has uncommitted changes."""
-    pass
-
-
-# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -199,59 +86,6 @@ class Controller:
 
     Pipeline: Plan → Implement → Test → Debug Loop → Security → Release → PR
     """
-
-    # -----------------------------------------------------------------------
-    # Git sync (pre-task)
-    # -----------------------------------------------------------------------
-
-    def _is_git_repo(self, path: Path) -> bool:
-        """Return True if `path` looks like a git working tree."""
-        try:
-            if (path / ".git").exists():
-                return True
-            # Worktrees can have a .git file pointing to the actual gitdir
-            if (path / ".git").is_file():
-                return True
-        except Exception:
-            return False
-        return False
-
-    def _run_git(self, args: list[str], cwd: Path, timeout: int = 20) -> subprocess.CompletedProcess:
-        """Run a git command and capture output for logging."""
-        return subprocess.run(
-            ["git", *args],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-    def _pre_task_git_fetch(self) -> None:
-        """Best-effort fetch to ensure planning is against recent `origin/main`.
-
-        Soft-fails (warn + continue) to avoid breaking offline/CI runs.
-        """
-        if not self._is_git_repo(self.repo_path):
-            logger.debug(f"[GIT] Skipping fetch: not a git repo: {self.repo_path}")
-            return
-
-        try:
-            res = self._run_git(["fetch", "origin", "main"], cwd=self.repo_path, timeout=20)
-            if res.returncode != 0:
-                stderr = (res.stderr or "").strip()
-                stdout = (res.stdout or "").strip()
-                msg = stderr or stdout or f"git fetch failed with code {res.returncode}"
-                logger.warning(f"[GIT] Pre-task fetch failed (soft): {msg}")
-                return
-
-            out = (res.stdout or "").strip()
-            if out:
-                logger.info(f"[GIT] Pre-task fetch: {out}")
-            else:
-                logger.debug("[GIT] Pre-task fetch: up to date")
-        except Exception as e:
-            logger.warning(f"[GIT] Pre-task fetch exception (soft): {e}")
-            return
 
     def __init__(
         self,
@@ -303,7 +137,7 @@ class Controller:
 
         # Ensure we plan against the most recent code.
         # Soft-fail to avoid breaking offline/CI scenarios.
-        self._pre_task_git_fetch()
+        pre_task_git_fetch(self.repo_path)
 
         # --- EXECUTION GUARD (Manual Patch) ---
         # Check for uncommitted changes in the main repo, ignoring .glitchlab/
@@ -537,7 +371,7 @@ class Controller:
 
                         for entry in applied:
                             console.print(f"  [cyan]{entry}[/]")
-                            self._attest_controller_action(entry)
+                            attest_controller_action(entry, self.run_id)
 
                     # ── Standard Execution Path ──
                     else:
@@ -597,7 +431,7 @@ class Controller:
 
                         for entry in applied:
                             console.print(f"  [cyan]{entry}[/]")
-                            self._attest_controller_action(entry)
+                            attest_controller_action(entry, self.run_id)
 
                     # ── Patch & Surgical failure retry (one attempt) ──
                     # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
@@ -614,7 +448,7 @@ class Controller:
 
                         for entry in applied:
                             console.print(f"  [cyan]{entry}[/]")
-                            self._attest_controller_action(entry)
+                            attest_controller_action(entry, self.run_id)
 
                         if any(
                             "FAIL" in a or "PATCH_FAILED" in a for a in applied
@@ -645,7 +479,7 @@ class Controller:
 
                         for entry in applied:
                             console.print(f"  [cyan]{entry}[/]")
-                            self._attest_controller_action(entry)
+                            attest_controller_action(entry, self.run_id)
 
                         if any(a.startswith("PATCH_FAILED") for a in applied):
                             console.print(
@@ -694,7 +528,7 @@ class Controller:
                         console.print(
                             "[red]🚫 Security blocked this change.[/]"
                         )
-                        self._print_security_issues(sec)
+                        print_security_issues(sec)
 
                         if self.auto_approve:
                             console.print(
@@ -726,12 +560,12 @@ class Controller:
                         and nova_result.get("should_write_adr")
                         and nova_result.get("adr")
                     ):
-                        adr_applied = self._write_adr(
+                        adr_applied = write_adr(
                             ws_path, nova_result["adr"]
                         )
                         if adr_applied:
                             console.print(f"  [cyan]{adr_applied}[/]")
-                            self._attest_controller_action(adr_applied)
+                            attest_controller_action(adr_applied, self.run_id)
 
                     # Maintenance mode: forbid file create/delete
                     # and out-of-scope edits
@@ -874,7 +708,7 @@ class Controller:
                 result["branch"] = self._workspace.branch_name
                 console.print(f"[yellow]Changes committed to {self._workspace.branch_name}[/]")
 
-            self._print_budget_summary()
+            print_budget_summary(self.router.budget.summary())
             result["events"] = self._state.events
             result["budget"] = self.router.budget.summary()
 
@@ -904,7 +738,9 @@ class Controller:
             self._history.record(result)
 
         # --- NEW: Zephyr Quality Scoring & Run Completion ---
-        quality_score = self._calculate_quality_score()
+        quality_score = calculate_quality_score(
+            self.router.budget.summary(), self._state
+        )
         result["quality_score"] = quality_score
 
         bus.emit(
@@ -915,48 +751,6 @@ class Controller:
         )
 
         return result
-
-    def _calculate_quality_score(self) -> dict[str, Any]:
-        """Calculate a run quality score out of 100 based on efficiency and convergence."""
-        score = 100
-        budget_summary = self.router.budget.summary()
-        
-        # 1. Time & Efficiency (Penalize excessive token usage)
-        total_tokens = budget_summary.get("total_tokens", 0)
-        if total_tokens > 50000:
-            score -= min(30, (total_tokens - 50000) // 5000) # Max penalty 30
-        
-        # 2. Convergence (Did it struggle in the fix loop?)
-        debug_attempts = 0
-        if self._state:
-            debug_attempts = self._state.debug_attempts
-            if debug_attempts > 0:
-                score -= (debug_attempts * 10) # Heavy penalty for needing multiple fix attempts
-
-        return {
-            "score": max(0, score),
-            "tokens_used": total_tokens,
-            "debug_attempts": debug_attempts
-        }
-    
-    def _attest_controller_action(self, action_summary: str) -> None:
-        """Emit an SBOF attestation for direct controller file writes."""
-        if action_summary.startswith("FAIL") or "ERROR" in action_summary:
-            return
-            
-        bus.emit(
-            event_type="action.completed",
-            payload={
-                "command": "controller.write_file",
-                "stdout": action_summary,
-                "stderr": "",
-                "returncode": 0,
-                "allowed": True
-            },
-            agent_id="controller",
-            run_id=self.run_id,
-            action_id=f"act-{uuid.uuid4()}"
-        )
 
     # -----------------------------------------------------------------------
     # Pipeline Step Dispatcher
@@ -1070,7 +864,7 @@ class Controller:
             "risk": raw.get("risk_level"),
         })
 
-        self._print_plan(raw)
+        print_plan(raw)
 
         if self.config.intervention.pause_after_plan and not self.auto_approve:
             if not self._confirm("Approve plan?"):
@@ -1178,47 +972,12 @@ class Controller:
         return impl_result
 
     def _run_delegated_agent(self, target: str, request: str, task: Task, ws_path: Path, tools: ToolExecutor) -> str:
-        """Helper method: Handle mid-flight delegation requests from the Implementer."""
-        # Create a hyper-focused sub-context for the delegated colleague
-        sub_context = AgentContext(
-            task_id=f"{task.task_id}-delegate-{target}",
-            run_id=self.run_id,
-            objective=f"Your colleague needs your expertise on a specific sub-task:\n\n{request}",
-            repo_path=str(self.repo_path),
-            working_dir=str(ws_path),
-            extra={
-                "tool_executor": tools,
-                "prelude": self._prelude,
-                "fast_mode": False,
-                "repo_index": getattr(self, "_repo_index", None),
-            }
+        return run_delegated_agent(
+            target=target, request=request, task=task, ws_path=ws_path,
+            run_id=self.run_id, repo_path=self.repo_path, agents=self.agents,
+            tools=tools, prelude=self._prelude, repo_index=self._repo_index,
+            test_command=self.test_command,
         )
-        
-        try:
-            if target == "security":
-                res = self.agents["security"].run(sub_context)
-                return f"Verdict: {res.get('verdict')}\nSummary: {res.get('summary')}\nIssues: {res.get('issues', [])}"
-            
-            elif target == "debugger":
-                sub_context.extra["test_command"] = self.test_command
-                res = self.agents["debugger"].run(sub_context)
-                return f"Diagnosis: {res.get('diagnosis')}\nRoot Cause: {res.get('root_cause')}\nFixes applied: {res.get('fix_summary', 'None')}"
-            
-            elif target == "testgen":
-                sub_context.extra["test_command"] = self.test_command
-                res = self.agents["testgen"].run(sub_context)
-                return f"Test Generated: {res.get('test_file')}\nDescription: {res.get('description')}"
-            
-            elif target == "archivist":
-                res = self.agents["archivist"].run(sub_context)
-                return f"Architecture Notes: {res.get('architecture_notes')}\nADR Written: {res.get('should_write_adr')}"
-            
-            else:
-                return f"Error: Unknown colleague '{target}'."
-                
-        except Exception as e:
-            logger.error(f"Delegation to {target} failed: {e}")
-            return f"Colleague {target} encountered an error and could not complete the request: {e}"
 
     def _retry_patch(
         self,
@@ -1323,7 +1082,7 @@ Ensure:
             self._log_event("testgen_created", {"file": test_file, "description": desc})
             console.print(f"  [cyan]TESTGEN {test_file}[/]")
             console.print(f"  [dim]Generated: {desc}[/]")
-            self._attest_controller_action(f"TESTGEN {test_file}")
+            attest_controller_action(f"TESTGEN {test_file}", self.run_id)
         except Exception as e:
             console.print(f"  [red]Failed to write test file: {e}[/]")
 
@@ -1420,204 +1179,40 @@ Ensure:
         return False
 
     def _run_auditor(self, task: Task, impl: dict, ws_path: Path) -> dict:
-        console.print("\n[bold yellow]🕵️  [AUDITOR] Checking for performance smells...[/]")
-
-        diff = self._workspace.diff_full() if self._workspace else ""
-
-        context = AgentContext(
-            task_id=task.task_id,
-            run_id=self.run_id,
-            objective=task.objective,
-            repo_path=str(self.repo_path),
-            working_dir=str(ws_path),
-            previous_output=self._state.to_agent_summary("auditor"),
-            extra={
-                "diff": diff,
-            },
+        result = run_auditor(
+            agent=self.auditor, task=task, ws_path=ws_path, run_id=self.run_id,
+            repo_path=self.repo_path, state=self._state, workspace=self._workspace,
         )
-
-        result = self.auditor.run(context)
         self._log_event("auditor_feedback", {"feedback": result.get("feedback")})
         return result
 
     def _run_security(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> AgentResult:
-        console.print("\n[bold red]🔒 [FRANKIE] Security scan...[/]")
-
-        diff = self._workspace.diff_full() if self._workspace else ""
-
-        # v2: Structured state, not raw impl blob
-        context = AgentContext(
-            task_id=task.task_id,
-            run_id=self.run_id,
-            objective=task.objective,
-            repo_path=str(self.repo_path),
-            working_dir=str(ws_path),
-            previous_output=self._state.to_agent_summary("security"),
-            extra={
-                "diff": diff,
-                "protected_paths": self.config.boundaries.protected_paths,
-                "fast_mode": is_fast_mode,
-                "repo_index": self._repo_index,  # <--- Add this line to enable query_symbol_map
-                "prelude": self._prelude,
-            },
+        result = run_security(
+            agent=self.agents["security"], task=task, ws_path=ws_path,
+            run_id=self.run_id, repo_path=self.repo_path, state=self._state,
+            workspace=self._workspace, config=self.config, repo_index=self._repo_index,
+            prelude=self._prelude, is_fast_mode=is_fast_mode,
         )
-
-        raw = self.agents["security"].run(context)
-        result = AgentResult.from_raw(raw)
         self._log_event("security_review", {"verdict": result.payload.get("verdict")})
         return result
 
     def _run_release(self, task: Task, impl: dict, ws_path: Path, is_fast_mode: bool = False) -> AgentResult:
-        console.print("\n[bold cyan]📦 [SEMVER] Release assessment...[/]")
-
-        diff = self._workspace.diff_stat() if self._workspace else ""
-
-        context = AgentContext(
-            task_id=task.task_id,
-            run_id=self.run_id,
-            objective=task.objective,
-            repo_path=str(self.repo_path),
-            working_dir=str(ws_path),
-            previous_output=self._state.to_agent_summary("release"),
-            extra={
-                "diff": diff,
-                "fast_mode": is_fast_mode,
-            },
+        result = run_release(
+            agent=self.agents["release"], task=task, ws_path=ws_path,
+            run_id=self.run_id, repo_path=self.repo_path, state=self._state,
+            workspace=self._workspace, is_fast_mode=is_fast_mode,
         )
-
-        raw = self.agents["release"].run(context)
-        result = AgentResult.from_raw(raw)
         self._log_event("release_assessment", {"bump": result.payload.get("version_bump")})
         return result
 
     def _run_archivist(
         self, task: Task, impl: dict, plan: dict, release: dict, ws_path: Path, is_fast_mode: bool = False
     ) -> AgentResult:
-        """Run Archivist Nova with structured state context."""
-        console.print("\n[bold dim]📚 [NOVA] Documenting...[/]")
-
-        existing_docs = []
-        for pattern in ["*.md", "docs/**/*.md", "doc/**/*.md"]:
-            existing_docs.extend(
-                str(p.relative_to(ws_path))
-                for p in ws_path.glob(pattern)
-                if p.is_file() and ".glitchlab" not in str(p)
-            )
-
-        context = AgentContext(
-            task_id=task.task_id,
-            run_id=self.run_id,
-            objective=task.objective,
-            repo_path=str(self.repo_path),
-            working_dir=str(ws_path),
-            previous_output=self._state.to_agent_summary("archivist"),
-            extra={
-                "existing_docs": existing_docs[:50],
-                "fast_mode": is_fast_mode,
-            }
+        return run_archivist(
+            agent=self.agents["archivist"], task=task, ws_path=ws_path,
+            run_id=self.run_id, repo_path=self.repo_path, state=self._state,
+            is_fast_mode=is_fast_mode,
         )
-
-        # ── THE MISSING PIECE ──
-        # Call Nova's new tool-loop and return the dict result
-        raw = self.agents["archivist"].run(context)
-
-        if raw is None:
-            return AgentResult(
-                status="error",
-                payload={
-                    "should_write_adr": False,
-                    "doc_updates": [],
-                    "architecture_notes": "Archivist failed.",
-                },
-            )
-
-        return AgentResult.from_raw(raw)
-
-    @staticmethod
-    def _write_adr(ws_path: Path, adr: dict | str) -> str | None:
-        """Write an ADR to the workspace."""
-        adr_dir = ws_path / ".context" / "decisions"
-        if not adr_dir.exists():
-            adr_dir = ws_path / "docs" / "adr"
-        adr_dir.mkdir(parents=True, exist_ok=True)
-
-        existing = list(adr_dir.glob("*.md"))
-        next_num = len(existing) + 1
-
-        # Handle the case where the LLM returns a raw markdown string
-        if isinstance(adr, str):
-            title = f"ADR-{next_num:03d}"
-            # Try to extract a title from the first markdown header
-            first_line = adr.strip().split('\n')[0]
-            if first_line.startswith('# '):
-                title = first_line.replace('# ', '').strip()
-                
-            safe_title = re.sub(r'[^a-z0-9\-]+', '-', title.lower())
-            safe_title = re.sub(r'-+', '-', safe_title).strip('-')
-            filename = f"{next_num:03d}-{safe_title[:50]}.md"
-            filepath = adr_dir / filename
-            
-            filepath.write_text(adr + "\n\n---\n*Generated by GLITCHLAB / Archivist Nova*\n")
-            return f"ADR {filepath.relative_to(ws_path)}"
-
-        # Handle the case where the LLM returns a structured dictionary
-        title = adr.get("title", f"ADR-{next_num:03d}")
-        safe_title = re.sub(r'[^a-z0-9\-]+', '-', title.lower())
-        safe_title = re.sub(r'-+', '-', safe_title).strip('-')
-        filename = f"{next_num:03d}-{safe_title[:50]}.md"
-        filepath = adr_dir / filename
-
-        content = f"""# {title}
-
-**Status:** {adr.get('status', 'accepted')}
-**Date:** {datetime.now(timezone.utc).strftime('%Y-%m-%d')}
-
-## Context
-
-{adr.get('context', 'N/A')}
-
-## Decision
-
-{adr.get('decision', 'N/A')}
-
-## Consequences
-
-{adr.get('consequences', 'N/A')}
-"""
-        alternatives = adr.get("alternatives_considered", [])
-        if alternatives:
-            content += "\n## Alternatives Considered\n\n"
-            for alt in alternatives:
-                content += f"- {alt}\n"
-
-        content += "\n---\n*Generated by GLITCHLAB / Archivist Nova*\n"
-
-        filepath.write_text(content)
-        return f"ADR {filepath.relative_to(ws_path)}"
-
-    @staticmethod
-    def _write_doc_update(ws_path: Path, doc: dict) -> str | None:
-        """Apply a documentation update."""
-        fpath = ws_path / doc["file"]
-        action = doc.get("action", "create")
-        content = doc.get("content", "")
-
-        if not content:
-            return None
-
-        if action == "create":
-            fpath.parent.mkdir(parents=True, exist_ok=True)
-            fpath.write_text(content)
-            return f"DOC CREATE {doc['file']}"
-        elif action == "append":
-            fpath.parent.mkdir(parents=True, exist_ok=True)
-            existing = fpath.read_text() if fpath.exists() else ""
-            fpath.write_text(existing + "\n\n" + content)
-            return f"DOC APPEND {doc['file']}"
-        elif action == "update" and fpath.exists():
-            fpath.write_text(content)
-            return f"DOC UPDATE {doc['file']}"
-        return None
 
     # -----------------------------------------------------------------------
     # PR Creation
@@ -1626,7 +1221,7 @@ Ensure:
     def _create_pr(self, task: Task, impl: dict, release: dict) -> str:
         """Create a GitHub PR via gh CLI."""
         title = impl.get("commit_message", f"glitchlab: {task.task_id}")
-        body = self._build_pr_body(task, impl, release)
+        body = build_pr_body(task, impl, release)
 
         result = subprocess.run(
             [
@@ -1644,76 +1239,6 @@ Ensure:
             raise RuntimeError(f"PR creation failed: {result.stderr}")
 
         return result.stdout.strip()
-
-    @staticmethod
-    def _build_pr_body(task: Task, impl: dict, release: dict) -> str:
-        body = f"""## 🔬 GLITCHLAB Automated PR
-
-**Task:** {task.task_id}
-**Source:** {task.source}
-
-### Summary
-{impl.get('summary', 'No summary provided.')}
-
-### Changes
-"""
-        for change in impl.get("changes", []):
-            body += f"- `{change.get('action', '?')}` {change.get('file', '?')}: {change.get('description', '')}\n"
-
-        body += f"""
-### Version Impact
-- **Bump:** {release.get('version_bump', 'unknown')}
-- **Reasoning:** {release.get('reasoning', 'N/A')}
-
-### Changelog
-{release.get('changelog_entry', 'N/A')}
-
----
-*Generated by GLITCHLAB — Build Weird. Ship Clean.*
-"""
-        return body
-
-    # -----------------------------------------------------------------------
-    # Display Helpers
-    # -----------------------------------------------------------------------
-
-    def _print_plan(self, plan: dict) -> None:
-        table = Table(title="Execution Plan", border_style="magenta")
-        table.add_column("#", style="dim")
-        table.add_column("Action")
-        table.add_column("Files")
-        table.add_column("Description")
-
-        for step in plan.get("steps", []):
-            table.add_row(
-                str(step.get("step_number", "?")),
-                step.get("action", "?"),
-                ", ".join(step.get("files", [])),
-                step.get("description", ""),
-            )
-
-        console.print(table)
-        console.print(
-            f"Risk: [bold]{plan.get('risk_level', '?')}[/] | "
-            f"Core change: {plan.get('requires_core_change', False)} | "
-            f"Complexity: {plan.get('estimated_complexity', '?')}"
-        )
-
-    def _print_security_issues(self, sec: dict) -> None:
-        for issue in sec.get("issues", []):
-            sev = issue.get("severity", "info")
-            color = {"critical": "red", "high": "red", "medium": "yellow"}.get(sev, "dim")
-            console.print(f"  [{color}]{sev.upper()}[/] {issue.get('description', '')}")
-
-    def _print_budget_summary(self) -> None:
-        summary = self.router.budget.summary()
-        console.print(Panel(
-            f"Tokens: {summary['total_tokens']:,} / "
-            f"Cost: ${summary['estimated_cost']:.4f} / "
-            f"Calls: {summary['call_count']}",
-            title="💸 Budget",
-            border_style="green",
-        ))
 
     # -----------------------------------------------------------------------
     # Utilities
