@@ -131,17 +131,23 @@ class ContextMonitor:
         snip_ratio = max(0.15, snip_ratio) # Never truncate beyond 15% of original to retain some context
         
         new_messages = []
+        _COMPRESSED_MARKERS = ("[Content compressed", "[Search results compressed")
         for msg in messages:
             if msg.get("role") == "system":
                 # Never truncate system instructions
                 new_messages.append(msg)
             else:
                 content = msg.get("content", "")
-                if isinstance(content, str) and len(content) > 500:
+                # Skip messages already compressed by agent-level compression
+                if isinstance(content, str) and any(m in content for m in _COMPRESSED_MARKERS):
+                    new_messages.append(msg)
+                elif isinstance(content, str) and len(content) > 500:
                     target_len = int(len(content) * snip_ratio)
                     # Keep the end of the message (usually contains the most recent errors/instructions)
                     content = "\n...[TRUNCATED BY CONTEXT MONITOR]...\n" + content[-target_len:]
-                new_messages.append({"role": msg.get("role"), "content": content})
+                    new_messages.append({"role": msg.get("role"), "content": content})
+                else:
+                    new_messages.append(msg)
                 
         return new_messages
 
@@ -307,7 +313,22 @@ class Router:
         
         # V2: Enforce proactive context headroom
         safe_messages = self.context_monitor.enforce_headroom(messages, model, max_tokens)
-        
+
+        if len(safe_messages) != len(messages) or any(
+            safe_messages[i].get("content") != messages[i].get("content")
+            for i in range(min(len(safe_messages), len(messages)))
+        ):
+            bus.emit(
+                event_type="context_monitor.snipped",
+                payload={
+                    "role": role,
+                    "model": model,
+                    "original_message_count": len(messages),
+                    "snipped_message_count": len(safe_messages),
+                },
+                agent_id=role,
+            )
+
         start = time.monotonic()
 
         logger.debug(f"[ROUTER] {role} → {model} ({len(safe_messages)} messages)")
