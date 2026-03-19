@@ -455,6 +455,55 @@ Plan: {steps_text}
                         res = "Structural map (RepoIndex) is unavailable."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
+                elif tc_name == "find_references":
+                    symbol = tc_args.get("symbol")
+                    language = tc_args.get("language")
+                    if symbol_index:
+                        refs = symbol_index.find_references(symbol, language)
+                        if not refs:
+                            res = f"No structural references found for '{symbol}'. Fall back to search_grep if needed."
+                        else:
+                            lines = [f"{r['file']}:{r['line']} [{r['kind']}] {r['context']}" for r in refs[:30]]
+                            res = f"Found {len(refs)} references for '{symbol}':\n" + "\n".join(lines)
+                            if len(refs) > 30:
+                                res += f"\n... (truncated {len(refs)-30} more)"
+                    else:
+                        res = "AST parser unavailable. Please fall back to search_grep."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "get_function":
+                    symbol = tc_args.get("symbol")
+                    file_path = tc_args.get("file")
+                    if symbol_index:
+                        func_data = symbol_index.get_function_body(symbol, file_path)
+                        if func_data:
+                            res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
+                        else:
+                            res = f"Function '{symbol}' not found. Check spelling or use search_grep."
+                    else:
+                        res = "AST parser unavailable. Please fall back to read_file."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "ask_colleague":
+                    return {
+                        "_status": "delegating",
+                        "colleague": tc_args.get("colleague"),
+                        "request": tc_args.get("request"),
+                        "_messages": messages,
+                        "tc_id": tc_id,
+                        "tc_name": tc_name
+                    }
+
+                elif tc_name == "query_project_context":
+                    topic = tc_args.get("topic", "")
+                    scope = tc_args.get("scope", "")
+                    prelude = context.extra.get("prelude")
+                    if prelude:
+                        res = prelude.query(topic=topic, scope=scope)
+                    else:
+                        res = "Error: Prelude context not wired up."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
                 elif tc_name == "write_file":
                     if think_count == 0:
                         res = "Access Denied: You must use the `think` tool to explain your modifications before calling `write_file`."
