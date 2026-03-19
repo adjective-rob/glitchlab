@@ -177,11 +177,21 @@ class ToolExecutor:
             action_id=action_id
         )
 
+    # Patterns that indicate file I/O when used inside `python -c`.
+    # These turn run_check into an unrestricted file reader/writer.
+    _PYTHON_C_FILE_IO = ("open(", "pathlib", "shutil", "os.read", "os.listdir", "os.walk", "glob")
+
     def _is_allowed(self, command: str) -> bool:
         """Check if command matches any allowlist entry (prefix match)."""
         cmd_stripped = command.strip()
         for allowed in self.allowed_tools:
             if cmd_stripped.startswith(allowed):
+                # Block python -c with file I/O (prevents run_check abuse)
+                if allowed == "python -c" and any(
+                    fn in cmd_stripped for fn in self._PYTHON_C_FILE_IO
+                ):
+                    logger.warning(f"[TOOLS] python -c file I/O blocked: {cmd_stripped[:80]}")
+                    return False
                 return True
         return False
 
