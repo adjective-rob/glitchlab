@@ -17,6 +17,7 @@ from loguru import logger
 from glitchlab.event_bus import bus
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.context_compressor import compress_stale_messages
 from glitchlab.router import RouterResponse
 
 
@@ -285,64 +286,7 @@ Plan: {steps_text}
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
             
             # 1. Proactive smart context compression
-            for i in range(len(messages)):
-                # Compress tool outputs after they've been consumed by the assistant
-                if messages[i].get("role") == "tool":
-                    consumed = any(m.get("role") == "assistant" for m in messages[i+1:])
-                    if consumed:
-                        content = str(messages[i].get("content", ""))
-                        if "... [Content compressed" in content or "... [Search results compressed" in content:
-                            continue  # Already compressed
-                        
-                        tname = messages[i].get("name")
-                        
-                        # Smart symbol extraction for read_file
-                        if tname == "read_file" and len(content) > 1000:
-                            lines = content.splitlines()
-                            head = "\n".join(lines[:10])
-                            tail = "\n".join(lines[-10:])
-                            # Extract functions, classes, structs, etc.
-                            symbols = [l.strip() for l in lines if l.strip().startswith(("def ", "class ", "async def ", "pub fn ", "struct ", "type ", "export "))]
-                            sym_str = "\n".join(symbols[:20])
-                            messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
-
-                        # Reference-only extraction for search_grep
-                        elif tname == "search_grep" and len(content) > 500:
-                            lines = content.splitlines()
-                            refs = []
-                            for l in lines:
-                                parts = l.split(":")
-                                if len(parts) >= 2:
-                                    refs.append(f"{parts[0]}:{parts[1]}")
-                            if refs:
-                                messages[i]["content"] = "\n".join(refs[:30]) + "\n... [Search results compressed to references only]"
-                            else:
-                                messages[i]["content"] = content[:500] + "\n... [Search results compressed]"
-
-                        elif tname == "run_check" and len(content) > 800:
-                            lines = content.splitlines()
-                            exit_line = lines[0] if lines else ""
-                            tail = "\n".join(lines[-20:])
-                            messages[i]["content"] = f"{exit_line}\n... [Content compressed to last 20 lines]\n{tail}"
-
-                        elif tname in ("write_file", "replace_in_file") and len(content) > 200:
-                            messages[i]["content"] = content[:200] + "\n... [Content compressed]"
-
-                # Compress tool inputs (e.g. massive write_file contents) after consumption
-                if messages[i].get("role") == "assistant" and messages[i].get("tool_calls"):
-                    consumed = any(m.get("role") == "tool" for m in messages[i+1:])
-                    if consumed:
-                        for tc in messages[i]["tool_calls"]:
-                            if tc.get("function", {}).get("name") == "write_file":
-                                try:
-                                    args = json.loads(tc["function"]["arguments"])
-                                    if "content" in args and len(str(args["content"])) > 200:
-                                        lines_written = len(str(args["content"]).splitlines())
-                                        path = args.get("path", "unknown")
-                                        args["content"] = f"... [Content compressed: wrote {lines_written} lines to {path}]"
-                                        tc["function"]["arguments"] = json.dumps(args)
-                                except Exception:
-                                    pass
+            compress_stale_messages(messages)
 
             # 2. Rolling window search spiral guard
             # Look at the last 6 tool calls across all messages
