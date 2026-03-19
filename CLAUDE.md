@@ -1,4 +1,4 @@
-# CLAUDE.md — GLITCHLAB v4.2.0
+# CLAUDE.md — GLITCHLAB v4.3.0
 
 ## Identity
 

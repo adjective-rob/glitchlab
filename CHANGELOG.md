@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-03-14
+
+### Changed
+- **Version Bump**: Updated version string to 4.3.0 across all relevant locations (pyproject.toml, glitchlab/__init__.py, glitchlab/identity.py, tests/test_identity.py).
+
 ## [4.2.0] - 2026-03-07
 
 ### Added
