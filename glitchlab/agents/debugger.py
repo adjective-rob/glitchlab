@@ -17,7 +17,7 @@ from loguru import logger
 from glitchlab.event_bus import bus
 
 from glitchlab.agents import AgentContext, BaseAgent
-from glitchlab.context_compressor import compress_stale_messages
+from glitchlab.context_compressor import compress_stale_messages, hard_compact_messages
 from glitchlab.router import RouterResponse
 
 
@@ -240,6 +240,7 @@ Investigate and fix. Call `done` when the tests pass."""
             
             # 1. Proactive smart context compression
             compress_stale_messages(messages)
+            hard_compact_messages(messages)
 
             # 2. Rolling window search spiral guard
             # Look at the last 6 tool calls across all messages
