@@ -295,6 +295,8 @@ class Controller:
                             description=s.get("description", ""),
                             files=s.get("files", []),
                             action=s.get("action", ""),
+                            do_not_touch=s.get("do_not_touch", []),
+                            code_hint=s.get("code_hint", ""),
                         )
                         for s in plan.get("steps", [])
                     ]
@@ -975,6 +977,11 @@ class Controller:
 
         # Keep the user's task constraints, but DROP the JSON formatting constraints
         impl_constraints = list(task.constraints)
+
+        # Add plan-level do_not_touch as constraints
+        plan_dnt = plan.get("do_not_touch", [])
+        if plan_dnt:
+            impl_constraints.append(f"DO NOT TOUCH these files/symbols: {', '.join(plan_dnt)}")
 
         # --- MEMORY INJECTION ---
         heuristics = self._history.build_heuristics(plan.get("files_likely_affected", []))
