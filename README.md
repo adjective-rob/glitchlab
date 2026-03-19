@@ -1,4 +1,4 @@
-# **⚡ GLITCHLAB** v4.2.0
+# **⚡ GLITCHLAB** v4.3.0
 
 **The Agentic Dev Engine — Build Weird. Ship Clean.**  
  A local, repo-agnostic, multi-agent development engine that evolves codebases under strict governance.
@@ -94,7 +94,7 @@ GLITCHLAB is autonomous between checkpoints, but you stay in control:
 
 The **Controller** is the brainstem. It never writes code directly; it only coordinates.
 
-### **Project Structure (v4.2.0)**
+### **Project Structure (v4.3.0)**
 
 `glitchlab/`  
 `├── cli.py              # CLI interface (typer)`  
@@ -109,11 +109,15 @@ The **Controller** is the brainstem. It never writes code directly; it only coor
 
 ---
 
-## **What's New in v4.2.0**
+## **What's New in v4.3.0**
 
-### **Zephyr SBOF Integration**
+### **Routine Version Bump**
 
-GLITCHLAB v4.2.0 introduces **Zephyr SBOF (Signed Bill of Facts)** — cryptographic signing and attestation for every agent action. Every tool call, plan step, and code mutation is now signed with a tamper-evident signature before it is committed to the event log. This gives you:
+GLITCHLAB v4.3.0 is a minor version bump with no breaking changes. All version strings have been synchronized across the codebase.
+
+### **Previous Release: Zephyr SBOF Integration (v4.2.0)**
+
+GLITCHLAB v4.2.0 introduced **Zephyr SBOF (Signed Bill of Facts)** — cryptographic signing and attestation for every agent action. Every tool call, plan step, and code mutation is now signed with a tamper-evident signature before it is committed to the event log. This gives you:
 
 * **Cryptographic attestation** — each agent action carries a verifiable signature tied to the agent identity and the exact payload it produced.
 * **Tamper detection** — any post-hoc modification to an action record is immediately detectable by signature verification.
