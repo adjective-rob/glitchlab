@@ -14,6 +14,8 @@ from typing import Any
 
 from loguru import logger
 
+from glitchlab.event_bus import bus
+
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
@@ -329,6 +331,14 @@ Investigate and fix. Call `done` when the tests pass."""
                     continue
 
                 logger.info(f"[REROUTE] 🛠️ Tool call: {tc_name}")
+                bus.emit(
+                    event_type="agent.tool_called",
+                    payload={
+                        "tool_name": tc_name,
+                        "tool_args_keys": list(tc_args.keys()),
+                    },
+                    agent_id=self.role,
+                )
 
                 if tc_name == "think":
                     think_count += 1
@@ -514,6 +524,14 @@ Investigate and fix. Call `done` when the tests pass."""
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "done":
+                    bus.emit(
+                        event_type="agent.done",
+                        payload={
+                            "tool_name": "done",
+                            "loop_steps": step + 1,
+                        },
+                        agent_id=self.role,
+                    )
                     return {
                         "diagnosis": tc_args.get("diagnosis"),
                         "root_cause": tc_args.get("root_cause"),

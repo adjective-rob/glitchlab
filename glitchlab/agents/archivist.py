@@ -19,6 +19,7 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.event_bus import bus
 from glitchlab.router import RouterResponse
 
 
@@ -263,6 +264,14 @@ When finished, call `done` with architecture_notes, should_write_adr, adr (or nu
                     continue
 
                 logger.info(f"[NOVA] 🛠️ Tool call: {tc_name}")
+                bus.emit(
+                    event_type="agent.tool_called",
+                    payload={
+                        "tool_name": tc_name,
+                        "tool_args_keys": list(tc_args.keys()),
+                    },
+                    agent_id=self.role,
+                )
 
                 if tc_name == "think":
                     think_count += 1
@@ -347,6 +356,14 @@ When finished, call `done` with architecture_notes, should_write_adr, adr (or nu
 
                 elif tc_name == "done":
                     # Return structured output expected by controller
+                    bus.emit(
+                        event_type="agent.done",
+                        payload={
+                            "tool_name": "done",
+                            "loop_steps": step + 1,
+                        },
+                        agent_id=self.role,
+                    )
                     return {
                         "adr": tc_args.get("adr", None),
                         "doc_updates": tc_args.get("doc_updates", []),
