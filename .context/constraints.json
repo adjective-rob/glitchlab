@@ -1,0 +1,15 @@
+{
+  "$schema": "https://adjective.us/prelude/schemas/v1/constraints.schema.json",
+  "version": "1.0.0",
+  "mustUse": [],
+  "mustNotUse": [],
+  "preferences": [],
+  "fileOrganization": [],
+  "documentation": {
+    "required": true,
+    "style": "Markdown"
+  },
+  "security": [
+    "Separate .env files for different environments"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://adjective.us/prelude/schemas/v1/stack.schema.json",
+  "version": "1.0.0",
+  "language": "Python",
+  "packageManager": "poetry",
+  "frameworks": []
+}

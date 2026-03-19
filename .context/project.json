@@ -1,0 +1,8 @@
+{
+  "$schema": "https://adjective.us/prelude/schemas/v1/project.schema.json",
+  "version": "1.0.0",
+  "name": "glitchlab-soapbox",
+  "description": "**The Agentic Dev Engine — Build Weird. Ship Clean.**  ",
+  "createdAt": "2026-03-19T22:56:12.336Z",
+  "updatedAt": "2026-03-19T22:56:12.337Z"
+}
