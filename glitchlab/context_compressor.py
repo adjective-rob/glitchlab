@@ -118,7 +118,7 @@ def compress_stale_messages(messages: list[dict]) -> None:
 # compress_stale_messages shrinks content; this function removes messages.
 # --------------------------------------------------------------------------- #
 
-_HARD_COMPACT_THRESHOLD = 40  # Trigger compaction above this many messages
+_HARD_COMPACT_THRESHOLD = 50  # Trigger compaction above this many messages
 _HARD_COMPACT_KEEP_RECENT = 12  # Always preserve the N most recent messages
 
 
