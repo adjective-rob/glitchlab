@@ -30,11 +30,13 @@ class PlanStep(BaseModel):
     files: list[str] = Field(min_length=1, description="Must contain at least one valid file path")
     # Literal types prevent the LLM from hallucinating unsupported actions
     action: Literal["modify", "create", "delete"]
+    do_not_touch: list[str] = Field(default_factory=list, description="Files or functions adjacent to this change that must NOT be modified")
 
 
 class ExecutionPlan(BaseModel):
     steps: list[PlanStep]
     files_likely_affected: list[str]
+    do_not_touch: list[str] = Field(default_factory=list, description="Files, functions, or code regions that are adjacent to the change but must remain untouched")
     requires_core_change: bool
     risk_level: Literal["low", "medium", "high"]
     risk_notes: str
@@ -65,10 +67,12 @@ Output schema:
       "step_number": 1,
       "description": "What to do",
       "files": ["path/to/file.rs"],
-      "action": "modify|create|delete"
+      "action": "modify|create|delete",
+      "do_not_touch": ["path/to/adjacent.py", "ClassName.method_name"]
     }
   ],
   "files_likely_affected": ["path/to/file1", "path/to/file2"],
+  "do_not_touch": ["path/to/adjacent_file.py", "ClassName.method_name"],
   "requires_core_change": false,
   "risk_level": "low|medium|high",
   "risk_notes": "Why this risk level",
@@ -86,6 +90,8 @@ Rules:
 - Flag core changes honestly — this triggers human review.
 - If the task is ambiguous, say so in risk_notes.
 - Never suggest changes outside the task scope.
+- For every step, identify adjacent files or functions that are related but MUST NOT be modified. List them in do_not_touch. This prevents the implementer from "helpfully" editing nearby code.
+- The top-level do_not_touch list covers the entire plan. Per-step do_not_touch covers that specific step.
 - Consider test strategy for every plan.
 - DO NOT add steps to run tests, formatters, or CLI commands. You only plan file creations, modifications, and deletions.
 - Every step MUST have at least one valid file path in the 'files' array.
