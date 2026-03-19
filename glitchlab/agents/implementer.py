@@ -302,6 +302,7 @@ Plan: {steps_text}
         modified_files = set()
         created_files = set()
         think_count = 0
+        write_count = 0
         search_count = 0
         fast_mode = context.extra.get("fast_mode", False)
         max_steps = 10 if fast_mode else 30
@@ -312,6 +313,17 @@ Plan: {steps_text}
             # 1. Proactive smart context compression
             compress_stale_messages(messages)
             hard_compact_messages(messages)
+
+            # Stall detection: if we're past step 15 with no writes, force a think+act nudge
+            if step >= 15 and write_count == 0 and think_count > 0:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "WARNING: You have spent 15+ steps reading and searching without writing any code. "
+                        "You MUST take action now. Use `replace_in_file` to make your changes, or call `done` "
+                        "if the task cannot be completed. Do NOT read more files."
+                    )
+                })
 
             # 2. Rolling window search spiral guard
             # Look at the last 6 tool calls across all messages
@@ -513,6 +525,7 @@ Plan: {steps_text}
                             created_files.add(path)
                         else:
                             modified_files.add(path)
+                        write_count += 1
 
                         if symbol_index:
                             symbol_index.invalidate(path)
@@ -545,7 +558,8 @@ Plan: {steps_text}
                                 new_content = content.replace(find_str, replace_str)
                                 fpath.write_text(new_content, encoding='utf-8')
                                 modified_files.add(path)
-                                
+                                write_count += 1
+
                                 if symbol_index:
                                     symbol_index.invalidate(path)
                                     
