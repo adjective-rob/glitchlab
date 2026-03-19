@@ -25,6 +25,7 @@ It never writes code. It only coordinates.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import uuid
@@ -752,6 +753,7 @@ class Controller:
                 except Exception:
                     pass
             self._history.record(result)
+            self._write_session_entry(task, result)
 
         # --- NEW: Zephyr Quality Scoring & Run Completion ---
         quality_score = calculate_quality_score(
@@ -767,6 +769,73 @@ class Controller:
         )
 
         return result
+
+    # -----------------------------------------------------------------------
+    # Prelude Session Entry
+    # -----------------------------------------------------------------------
+
+    def _write_session_entry(self, task: Task, result: dict[str, Any]) -> None:
+        """Write a Prelude-compatible session entry to .context/session.json."""
+        session_file = self.repo_path / ".context" / "session.json"
+        if not session_file.parent.exists():
+            return  # No .context/ directory — Prelude not initialized
+
+        # Map GLITCHLAB status to Prelude outcome
+        status = result.get("status", "unknown")
+        outcome_map = {
+            "pr_created": "success",
+            "committed": "success",
+            "merged": "success",
+            "implementation_failed": "failed",
+            "budget_exceeded": "failed",
+            "error": "failed",
+            "interrupted": "failed",
+        }
+        outcome = outcome_map.get(status, "partial")
+
+        # Build the entry
+        entry = {
+            "id": self.run_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "type": "prompt",
+            "summary": task.objective[:200],
+            "filesAffected": list(set(
+                (self._state.files_modified if self._state else [])
+                + (self._state.files_created if self._state else [])
+            )),
+            "outcome": outcome,
+            "tags": [self._state.mode if self._state else "unknown"],
+        }
+
+        # Read existing, append, cap at 20 entries, write back
+        try:
+            if session_file.exists():
+                data = json.loads(session_file.read_text())
+            else:
+                data = {
+                    "$schema": "https://adjective.us/prelude/schemas/v1/session.json",
+                    "version": "1.0.0",
+                    "sessions": [{
+                        "sessionId": "glitchlab",
+                        "startedAt": datetime.now(timezone.utc).isoformat(),
+                        "entries": []
+                    }]
+                }
+
+            entries = data.get("sessions", [{}])[0].get("entries", [])
+            entries.append(entry)
+
+            # Cap at 20 entries
+            if len(entries) > 20:
+                entries = entries[-20:]
+
+            data["sessions"][0]["entries"] = entries
+            session_file.write_text(json.dumps(data, indent=2))
+            logger.debug(
+                f"[PRELUDE] Session entry written: {outcome} — {task.objective[:60]}"
+            )
+        except Exception as e:
+            logger.warning(f"[PRELUDE] Failed to write session entry: {e}")
 
     # -----------------------------------------------------------------------
     # Pipeline Step Dispatcher
