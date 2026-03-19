@@ -139,10 +139,20 @@ def hard_compact_messages(messages: list[dict]) -> None:
 
     # Sacred prefix: system + initial user message
     prefix = messages[:2]
-    # Working memory: always keep recent messages
-    suffix = messages[-_HARD_COMPACT_KEEP_RECENT:]
-    # Middle: candidates for compaction
-    middle = messages[2:-_HARD_COMPACT_KEEP_RECENT]
+
+    # Find a safe cut point that doesn't split assistant+tool pairs.
+    # Start at the target and walk backward until we hit an assistant message,
+    # which means its tool_results are all after the cut (in the suffix).
+    cut = len(messages) - _HARD_COMPACT_KEEP_RECENT
+    while cut > 2 and messages[cut].get("role") != "assistant":
+        cut -= 1
+
+    # If we walked all the way back to prefix, skip compaction this round
+    if cut <= 2:
+        return
+
+    suffix = messages[cut:]
+    middle = messages[2:cut]
 
     if not middle:
         return
