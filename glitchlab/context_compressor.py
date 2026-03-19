@@ -162,6 +162,7 @@ def hard_compact_messages(messages: list[dict]) -> None:
     files_edited = set()
     checks_run = []
     searches_done = []
+    think_outputs = []
 
     for msg in middle:
         role = msg.get("role")
@@ -193,6 +194,10 @@ def hard_compact_messages(messages: list[dict]) -> None:
                 if len(searches_done) < 3:
                     searches_done.append(content[:80])
 
+            elif name == "think":
+                if len(think_outputs) < 2:
+                    think_outputs.append(content[:500])
+
         elif role == "assistant" and msg.get("tool_calls"):
             # Check if this assistant message contains edits — if so, keep it
             for tc in msg.get("tool_calls", []):
@@ -215,6 +220,8 @@ def hard_compact_messages(messages: list[dict]) -> None:
         summary_parts.append(f"Checks run: {'; '.join(checks_run)}")
     if searches_done:
         summary_parts.append(f"Searches: {'; '.join(searches_done)}")
+    if think_outputs:
+        summary_parts.append("Agent reasoning:\n" + "\n---\n".join(think_outputs))
 
     summary_msg = {
         "role": "user",
