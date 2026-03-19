@@ -184,6 +184,11 @@ DEBUGGER_TOOLS = [
     }
 ]
 
+_READ_FILE_TRUNCATE_THRESHOLD = 300
+_READ_FILE_HEAD_LINES = 30
+_READ_FILE_TAIL_LINES = 30
+
+
 class DebuggerAgent(BaseAgent):
     role = "debugger"
 
@@ -313,6 +318,17 @@ Investigate and fix. Call `done` when the tests pass."""
                             e = min(line_count, end_line or line_count)
                             numbered = [f"{i}: {line}" for i, line in enumerate(file_lines[s:e], start=s + 1)]
                             res = f"Read {path} lines {s + 1}-{e} of {line_count}:\n\n" + "\n".join(numbered)
+                        elif line_count > _READ_FILE_TRUNCATE_THRESHOLD:
+                            head = "\n".join(file_lines[:_READ_FILE_HEAD_LINES])
+                            tail = "\n".join(file_lines[-_READ_FILE_TAIL_LINES:])
+                            res = (
+                                f"Read {path} ({line_count} lines, truncated to first "
+                                f"{_READ_FILE_HEAD_LINES} + last {_READ_FILE_TAIL_LINES}):\n\n"
+                                f"{head}\n\n"
+                                f"... ({line_count - _READ_FILE_HEAD_LINES - _READ_FILE_TAIL_LINES} lines omitted. "
+                                f"Use read_file with start_line/end_line to see specific sections.) ...\n\n"
+                                f"{tail}"
+                            )
                         else:
                             res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
