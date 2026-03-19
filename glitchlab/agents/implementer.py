@@ -235,6 +235,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 7. Use `get_function` to read specific function bodies instead of `read_file` to save context space on large files.
 8. Use `find_references` to understand where a symbol is defined or called before changing its signature.
 9. When you are confident the plan is implemented, use the `done` tool.
+10. ALWAYS prefer replace_in_file over write_file for existing files. Use write_file ONLY for creating new files. Using write_file on an existing file risks dropping content.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:

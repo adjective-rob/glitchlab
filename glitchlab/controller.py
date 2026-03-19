@@ -401,7 +401,7 @@ class Controller:
 
                         is_high_complexity = plan.get(
                             "estimated_complexity", ""
-                        ).lower() in ["high", "large"]
+                        ).lower() in ["high", "large", "unknown"]
                         if is_high_complexity:
                             console.print(
                                 "  [dim]High complexity: allowing full-file rewrites.[/]"
