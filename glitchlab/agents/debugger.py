@@ -47,10 +47,14 @@ DEBUGGER_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read the contents of a file to understand the failing logic or type signatures.",
+            "description": "Read a file's contents. Use start_line/end_line to read a specific range of a large file.",
             "parameters": {
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
+                "properties": {
+                    "path": {"type": "string"},
+                    "start_line": {"type": "integer", "description": "First line to return (1-indexed, inclusive). Optional."},
+                    "end_line": {"type": "integer", "description": "Last line to return (1-indexed, inclusive). Optional."}
+                },
                 "required": ["path"]
             }
         }
@@ -296,9 +300,20 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
+                    start_line = tc_args.get("start_line")
+                    end_line = tc_args.get("end_line")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
-                        res = f"Read {len(content)} characters from {path}:\n\n{content}"
+                        file_lines = content.splitlines()
+                        line_count = len(file_lines)
+
+                        if start_line or end_line:
+                            s = max(0, (start_line or 1) - 1)
+                            e = min(line_count, end_line or line_count)
+                            numbered = [f"{i}: {line}" for i, line in enumerate(file_lines[s:e], start=s + 1)]
+                            res = f"Read {path} lines {s + 1}-{e} of {line_count}:\n\n" + "\n".join(numbered)
+                        else:
+                            res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
