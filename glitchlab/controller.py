@@ -786,6 +786,18 @@ class Controller:
     ) -> AgentResult:
         """Execute a single pipeline step by dispatching to the registered agent."""
 
+        bus.emit(
+            event_type="pipeline.step_started",
+            payload={
+                "step_name": step.name,
+                "agent_role": step.agent_role,
+                "required": step.required,
+                "skip_if": step.skip_if,
+            },
+            agent_id=step.agent_role,
+            run_id=getattr(self, 'run_id', None),
+        )
+
         # 1. Check skip_if conditions against current state
         skip_conditions: dict[str, bool] = {
             "doc_only": is_doc_only,
@@ -794,6 +806,16 @@ class Controller:
         }
         for condition in step.skip_if:
             if skip_conditions.get(condition, False):
+                bus.emit(
+                    event_type="pipeline.step_skipped",
+                    payload={
+                        "step_name": step.name,
+                        "agent_role": step.agent_role,
+                        "skip_reason": condition,
+                    },
+                    agent_id=step.agent_role,
+                    run_id=getattr(self, 'run_id', None),
+                )
                 return AgentResult(
                     status="success",
                     agent=step.agent_role,
@@ -804,39 +826,89 @@ class Controller:
         role = step.agent_role
 
         if role == "planner":
-            return self._run_planner(task, ws_path, failure_context)
+            result = self._run_planner(task, ws_path, failure_context)
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "implementer":
             if is_doc_only:
                 # Doc-only path: implementer bypassed, handled in post-processing
-                return AgentResult(
+                result = AgentResult(
                     status="success", agent="implementer",
                     payload={"doc_only": True},
                 )
-            return self._run_implementer(task, plan or {}, ws_path, tools)
+                bus.emit(
+                    event_type="pipeline.step_completed",
+                    payload={
+                        "step_name": step.name, "agent_role": role, "status": result.status,
+                    },
+                    agent_id=role, run_id=getattr(self, 'run_id', None),
+                )
+                return result
+            result = self._run_implementer(task, plan or {}, ws_path, tools)
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "testgen":
             self._run_testgen(task, ws_path, is_doc_only)
-            return AgentResult(status="success", agent="testgen")
+            result = AgentResult(status="success", agent="testgen")
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "debugger":
             test_ok = self._run_fix_loop(task, ws_path, tools, impl or {})
-            return AgentResult(
+            result = AgentResult(
                 status="success",
                 agent="debugger",
                 payload={"test_passing": test_ok},
             )
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "security":
-            return self._run_security(task, impl or {}, ws_path)
+            result = self._run_security(task, impl or {}, ws_path)
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "release":
-            return self._run_release(task, impl or {}, ws_path, is_fast_mode)
+            result = self._run_release(task, impl or {}, ws_path, is_fast_mode)
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         if role == "archivist":
-            return self._run_archivist(
+            result = self._run_archivist(
                 task, impl or {}, plan or {}, rel or {}, ws_path, is_fast_mode
             )
+            bus.emit(
+                event_type="pipeline.step_completed",
+                payload={"step_name": step.name, "agent_role": role, "status": result.status},
+                agent_id=role, run_id=getattr(self, 'run_id', None),
+            )
+            return result
 
         raise ValueError(f"Unknown pipeline agent_role: {role!r}")
 

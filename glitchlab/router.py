@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 
 from glitchlab.config_loader import GlitchLabConfig
+from glitchlab.event_bus import bus
 
 
 class BudgetExceededError(Exception):
@@ -309,24 +310,57 @@ class Router:
             model, safe_messages, temperature, max_tokens, response_format, tools, **kwargs
         )
 
+        bus.emit(
+            event_type="llm.started",
+            payload={"role": role, "model": model, "message_count": len(messages)},
+            agent_id=role,
+        )
+
         try:
             response = litellm.completion(**kwargs_dict)
         except litellm.exceptions.ServiceUnavailableError:
             # Determine which fallback to use based on the primary model tier
             # Logic: If primary is a preview/pro model, use high_tier fallback.
             fallback_model = self.config.fallbacks.high_tier
-            logger.warning(f"⚠️ [ROUTER] 503 Service Unavailable from {model}. Failing over to {fallback_model}...")
-            
+            logger.warning(
+                f"⚠️ [ROUTER] 503 Service Unavailable from {model}. "
+                f"Failing over to {fallback_model}..."
+            )
+
             # Rebuild kwargs for the fallback model
             kwargs_dict = _build_kwargs(
-                fallback_model, safe_messages, temperature, max_tokens, response_format, tools, **kwargs
+                fallback_model, safe_messages, temperature, max_tokens,
+                response_format, tools, **kwargs
             )
             response = litellm.completion(**kwargs_dict)
+        except Exception as e:
+            bus.emit(
+                event_type="llm.error",
+                payload={"role": role, "model": model, "error": str(e)},
+                agent_id=role,
+            )
+            raise
 
         # Accuracy Fix: Place calculation here to capture total time spent including failover
         elapsed_ms = int((time.monotonic() - start) * 1000)
 
         self.budget.record(response, role)
+
+        bus.emit(
+            event_type="llm.completed",
+            payload={
+                "role": role,
+                "model": model,
+                "tokens_prompt": response.usage.prompt_tokens if response.usage else 0,
+                "tokens_completion": (
+                    response.usage.completion_tokens if response.usage else 0
+                ),
+                "tokens_total": response.usage.total_tokens if response.usage else 0,
+                "estimated_cost": round(self.budget.usage.estimated_cost, 4),
+                "duration_ms": int(elapsed_ms),
+            },
+            agent_id=role,
+        )
 
         # Extract tool calls safely
         response_message = response.choices[0].message
