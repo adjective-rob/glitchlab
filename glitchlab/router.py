@@ -100,55 +100,87 @@ class ContextMonitor:
         # Always reserve this many tokens strictly for the model's response
         self.safe_headroom = safe_headroom_tokens
 
-    def enforce_headroom(self, messages: list[dict[str, str]], model: str, max_tokens: int) -> list[dict[str, str]]:
+    def enforce_headroom(self, messages: list[dict], model: str, max_tokens: int) -> list[dict]:
         # 1. Determine model context window
         try:
             model_info = litellm.get_model_info(model)
             max_window = model_info.get("max_input_tokens") or model_info.get("max_tokens") or 128000
         except Exception:
-            max_window = 128000 # Fallback to a safe default (e.g., standard GPT-4o window)
-            
+            max_window = 128000
+
         # 2. Calculate our hard limit for the input prompt
         target_output = max_tokens or self.safe_headroom
         input_limit = max_window - target_output - (self.safe_headroom // 2)
-        
-        # 3. Count current tokens (fallback to fast character approximation if tokenizer fails)
+
+        # 3. Count current tokens
         try:
             current_tokens = litellm.token_counter(model=model, messages=messages)
         except Exception:
             current_tokens = sum(len(str(m.get("content", ""))) for m in messages) // 4
-            
+
         if current_tokens <= input_limit:
             return messages
-            
+
         logger.warning(
             f"⚠️ [CONTEXT] Token pressure high ({current_tokens} > {input_limit}). "
             "Snipping oldest context to prevent JSON truncation..."
         )
-        
-        # 4. Snip logic: Reduce the length of non-system messages to fit
-        snip_ratio = input_limit / current_tokens
-        snip_ratio = max(0.15, snip_ratio) # Never truncate beyond 15% of original to retain some context
-        
-        new_messages = []
-        _COMPRESSED_MARKERS = ("[Content compressed", "[Search results compressed")
+
+        # 4. Build a set of tool_call IDs present in assistant messages
+        #    so we never orphan a tool result.
+        live_tc_ids: set[str] = set()
         for msg in messages:
-            if msg.get("role") == "system":
-                # Never truncate system instructions
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    tc_id = tc.get("id") or (tc.get("function", {}).get("name", "") + "_orphan")
+                    live_tc_ids.add(tc_id)
+
+        # 5. Snip logic — tool-aware
+        snip_ratio = max(0.15, input_limit / current_tokens)
+        _COMPRESSED_MARKERS = ("[Content compressed", "[Search results compressed")
+
+        new_messages = []
+        skip_tc_ids: set[str] = set()  # track IDs whose assistant msg was dropped
+
+        for msg in messages:
+            role = msg.get("role")
+
+            if role == "system":
                 new_messages.append(msg)
+
+            elif role == "assistant" and msg.get("tool_calls"):
+                # Never truncate the content of tool-calling assistant messages.
+                # They contain the structural tool_calls array that must stay intact.
+                new_messages.append(msg)
+
+            elif role == "tool":
+                tc_id = msg.get("tool_call_id", "")
+                # If the parent assistant message was dropped, drop this too
+                if tc_id in skip_tc_ids:
+                    continue
+                # Truncate large tool results but preserve the message structure
+                content = str(msg.get("content", ""))
+                if isinstance(content, str) and any(m in content for m in _COMPRESSED_MARKERS):
+                    new_messages.append(msg)
+                elif len(content) > 500:
+                    target_len = int(len(content) * snip_ratio)
+                    truncated = "\n...[TRUNCATED BY CONTEXT MONITOR]...\n" + content[-target_len:]
+                    new_messages.append({**msg, "content": truncated})
+                else:
+                    new_messages.append(msg)
+
             else:
+                # user or plain assistant messages — truncate normally
                 content = msg.get("content", "")
-                # Skip messages already compressed by agent-level compression
                 if isinstance(content, str) and any(m in content for m in _COMPRESSED_MARKERS):
                     new_messages.append(msg)
                 elif isinstance(content, str) and len(content) > 500:
                     target_len = int(len(content) * snip_ratio)
-                    # Keep the end of the message (usually contains the most recent errors/instructions)
                     content = "\n...[TRUNCATED BY CONTEXT MONITOR]...\n" + content[-target_len:]
-                    new_messages.append({"role": msg.get("role"), "content": content})
+                    new_messages.append({"role": role, "content": content})
                 else:
                     new_messages.append(msg)
-                
+
         return new_messages
 
 
