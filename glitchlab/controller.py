@@ -996,6 +996,10 @@ class Controller:
                 "learned_heuristics": heuristics,
                 "symbol_index": symbol_index,
                 "prelude": self._prelude,
+                "fast_mode": (
+                    len(self._state.files_in_scope) <= 3
+                    and self._state.estimated_complexity in ("trivial", "small")
+                ),
             },
         )
 

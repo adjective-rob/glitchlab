@@ -278,7 +278,8 @@ Plan: {steps_text}
         created_files = set()
         think_count = 0
         search_count = 0
-        max_steps = 30
+        fast_mode = context.extra.get("fast_mode", False)
+        max_steps = 10 if fast_mode else 30
         
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
@@ -304,60 +305,7 @@ Plan: {steps_text}
                             symbols = [l.strip() for l in lines if l.strip().startswith(("def ", "class ", "async def ", "pub fn ", "struct ", "type ", "export "))]
                             sym_str = "\n".join(symbols[:20])
                             messages[i]["content"] = f"{head}\n\n... [Content compressed. Key symbols:]\n{sym_str}\n...\n{tail}"
-                        
-                        elif tc_name == "find_references":
-                            symbol = tc_args.get("symbol")
-                            language = tc_args.get("language")
-                            if symbol_index:
-                                refs = symbol_index.find_references(symbol, language)
-                                if not refs:
-                                    res = f"No structural references found for '{symbol}'. Fall back to search_grep if needed."
-                                else:
-                                    # Cap at 30 to protect context
-                                    lines = [f"{r['file']}:{r['line']} [{r['kind']}] {r['context']}" for r in refs[:30]]
-                                    res = f"Found {len(refs)} references for '{symbol}':\n" + "\n".join(lines)
-                                    if len(refs) > 30:
-                                        res += f"\n... (truncated {len(refs)-30} more)"
-                            else:
-                                res = "AST parser unavailable. Please fall back to search_grep."
-                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
-                        elif tc_name == "get_function":
-                            symbol = tc_args.get("symbol")
-                            file_path = tc_args.get("file")
-                            if symbol_index:
-                                func_data = symbol_index.get_function_body(symbol, file_path)
-                                if func_data:
-                                    res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
-                                else:
-                                    res = f"Function '{symbol}' not found. Check spelling or use search_grep."
-                            else:
-                                res = "AST parser unavailable. Please fall back to read_file."
-                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
-
-                        elif tc_name == "ask_colleague":
-                            # PAUSE THE IMPLEMENTER AND YIELD TO CONTROLLER
-                            return {
-                                "_status": "delegating",
-                                "colleague": tc_args.get("colleague"),
-                                "request": tc_args.get("request"),
-                                "_messages": messages, # Save the brain state!
-                                "tc_id": tc_id,        # Remember which tool call triggered this
-                                "tc_name": tc_name
-                    }
-
-                        elif tc_name == "query_project_context":
-                            topic = tc_args.get("topic", "")
-                            scope = tc_args.get("scope", "")
-                            prelude = context.extra.get("prelude")
-                    
-                            if prelude:
-                                res = prelude.query(topic=topic, scope=scope)
-                            else:
-                                res = "Error: Prelude context not wired up."
-                        
-                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})                                                  
-                        
                         # Reference-only extraction for search_grep
                         elif tname == "search_grep" and len(content) > 500:
                             lines = content.splitlines()
@@ -370,7 +318,16 @@ Plan: {steps_text}
                                 messages[i]["content"] = "\n".join(refs[:30]) + "\n... [Search results compressed to references only]"
                             else:
                                 messages[i]["content"] = content[:500] + "\n... [Search results compressed]"
-                
+
+                        elif tname == "run_check" and len(content) > 800:
+                            lines = content.splitlines()
+                            exit_line = lines[0] if lines else ""
+                            tail = "\n".join(lines[-20:])
+                            messages[i]["content"] = f"{exit_line}\n... [Content compressed to last 20 lines]\n{tail}"
+
+                        elif tname in ("write_file", "replace_in_file") and len(content) > 200:
+                            messages[i]["content"] = content[:200] + "\n... [Content compressed]"
+
                 # Compress tool inputs (e.g. massive write_file contents) after consumption
                 if messages[i].get("role") == "assistant" and messages[i].get("tool_calls"):
                     consumed = any(m.get("role") == "tool" for m in messages[i+1:])
