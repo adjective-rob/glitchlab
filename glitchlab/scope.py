@@ -34,6 +34,7 @@ class ScopeResolver:
         target_files: list[str],
         max_lines: int = 2000,
         include_deps: bool = True,
+        signatures_only: bool = False,
     ) -> dict[str, str]:
         """
         Read target files + optionally resolve their local imports
@@ -47,12 +48,26 @@ class ScopeResolver:
                 continue
 
             try:
-                lines = full.read_text().splitlines()
-                if len(lines) > max_lines:
-                    content = "\n".join(lines[:max_lines]) + f"\n\n... truncated ({len(lines)} lines total)"
+                if signatures_only:
+                    line_count = len(full.read_text().splitlines())
+                    sigs = self._extract_signatures(full)
+                    if sigs:
+                        context[fpath] = (
+                            f"({line_count} lines)\n\n{sigs}\n\n"
+                            "Use read_file or get_function for full content."
+                        )
+                    else:
+                        context[fpath] = (
+                            f"({line_count} lines) — no signatures extracted. "
+                            "Use read_file for content."
+                        )
                 else:
-                    content = "\n".join(lines)
-                context[fpath] = content
+                    lines = full.read_text().splitlines()
+                    if len(lines) > max_lines:
+                        content = "\n".join(lines[:max_lines]) + f"\n\n... truncated ({len(lines)} lines total)"
+                    else:
+                        content = "\n".join(lines)
+                    context[fpath] = content
             except Exception as e:
                 context[fpath] = f"(could not read: {e})"
 
@@ -86,6 +101,17 @@ class ScopeResolver:
             deps = self._resolve_js_imports(content, file_path)
 
         return deps
+
+    def _extract_signatures(self, file_path: Path) -> str:
+        """Extract signatures from a file based on its extension."""
+        suffix = file_path.suffix
+        if suffix == ".py":
+            return self._extract_python_signatures(file_path)
+        elif suffix == ".rs":
+            return self._extract_rust_signatures(file_path)
+        elif suffix in (".ts", ".tsx", ".js", ".jsx"):
+            return self._extract_js_signatures(file_path)
+        return ""
 
     def _resolve_python_imports(self, content: str, source: Path) -> dict[str, str]:
         """Extract local Python imports and return their signatures."""

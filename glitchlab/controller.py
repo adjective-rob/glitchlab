@@ -973,6 +973,7 @@ class Controller:
         file_context = self._scope.resolve_for_files(
             plan.get("files_likely_affected", []),
             include_deps=True,
+            signatures_only=True,
         )
 
         # Keep the user's task constraints, but DROP the JSON formatting constraints
