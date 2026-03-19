@@ -194,7 +194,7 @@ class Controller:
             f"[bold green]Task:[/] {task.objective[:120]}\n"
             f"[bold]ID:[/] {task.task_id}  |  [bold]Source:[/] {task.source}\n"
             f"[bold]Risk:[/] {task.risk_level}  |  [bold]Mode:[/] {task.mode.upper()}",
-            title="⚡ GLITCHLAB v2",
+            title="⚡ GLITCHLAB v4.3.1",
             subtitle="Build Weird. Ship Clean.",
             border_style="bright_green",
         ))
