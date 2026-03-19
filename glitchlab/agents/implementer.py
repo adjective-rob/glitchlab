@@ -232,9 +232,9 @@ IMPLEMENTER_TOOLS = [
 # Files above this threshold return head + tail with a nudge toward
 # get_function. Keeps the message list lean without losing orientation.
 # ---------------------------------------------------------------------------
-_READ_FILE_TRUNCATE_THRESHOLD = 500
-_READ_FILE_HEAD_LINES = 50
-_READ_FILE_TAIL_LINES = 50
+_READ_FILE_TRUNCATE_THRESHOLD = 200
+_READ_FILE_HEAD_LINES = 30
+_READ_FILE_TAIL_LINES = 30
 
 
 class ImplementerAgent(BaseAgent):
@@ -256,6 +256,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 11. If the plan includes `do_not_touch` items, you MUST NOT modify those files or functions. They are explicitly out of scope.
 12. If the plan includes `code_hint`, use it as a starting point for your implementation. Verify the hint against actual code before applying — hints are approximate, not guaranteed correct.
 13. The initial file context shows signatures and structure, not full content. Use `get_function` to read specific functions, or use `read_file` with `start_line`/`end_line` to read a range of a large file. Avoid reading entire large files — it wastes context budget.
+14. NEVER read_file an entire file over 200 lines. Use get_function or read_file with start_line/end_line. Every full-file read costs ~5K tokens — you have a budget.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
