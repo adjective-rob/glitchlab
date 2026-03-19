@@ -54,6 +54,9 @@ def print_budget_summary(budget_summary: dict) -> None:
         title="💸 Budget",
         border_style="green",
     ))
+    if budget_summary.get("role_usage"):
+        for role, tokens in sorted(budget_summary["role_usage"].items()):
+            console.print(f"  [dim]{role}: {tokens:,} tokens[/]")
 
 
 def build_pr_body(task: Task, impl: dict, release: dict) -> str:

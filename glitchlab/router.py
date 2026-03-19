@@ -82,6 +82,7 @@ class BudgetTracker:
             "call_count": self.usage.call_count,
             "tokens_remaining": self.tokens_remaining,
             "dollars_remaining": round(self.dollars_remaining, 4),
+            "role_usage": dict(self.role_usage),
         }
 
 

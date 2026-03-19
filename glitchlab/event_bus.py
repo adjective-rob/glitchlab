@@ -48,9 +48,13 @@ class EventBus:
         for subscriber in self._subscribers:
             try:
                 subscriber(event)
-            except Exception:
+            except Exception as e:
                 # Prevent a failing subscriber (like a bad file write) from crashing the engine
-                pass
+                import logging
+                logging.getLogger("glitchlab.event_bus").debug(
+                    "Subscriber %s failed: %s", subscriber.__name__
+                    if hasattr(subscriber, '__name__') else subscriber, e
+                )
 
 # Global singleton instance for easy imports across the project
 bus = EventBus()
