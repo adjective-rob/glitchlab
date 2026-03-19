@@ -16,6 +16,7 @@ from rich.console import Console
 from glitchlab.agents import AgentContext, BaseAgent, AgentResult
 from glitchlab.task import Task
 from glitchlab.task_state import TaskState
+from datetime import datetime, timezone
 
 console = Console()
 
@@ -153,6 +154,7 @@ def run_archivist(
         extra={
             "existing_docs": existing_docs[:50],
             "fast_mode": is_fast_mode,
+            "today": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         },
     )
 

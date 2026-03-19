@@ -148,6 +148,7 @@ Rules:
 3. NO TRUNCATION: Never use `write_file` on large existing documents. Prefer `replace_in_file` so you don't delete history.
 4. ADR POLICY: Write ADRs for any change that affects architecture, public API, or introduces new patterns.
 5. FINALIZATION: When all files are updated via tools, call the `done` tool to submit your final architectural notes and ADR data.
+6. When writing changelog entries or ADRs, use the date provided in context.extra["today"]. Do not guess the date.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
