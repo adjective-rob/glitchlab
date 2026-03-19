@@ -882,7 +882,7 @@ class Controller:
             return result
 
         if role == "security":
-            result = self._run_security(task, impl or {}, ws_path)
+            result = self._run_security(task, impl or {}, ws_path, is_fast_mode)
             bus.emit(
                 event_type="pipeline.step_completed",
                 payload={"step_name": step.name, "agent_role": role, "status": result.status},
