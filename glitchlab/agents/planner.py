@@ -31,6 +31,7 @@ class PlanStep(BaseModel):
     # Literal types prevent the LLM from hallucinating unsupported actions
     action: Literal["modify", "create", "delete"]
     do_not_touch: list[str] = Field(default_factory=list, description="Files or functions adjacent to this change that must NOT be modified")
+    code_hint: str = Field(default="", description="Pseudocode or code sketch showing the shape of the change. Not a full implementation.")
 
 
 class ExecutionPlan(BaseModel):
@@ -68,7 +69,8 @@ Output schema:
       "description": "What to do",
       "files": ["path/to/file.rs"],
       "action": "modify|create|delete",
-      "do_not_touch": ["path/to/adjacent.py", "ClassName.method_name"]
+      "do_not_touch": ["path/to/adjacent.py", "ClassName.method_name"],
+      "code_hint": "Add `fast_mode: bool` parameter to the extra dict, computed from self._state.files_in_scope <= 3"
     }
   ],
   "files_likely_affected": ["path/to/file1", "path/to/file2"],
@@ -95,6 +97,8 @@ Rules:
 - Consider test strategy for every plan.
 - DO NOT add steps to run tests, formatters, or CLI commands. You only plan file creations, modifications, and deletions.
 - Every step MUST have at least one valid file path in the 'files' array.
+- For modify/create steps, include a code_hint showing the shape of the change. This can be pseudocode, a signature sketch, or a short code fragment. The implementer will use this as a starting point, not as final code.
+- code_hint should be concise — 1-5 lines. If the change is trivial (e.g. adding a field), a one-liner is fine.
 """
 
     def run(self, context: AgentContext, **kwargs) -> dict[str, Any]:
