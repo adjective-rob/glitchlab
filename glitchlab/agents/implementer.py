@@ -47,10 +47,14 @@ IMPLEMENTER_TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read the contents of a file from the workspace to get type signatures or context.",
+            "description": "Read a file's contents. For large files (500+ lines), returns head+tail only. Use start_line/end_line to read a specific range instead.",
             "parameters": {
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
+                "properties": {
+                    "path": {"type": "string"},
+                    "start_line": {"type": "integer", "description": "First line to return (1-indexed, inclusive). Optional."},
+                    "end_line": {"type": "integer", "description": "Last line to return (1-indexed, inclusive). Optional."}
+                },
                 "required": ["path"]
             }
         }
@@ -228,7 +232,7 @@ IMPLEMENTER_TOOLS = [
 # Files above this threshold return head + tail with a nudge toward
 # get_function. Keeps the message list lean without losing orientation.
 # ---------------------------------------------------------------------------
-_READ_FILE_TRUNCATE_THRESHOLD = 300
+_READ_FILE_TRUNCATE_THRESHOLD = 500
 _READ_FILE_HEAD_LINES = 50
 _READ_FILE_TAIL_LINES = 50
 
@@ -251,7 +255,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 10. ALWAYS prefer replace_in_file over write_file for existing files. Use write_file ONLY for creating new files. Using write_file on an existing file risks dropping content.
 11. If the plan includes `do_not_touch` items, you MUST NOT modify those files or functions. They are explicitly out of scope.
 12. If the plan includes `code_hint`, use it as a starting point for your implementation. Verify the hint against actual code before applying — hints are approximate, not guaranteed correct.
-13. The initial file context shows signatures and structure, not full content. Use `get_function` to read the specific functions you need to edit. Avoid `read_file` on large files — it wastes context budget. If you need to understand file structure, the signatures are already provided.
+13. The initial file context shows signatures and structure, not full content. Use `get_function` to read specific functions, or use `read_file` with `start_line`/`end_line` to read a range of a large file. Avoid reading entire large files — it wastes context budget.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -368,18 +372,27 @@ Plan: {steps_text}
 
                 elif tc_name == "read_file":
                     path = tc_args.get("path")
+                    start_line = tc_args.get("start_line")
+                    end_line = tc_args.get("end_line")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
                         file_lines = content.splitlines()
                         line_count = len(file_lines)
-                        if line_count > _READ_FILE_TRUNCATE_THRESHOLD:
+
+                        if start_line or end_line:
+                            # Line-range mode: return exact slice with line numbers, no truncation
+                            s = max(0, (start_line or 1) - 1)
+                            e = min(line_count, end_line or line_count)
+                            numbered = [f"{i}: {line}" for i, line in enumerate(file_lines[s:e], start=s + 1)]
+                            res = f"Read {path} lines {s + 1}-{e} of {line_count}:\n\n" + "\n".join(numbered)
+                        elif line_count > _READ_FILE_TRUNCATE_THRESHOLD:
                             head = "\n".join(file_lines[:_READ_FILE_HEAD_LINES])
                             tail = "\n".join(file_lines[-_READ_FILE_TAIL_LINES:])
                             res = (
                                 f"Read {path} ({line_count} lines, truncated to first {_READ_FILE_HEAD_LINES} + last {_READ_FILE_TAIL_LINES}):\n\n"
                                 f"{head}\n\n"
                                 f"... ({line_count - _READ_FILE_HEAD_LINES - _READ_FILE_TAIL_LINES} lines omitted. "
-                                f"Use get_function to read specific functions.) ...\n\n"
+                                f"Use read_file with start_line/end_line or get_function to see specific sections.) ...\n\n"
                                 f"{tail}"
                             )
                         else:
