@@ -21,6 +21,8 @@ class StepState(BaseModel):
     action: str = ""
     status: Literal["pending", "completed", "failed", "skipped"] = "pending"
     outcome: str = ""
+    do_not_touch: list[str] = Field(default_factory=list)
+    code_hint: str = ""
 
 
 class TaskState(BaseModel):

@@ -239,6 +239,8 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 8. Use `find_references` to understand where a symbol is defined or called before changing its signature.
 9. When you are confident the plan is implemented, use the `done` tool.
 10. ALWAYS prefer replace_in_file over write_file for existing files. Use write_file ONLY for creating new files. Using write_file on an existing file risks dropping content.
+11. If the plan includes `do_not_touch` items, you MUST NOT modify those files or functions. They are explicitly out of scope.
+12. If the plan includes `code_hint`, use it as a starting point for your implementation. Verify the hint against actual code before applying — hints are approximate, not guaranteed correct.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -247,6 +249,12 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
         steps_text = ""
         for step in state.get("plan_steps", []):
             steps_text += f"\nStep {step.get('step_number')}: {step.get('description')}\n"
+            hint = step.get("code_hint", "")
+            if hint:
+                steps_text += f"  Code hint: {hint}\n"
+            dnt = step.get("do_not_touch", [])
+            if dnt:
+                steps_text += f"  DO NOT TOUCH: {', '.join(dnt)}\n"
 
         file_context = ""
         if context.file_context:
