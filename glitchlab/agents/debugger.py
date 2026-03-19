@@ -228,7 +228,8 @@ Investigate and fix. Call `done` when the tests pass."""
         created_files = set()
         think_count = 0
         search_count = 0
-        max_steps = 30 
+        fast_mode = context.extra.get("fast_mode", False)
+        max_steps = 8 if fast_mode else 15
 
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
