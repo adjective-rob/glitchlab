@@ -25,6 +25,11 @@ class BudgetExceededError(Exception):
     pass
 
 
+class ContextOverflowError(Exception):
+    """Raised when context shedding cannot recover from rate limits."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Usage Tracking
 # ---------------------------------------------------------------------------
@@ -294,7 +299,7 @@ class Router:
     @retry(
         stop=stop_after_attempt(6), 
         wait=wait_exponential(min=2, max=60),
-        retry=retry_if_not_exception_type(BudgetExceededError)
+        retry=retry_if_not_exception_type((BudgetExceededError, ContextOverflowError))
     )
     def complete(
         self,
@@ -398,11 +403,38 @@ class Router:
             )
             response = litellm.completion(**kwargs_dict)
         except Exception as e:
+            error_str = str(e)
+            is_rate_limit = "429" in error_str or "rate" in error_str.lower()
+            is_bad_request = "400" in error_str or "BadRequest" in error_str
+
             bus.emit(
                 event_type="llm.error",
-                payload={"role": role, "model": model, "error": str(e)},
+                payload={
+                    "role": role,
+                    "model": model,
+                    "error": error_str,
+                    "is_rate_limit": is_rate_limit,
+                    "is_bad_request": is_bad_request,
+                },
                 agent_id=role,
             )
+
+            if is_bad_request:
+                # Bad request (likely broken tool pairing) — do not retry,
+                # the same payload will fail every time.
+                logger.error(
+                    f"🛑 [ROUTER] BadRequest from API — not retrying. "
+                    f"Likely broken tool_call/tool_result pairing. Error: {error_str[:200]}"
+                )
+                raise ContextOverflowError(
+                    f"API rejected request (BadRequest). Context may be malformed: {error_str[:200]}"
+                ) from e
+
+            if is_rate_limit:
+                logger.warning(
+                    f"⚠️ [ROUTER] Rate limited. Will retry with backoff. Error: {error_str[:200]}"
+                )
+
             raise
 
         # Accuracy Fix: Place calculation here to capture total time spent including failover
