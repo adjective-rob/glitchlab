@@ -14,6 +14,8 @@ from typing import Any
 
 from loguru import logger
 
+from glitchlab.event_bus import bus
+
 from glitchlab.agents import AgentContext, BaseAgent
 from glitchlab.router import RouterResponse
 
@@ -430,6 +432,14 @@ Plan: {steps_text}
                     continue
 
                 logger.info(f"[PATCH] 🛠️ Tool call: {tc_name}")
+                bus.emit(
+                    event_type="agent.tool_called",
+                    payload={
+                        "tool_name": tc_name,
+                        "tool_args_keys": list(tc_args.keys()),
+                    },
+                    agent_id=self.role,
+                )
 
                 if tc_name == "think":
                     think_count += 1
@@ -594,6 +604,14 @@ Plan: {steps_text}
 
                 elif tc_name == "done":
                     # Exit the loop!
+                    bus.emit(
+                        event_type="agent.done",
+                        payload={
+                            "tool_name": "done",
+                            "loop_steps": step + 1,
+                        },
+                        agent_id=self.role,
+                    )
                     return {
                         "changes": [
                             {"file": f, "action": "modify", "_already_applied": True} for f in modified_files

@@ -20,6 +20,7 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.event_bus import bus
 from glitchlab.router import RouterResponse
 
 
@@ -309,6 +310,14 @@ FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `r
                     continue
 
                 logger.info(f"[FRANKIE] 🛠️ Tool call: {tc_name}")
+                bus.emit(
+                    event_type="agent.tool_called",
+                    payload={
+                        "tool_name": tc_name,
+                        "tool_args_keys": list(tc_args.keys()),
+                    },
+                    agent_id=self.role,
+                )
 
                 if tc_name == "think":
                     think_count += 1
@@ -415,6 +424,14 @@ FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `r
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "submit_report":
+                    bus.emit(
+                        event_type="agent.done",
+                        payload={
+                            "tool_name": "submit_report",
+                            "loop_steps": step + 1,
+                        },
+                        agent_id=self.role,
+                    )
                     return {
                         "verdict": tc_args.get("verdict", "warn"),
                         "issues": tc_args.get("issues", []),

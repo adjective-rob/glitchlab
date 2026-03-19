@@ -16,6 +16,7 @@ from typing import Any
 from loguru import logger
 
 from glitchlab.agents import AgentContext, BaseAgent
+from glitchlab.event_bus import bus
 from glitchlab.router import RouterResponse
 
 
@@ -252,6 +253,14 @@ Investigate the modified files, update CHANGELOG.md surgically, and call `submit
                     continue
 
                 logger.info(f"[SEMVER] 🛠️ Tool call: {tc_name}")
+                bus.emit(
+                    event_type="agent.tool_called",
+                    payload={
+                        "tool_name": tc_name,
+                        "tool_args_keys": list(tc_args.keys()),
+                    },
+                    agent_id=self.role,
+                )
 
                 if tc_name == "think":
                     think_count += 1
@@ -308,6 +317,14 @@ Investigate the modified files, update CHANGELOG.md surgically, and call `submit
                             res = f"Error: {e}"
 
                 elif tc_name == "submit_verdict":
+                    bus.emit(
+                        event_type="agent.done",
+                        payload={
+                            "tool_name": "submit_verdict",
+                            "loop_steps": step + 1,
+                        },
+                        agent_id=self.role,
+                    )
                     return {
                         "version_bump": tc_args.get("version_bump", "patch"),
                         "reasoning": tc_args.get("reasoning", ""),
