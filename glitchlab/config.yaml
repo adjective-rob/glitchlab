@@ -103,18 +103,21 @@ pipeline:
   - name: planner
     agent_role: planner
     required: true
+    fallback_tier: high
     reads: [task_description, repo_structure]
     writes: [plan_steps, files_in_scope, estimated_complexity]
 
   - name: implementer
     agent_role: implementer
     required: true
+    fallback_tier: high
     reads: [plan_steps, files_in_scope]
     writes: [files_modified, files_created, commit_message]
 
   - name: debugger
     agent_role: debugger
     required: true
+    fallback_tier: high
     skip_if: [doc_only, no_test_command]
     reads: [test_output, files_modified]
     writes: [debug_attempts, test_passing]
@@ -122,6 +125,7 @@ pipeline:
   - name: testgen
     agent_role: testgen
     required: true
+    fallback_tier: low
     skip_if: [doc_only]
     reads: [files_modified, files_created]
     writes: [tests_added]
@@ -129,6 +133,7 @@ pipeline:
   - name: security
     agent_role: security
     required: true
+    fallback_tier: low
     skip_if: [doc_only]
     reads: [files_modified, files_created]
     writes: [security_verdict]
@@ -136,6 +141,7 @@ pipeline:
   - name: release
     agent_role: release
     required: true
+    fallback_tier: low
     skip_if: [doc_only]
     reads: [files_modified, commit_message]
     writes: [version_bump, changelog_entry]
@@ -143,5 +149,6 @@ pipeline:
   - name: archivist
     agent_role: archivist
     required: false
+    fallback_tier: low
     reads: [plan_steps, files_modified, security_verdict]
     writes: [adr_content]

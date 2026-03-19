@@ -238,6 +238,12 @@ class Router:
             "testgen": config.routing.testgen,
         }
 
+        # Build fallback tier map from pipeline config
+        self._role_fallback_tier = {
+            step.agent_role: step.fallback_tier
+            for step in config.pipeline
+        }
+
         litellm.suppress_debug_info = True
 
     def resolve_model(self, role: str) -> str:
@@ -319,12 +325,17 @@ class Router:
         try:
             response = litellm.completion(**kwargs_dict)
         except litellm.exceptions.ServiceUnavailableError:
-            # Determine which fallback to use based on the primary model tier
-            # Logic: If primary is a preview/pro model, use high_tier fallback.
-            fallback_model = self.config.fallbacks.high_tier
+            # Select fallback tier from pipeline config (defaults to high)
+            tier = self._role_fallback_tier.get(role, "high")
+            fallback_model = (
+                self.config.fallbacks.low_tier
+                if tier == "low"
+                else self.config.fallbacks.high_tier
+            )
+            model = fallback_model  # Update so events and RouterResponse reflect actual model
             logger.warning(
-                f"⚠️ [ROUTER] 503 Service Unavailable from {model}. "
-                f"Failing over to {fallback_model}..."
+                f"⚠️ [ROUTER] 503 Service Unavailable. "
+                f"Failing over to {fallback_model} (tier={tier})..."
             )
 
             # Rebuild kwargs for the fallback model

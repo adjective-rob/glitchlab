@@ -71,6 +71,7 @@ class PipelineStep(BaseModel):
     skip_if: list[str] = Field(default_factory=list)   # conditions: "doc_only", "fast_mode", "no_test_command"
     reads: list[str] = Field(default_factory=list)      # TaskState fields this agent needs
     writes: list[str] = Field(default_factory=list)     # TaskState fields this agent produces
+    fallback_tier: str = "high"  # "high" or "low" — which fallback model to use on 503
 
 
 class GlitchLabConfig(BaseModel):
