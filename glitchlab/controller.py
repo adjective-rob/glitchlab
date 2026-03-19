@@ -488,6 +488,18 @@ class Controller:
                             result["status"] = "implementation_failed"
                             return result
 
+                    # Compute fast_mode for downstream agents
+                    is_fast_mode = (
+                        len(self._state.files_modified) <= 2
+                        and self._state.estimated_complexity
+                        in ("trivial", "small")
+                    )
+                    if is_fast_mode:
+                        console.print(
+                            "  [dim]Trivial change detected. "
+                            "Forcing downstream agents into Fast Mode.[/]"
+                        )
+
                 elif step.agent_role == "debugger":
                     test_ok = step_result.payload.get("test_passing", True)
 
@@ -508,18 +520,6 @@ class Controller:
 
                 elif step.agent_role == "security":
                     sec = step_result.payload
-
-                    # --- FAST MODE CHECK ---
-                    is_fast_mode = (
-                        len(self._state.files_modified) <= 2
-                        and self._state.estimated_complexity
-                        in ("trivial", "small")
-                    )
-                    if is_fast_mode:
-                        console.print(
-                            "  [dim]Trivial change detected. "
-                            "Forcing downstream agents into Fast Mode.[/]"
-                        )
 
                     self._state.mark_phase("security")
 
