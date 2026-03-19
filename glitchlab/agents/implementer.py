@@ -223,6 +223,16 @@ IMPLEMENTER_TOOLS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Maximum lines returned by read_file before truncation kicks in.
+# Files above this threshold return head + tail with a nudge toward
+# get_function. Keeps the message list lean without losing orientation.
+# ---------------------------------------------------------------------------
+_READ_FILE_TRUNCATE_THRESHOLD = 300
+_READ_FILE_HEAD_LINES = 50
+_READ_FILE_TAIL_LINES = 50
+
+
 class ImplementerAgent(BaseAgent):
     role = "implementer"
 
@@ -241,6 +251,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 10. ALWAYS prefer replace_in_file over write_file for existing files. Use write_file ONLY for creating new files. Using write_file on an existing file risks dropping content.
 11. If the plan includes `do_not_touch` items, you MUST NOT modify those files or functions. They are explicitly out of scope.
 12. If the plan includes `code_hint`, use it as a starting point for your implementation. Verify the hint against actual code before applying — hints are approximate, not guaranteed correct.
+13. The initial file context shows signatures and structure, not full content. Use `get_function` to read the specific functions you need to edit. Avoid `read_file` on large files — it wastes context budget. If you need to understand file structure, the signatures are already provided.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -258,7 +269,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 
         file_context = ""
         if context.file_context:
-            file_context = "\n\nInitial file contents provided by router:\n"
+            file_context = "\n\nInitial file context (signatures only — use get_function for full content):\n"
             for fname, content in context.file_context.items():
                 file_context += f"\n--- {fname} ---\n{content}\n"
 
@@ -359,7 +370,20 @@ Plan: {steps_text}
                     path = tc_args.get("path")
                     try:
                         content = (workspace_dir / path).read_text(encoding='utf-8')
-                        res = f"Read {len(content)} characters from {path}:\n\n{content}"
+                        file_lines = content.splitlines()
+                        line_count = len(file_lines)
+                        if line_count > _READ_FILE_TRUNCATE_THRESHOLD:
+                            head = "\n".join(file_lines[:_READ_FILE_HEAD_LINES])
+                            tail = "\n".join(file_lines[-_READ_FILE_TAIL_LINES:])
+                            res = (
+                                f"Read {path} ({line_count} lines, truncated to first {_READ_FILE_HEAD_LINES} + last {_READ_FILE_TAIL_LINES}):\n\n"
+                                f"{head}\n\n"
+                                f"... ({line_count - _READ_FILE_HEAD_LINES - _READ_FILE_TAIL_LINES} lines omitted. "
+                                f"Use get_function to read specific functions.) ...\n\n"
+                                f"{tail}"
+                            )
+                        else:
+                            res = f"Read {len(content)} characters from {path}:\n\n{content}"
                     except Exception as e:
                         res = f"Error reading file: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
