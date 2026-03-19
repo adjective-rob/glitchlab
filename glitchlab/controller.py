@@ -1223,6 +1223,10 @@ Ensure:
                     "tool_executor": tools, # Hand over the keys to the sandbox
                     "prelude": self._prelude,
                     "repo_index": self._repo_index,
+                    "fast_mode": (
+                        len(self._state.files_in_scope) <= 3
+                        and self._state.estimated_complexity in ("trivial", "small")
+                    ),
                 },
             )
 
