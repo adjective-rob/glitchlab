@@ -260,6 +260,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 15. You MUST attempt your first replace_in_file or write_file by step 8. Reading beyond step 8 without writing means you are stalling. Use what you have and start editing.
 16. Every code_hint for a 'modify' action MUST include the exact function name or line range where the change goes. Example: "In ImplementerAgent.run(), after the `response = self.router.complete()` call (around line 325), add: loop_tokens += response.tokens_used". The implementer will use get_function to read that exact function and apply the hint. Vague hints like "add token tracking to the loop" waste implementer steps.
 17. When the plan includes a code_hint referencing a specific function, your FIRST tool call after think should be get_function for that exact function. Do NOT read_file the entire file.
+18. After a successful run_check that shows tests passing, call done immediately. Do not read more files. The task is complete.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
