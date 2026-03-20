@@ -352,9 +352,15 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
             if compact_result:
                 project_context = f"\n\nProject context:\n{compact_result}\n"
 
+        # Agent Guide: inject codebase knowledge if available
+        agent_guide = ""
+        guide_path = Path(context.repo_path) / "glitchlab" / "AGENT_GUIDE.md"
+        if guide_path.exists():
+            agent_guide = f"\n\nAgent Guide:\n{guide_path.read_text()[:3000]}\n"
+
         user_content = f"""Task: {context.objective}
 Plan: {steps_text}
-{file_context}{project_context}"""
+{file_context}{agent_guide}{project_context}"""
 
         # --- ADD HEURISTICS ---
         heuristics = context.extra.get("learned_heuristics")
