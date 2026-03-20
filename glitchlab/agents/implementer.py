@@ -269,6 +269,22 @@ IMPLEMENTER_TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "patch_function",
+            "description": "Replace an entire function or method with new source code. Uses AST to find the exact boundaries of the existing function, then replaces only those lines. You must provide the COMPLETE new function including the def/async def line, decorators, and body. This is safer than write_file (won't delete other code) and more reliable than replace_in_file (no exact string matching needed).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "file": {"type": "string", "description": "Path to the file containing the function"},
+                    "function_name": {"type": "string", "description": "Name of the function or method to replace"},
+                    "new_source": {"type": "string", "description": "The complete new function source code, including def line and full body. Must be properly indented for its context (e.g. method inside a class needs class-level indentation)."}
+                },
+                "required": ["file", "function_name", "new_source"]
+            }
+        }
+    },
 ]
 
 
@@ -306,6 +322,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 16. Every code_hint for a 'modify' action MUST include the exact function name or line range where the change goes. Example: "In ImplementerAgent.run(), after the `response = self.router.complete()` call (around line 325), add: loop_tokens += response.tokens_used". The implementer will use get_function to read that exact function and apply the hint. Vague hints like "add token tracking to the loop" waste implementer steps.
 17. When the plan includes a code_hint referencing a specific function, your FIRST tool call after think should be get_function for that exact function. Do NOT read_file the entire file.
 18. After a successful run_check that shows tests passing, call done immediately. Do not read more files. The task is complete.
+19. For modifying existing functions, prefer `patch_function` over `replace_in_file`. It uses AST boundaries so you don't need exact string matching — just provide the function name and complete new source. Use `replace_in_file` only for changes outside function bodies (imports, constants, class-level attributes).
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -644,6 +661,75 @@ Plan: {steps_text}
                                 )
                     except Exception as e:
                         res = f"Error: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "patch_function":
+                    if think_count == 0:
+                        res = "Access Denied: You must use the `think` tool to explain your modifications before calling `patch_function`."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
+                    file_path = tc_args.get("file")
+                    func_name = tc_args.get("function_name")
+                    new_source = tc_args.get("new_source")
+
+                    if not file_path or not func_name or not new_source:
+                        res = "Error: file, function_name, and new_source are all required."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
+                    try:
+                        fpath = workspace_dir / file_path
+                        if not fpath.exists():
+                            res = f"Error: {file_path} does not exist."
+                        elif not symbol_index:
+                            res = "Error: AST parser unavailable. Use replace_in_file instead."
+                        else:
+                            # Find the function boundaries via AST
+                            func_data = symbol_index.get_function_body(func_name, file_path)
+                            if not func_data:
+                                res = f"Error: Function '{func_name}' not found in {file_path}. Check the name or use search_grep to find it."
+                            else:
+                                content = fpath.read_text(encoding='utf-8')
+                                file_lines = content.splitlines()
+                                start = func_data['line_start'] - 1  # 0-indexed
+                                end = func_data['line_end']           # exclusive
+
+                                # Check for decorators above the function — include them in the replacement range
+                                # Walk backward from start to find @decorator lines
+                                decorator_start = start
+                                while decorator_start > 0:
+                                    prev_line = file_lines[decorator_start - 1].strip()
+                                    if prev_line.startswith('@'):
+                                        decorator_start -= 1
+                                    else:
+                                        break
+
+                                # Replace the line range
+                                new_lines = new_source.splitlines()
+                                patched_lines = file_lines[:decorator_start] + new_lines + file_lines[end:]
+                                patched_content = "\n".join(patched_lines)
+
+                                # Preserve trailing newline if original had one
+                                if content.endswith("\n"):
+                                    patched_content += "\n"
+
+                                fpath.write_text(patched_content, encoding='utf-8')
+                                modified_files.add(file_path)
+                                write_count += 1
+
+                                if symbol_index:
+                                    symbol_index.invalidate(file_path)
+
+                                old_line_count = end - decorator_start
+                                new_line_count = len(new_lines)
+                                res = (
+                                    f"Success: Replaced '{func_name}' in {file_path} "
+                                    f"(lines {decorator_start + 1}-{end}, {old_line_count} lines → {new_line_count} lines)."
+                                )
+                    except Exception as e:
+                        res = f"Error patching function: {e}"
+
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "ask_colleague":
