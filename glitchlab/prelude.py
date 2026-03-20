@@ -344,6 +344,29 @@ class PreludeContext:
             return result.stdout.strip()
         return f"Query failed: {result.stderr}"
 
+    def compact(self, topic: str = "", scope: str = "", max_tokens: int = 800) -> str:
+        """Get compact, token-efficient context for LLM prompt injection.
+
+        Returns a flat string with [stack], [arch], [constraints] etc. prefixes.
+        Designed to be injected directly into agent system/user messages.
+        Requires Prelude >= 1.4.0.
+        """
+        if not self.cli_available:
+            return ""
+
+        args = ["compact"]
+        if topic:
+            args.append(topic)
+        if scope:
+            args.extend(["--scope", scope])
+        args.extend(["--max-tokens", str(max_tokens)])
+
+        result = self._run(*args)
+        if result.returncode == 0:
+            return result.stdout.strip()
+        logger.debug(f"[PRELUDE] compact failed: {result.stderr}")
+        return ""
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

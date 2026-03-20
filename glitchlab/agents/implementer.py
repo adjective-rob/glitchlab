@@ -278,9 +278,17 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
             for fname, content in context.file_context.items():
                 file_context += f"\n--- {fname} ---\n{content}\n"
 
+        # Prelude: inject compact project context if available
+        project_context = ""
+        prelude = context.extra.get("prelude")
+        if prelude and hasattr(prelude, 'compact') and callable(prelude.compact):
+            compact_result = prelude.compact(topic=context.objective, max_tokens=600)
+            if compact_result:
+                project_context = f"\n\nProject context:\n{compact_result}\n"
+
         user_content = f"""Task: {context.objective}
 Plan: {steps_text}
-{file_context}"""
+{file_context}{project_context}"""
 
         # --- ADD HEURISTICS ---
         heuristics = context.extra.get("learned_heuristics")

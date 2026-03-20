@@ -122,6 +122,14 @@ Rules:
             for fname, content in context.file_context.items():
                 file_context += f"\n--- {fname} ---\n{content}\n"
 
+        # Prelude: inject compact project context if available
+        project_context = ""
+        prelude = context.extra.get("prelude")
+        if prelude and hasattr(prelude, 'compact') and callable(prelude.compact):
+            compact_result = prelude.compact(topic=context.objective, max_tokens=400)
+            if compact_result:
+                project_context = f"\n\nProject context:\n{compact_result}\n"
+
         user_content = f"""Task: {context.objective}
 
 Repository: {context.repo_path}
@@ -132,7 +140,7 @@ Constraints:
 
 Acceptance Criteria:
 {chr(10).join(f'- {c}' for c in context.acceptance_criteria) if context.acceptance_criteria else '- Tests pass, clean diff'}
-{file_context}
+{file_context}{project_context}
 
 Produce your execution plan as JSON."""
 
