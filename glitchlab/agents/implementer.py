@@ -386,7 +386,7 @@ Plan: {steps_text}
         search_count = 0
         total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
-        max_steps = 10 if fast_mode else 30
+        max_steps = 15 if fast_mode else 30
         
         for step in range(max_steps):
             logger.debug(f"[PATCH] Loop Step {step+1}/{max_steps}...")
