@@ -8,7 +8,7 @@ decisions before it plans or writes a single line.
 
 Prelude is the memory. GLITCHLAB is the muscle.
 
-v1.2.0 changes:
+v1.4.0 changes:
   - Prelude can now be called from outside the target repo
   - Repo path passed as positional argument: `prelude export ~/path/to/repo`
   - External brain path set via PRELUDE_ROOT env var
@@ -186,7 +186,7 @@ class PreludeContext:
             args.append("--dry-run")
 
         # update reads from cwd, so we pass cwd here only
-        result = self._run(*args, use_cwd=True)
+        result = self._run(*args)
         if result.returncode == 0:
             logger.info("[PRELUDE] Context updated")
             self._cached_export = None  # invalidate cache
@@ -371,12 +371,12 @@ class PreludeContext:
     # Internal
     # ------------------------------------------------------------------
 
-    def _run(self, *args: str, use_cwd: bool = False) -> subprocess.CompletedProcess:
+    def _run(self, *args: str) -> subprocess.CompletedProcess:
         """
         Run a prelude CLI command.
 
         Sets PRELUDE_ROOT env var if brain_path is configured.
-        Never changes cwd unless use_cwd=True (only needed for `update`).
+        Always runs from repo_path so CLI can find .context/.
         """
         env = os.environ.copy()
         if self.brain_path:
@@ -388,7 +388,7 @@ class PreludeContext:
 
         return subprocess.run(
             cmd,
-            cwd=str(self.repo_path) if use_cwd else None,
+            cwd=str(self.repo_path),
             env=env,
             capture_output=True,
             text=True,

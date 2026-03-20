@@ -38,6 +38,17 @@
           "tags": [
             "evolution"
           ]
+        },
+        {
+          "id": "81297ab6-52d2-4dbd-9faf-ca7b6a04406b",
+          "timestamp": "2026-03-20T00:23:44.750655+00:00",
+          "type": "prompt",
+          "summary": "Add per-agent token tracking to the implementer and debugger tool loops. After each router.complete() call inside the loop, accumulate the step's token usage into a local counter. When the agent calls",
+          "filesAffected": [],
+          "outcome": "partial",
+          "tags": [
+            "evolution"
+          ]
         }
       ]
     }
