@@ -253,6 +253,22 @@ IMPLEMENTER_TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "diff_preview",
+            "description": "Preview what a replace_in_file would produce WITHOUT applying the change. Use this to verify your find string matches before committing an edit. Returns the matched context with the replacement applied, or an error if the find string doesn't match.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file"},
+                    "find": {"type": "string", "description": "The exact text to find"},
+                    "replace": {"type": "string", "description": "The text to replace it with"}
+                },
+                "required": ["path", "find", "replace"]
+            }
+        }
+    },
 ]
 
 
@@ -580,6 +596,54 @@ Plan: {steps_text}
                             res = f"No imports found in {path}."
                     except Exception as e:
                         res = f"Error reading file: {e}"
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "diff_preview":
+                    path = tc_args.get("path")
+                    find_str = tc_args.get("find", "")
+                    replace_str = tc_args.get("replace", "")
+                    try:
+                        fpath = workspace_dir / path
+                        if not fpath.exists():
+                            res = f"Error: {path} does not exist."
+                        else:
+                            content = fpath.read_text(encoding='utf-8')
+                            if find_str not in content:
+                                # Show nearby content to help the agent fix the find string
+                                lines = content.splitlines()
+                                # Try to find a partial match
+                                first_line = find_str.strip().splitlines()[0] if find_str.strip() else ""
+                                nearby = []
+                                for i, line in enumerate(lines):
+                                    if first_line and first_line.strip() in line:
+                                        start = max(0, i - 2)
+                                        end = min(len(lines), i + 3)
+                                        nearby = [f"{n+1}: {lines[n]}" for n in range(start, end)]
+                                        break
+                                if nearby:
+                                    res = f"NO MATCH. The find string was not found in {path}.\n\nNearest partial match:\n" + "\n".join(nearby)
+                                else:
+                                    res = f"NO MATCH. The find string was not found anywhere in {path}. Use read_file to check the exact content."
+                            else:
+                                count = content.count(find_str)
+                                # Show before/after context
+                                idx = content.index(find_str)
+                                before_start = max(0, content.rfind('\n', 0, max(0, idx - 100)) + 1)
+                                after_end = min(len(content), content.find('\n', idx + len(find_str) + 100))
+                                if after_end == -1:
+                                    after_end = len(content)
+
+                                before_context = content[before_start:idx + len(find_str) + 50]
+                                after_context = content[before_start:idx] + replace_str + content[idx + len(find_str):after_end]
+
+                                res = (
+                                    f"MATCH FOUND ({count} occurrence(s) in {path}). Preview of first match:\n\n"
+                                    f"--- BEFORE ---\n{before_context}\n\n"
+                                    f"--- AFTER ---\n{after_context}\n\n"
+                                    f"Use replace_in_file to apply this change."
+                                )
+                    except Exception as e:
+                        res = f"Error: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "ask_colleague":
