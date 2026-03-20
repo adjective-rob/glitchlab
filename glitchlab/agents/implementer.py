@@ -239,6 +239,20 @@ IMPLEMENTER_TOOLS = [
             }
         }
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_imports",
+            "description": "Get just the import block from a file. Returns all import/from-import lines at the top of the file. Much cheaper than read_file when you only need to check dependencies.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to the file"}
+                },
+                "required": ["path"]
+            }
+        }
+    },
 ]
 
 
@@ -539,6 +553,33 @@ Plan: {steps_text}
                             res = f"Class '{class_name}' not found. Check spelling or use search_grep."
                     else:
                         res = "AST parser unavailable. Please fall back to read_file."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "get_imports":
+                    path = tc_args.get("path")
+                    try:
+                        content = (workspace_dir / path).read_text(encoding='utf-8')
+                        file_lines = content.splitlines()
+                        import_lines = []
+                        for line in file_lines:
+                            stripped = line.strip()
+                            # Collect imports, blanks between imports, docstrings/comments before imports
+                            if stripped.startswith(('import ', 'from ', '#', '"""', "'''", '"""')) or stripped == '':
+                                import_lines.append(line)
+                            elif stripped.startswith('__') and '=' in stripped:
+                                # Module-level dunders like __all__, __version__
+                                import_lines.append(line)
+                            elif import_lines and not stripped:
+                                # Blank line after imports — stop
+                                break
+                            else:
+                                break
+                        if import_lines:
+                            res = f"Imports from {path}:\n\n" + "\n".join(import_lines)
+                        else:
+                            res = f"No imports found in {path}."
+                    except Exception as e:
+                        res = f"Error reading file: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "ask_colleague":
