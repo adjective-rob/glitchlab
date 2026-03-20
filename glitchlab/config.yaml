@@ -6,13 +6,13 @@
 # Model routing — agents never know which vendor backs them.
 # Names here map to LiteLLM model aliases.
 routing:
-  planner: "gemini/gemini-3.1-pro-preview"
-  implementer: "gemini/gemini-3.1-pro-preview"
-  debugger: "gemini/gemini-3.1-pro-preview"
-  security: "gemini/gemini-3-flash-preview"
-  release: "gemini/gemini-3-flash-preview"
-  archivist: "gemini/gemini-3-flash-preview"
-  testgen: "gemini/gemini-3.1-pro-preview"
+  planner: "anthropic/claude-sonnet-4-6"
+  implementer: "anthropic/claude-sonnet-4-6"
+  debugger: "anthropic/claude-sonnet-4-6"
+  security: "anthropic/claude-haiku-4-5"
+  release: "anthropic/claude-haiku-4-5"
+  archivist: "anthropic/claude-haiku-4-5"
+  testgen: "anthropic/claude-sonnet-4-6"
 
 fallbacks:
   high_tier: "openai/gpt-5.2"
