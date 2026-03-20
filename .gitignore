@@ -241,6 +241,7 @@ Thumbs.db
 .context/export.md
 .context/export.json
 .context/.watchlog.json
+.context/session.json
 
 # Projects
 .glitchlab/tasks/
