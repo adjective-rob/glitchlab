@@ -223,7 +223,22 @@ IMPLEMENTER_TOOLS = [
                 "required": ["symbol"]
             }
         }
-    }               
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_class",
+            "description": "Get a class outline showing the class signature and all method signatures with bodies collapsed. Use this to understand a class structure without reading the entire file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "class_name": {"type": "string", "description": "The class name to look up"},
+                    "file": {"type": "string", "description": "Optional file path to restrict the search"}
+                },
+                "required": ["class_name"]
+            }
+        }
+    },
 ]
 
 
@@ -496,6 +511,19 @@ Plan: {steps_text}
                             res = f"Function '{symbol}' in {func_data['file']} (Lines {func_data['line_start']}-{func_data['line_end']}):\n\n{func_data['body']}"
                         else:
                             res = f"Function '{symbol}' not found. Check spelling or use search_grep."
+                    else:
+                        res = "AST parser unavailable. Please fall back to read_file."
+                    messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                elif tc_name == "get_class":
+                    class_name = tc_args.get("class_name")
+                    file_path = tc_args.get("file")
+                    if symbol_index:
+                        class_data = symbol_index.get_class_outline(class_name, file_path)
+                        if class_data:
+                            res = f"Class '{class_name}' in {class_data['file']} (Lines {class_data['line_start']}-{class_data['line_end']}):\n\n{class_data['outline']}"
+                        else:
+                            res = f"Class '{class_name}' not found. Check spelling or use search_grep."
                     else:
                         res = "AST parser unavailable. Please fall back to read_file."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})

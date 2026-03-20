@@ -167,6 +167,59 @@ class SymbolIndex:
         return None
 
     def get_class_outline(self, class_name: str, file: str | None = None) -> dict | None:
-        """Stub for class outline capability."""
-        # Optional advanced feature — kept structural stub as per plan
-        pass
+        """Extract a class body with method signatures shown but bodies collapsed."""
+        self._scan_workspace()
+        if not TREE_SITTER_AVAILABLE:
+            return None
+
+        target_bytes = class_name.encode('utf8')
+
+        for path, (tree, source, lang) in self._cache.items():
+            if file and path != file:
+                continue
+
+            stack = [tree.root_node]
+            while stack:
+                node = stack.pop()
+
+                if "class" in node.type and "definition" in node.type:
+                    # Check if any immediate child is the identifier we want
+                    for child in node.children:
+                        if child.type in ('identifier', 'name') and child.text == target_bytes:
+                            lines = source.split(b'\n')
+                            start_line = node.start_point[0]
+                            end_line = node.end_point[0]
+
+                            # Build outline: show full class signature + method signatures with bodies collapsed
+                            outline_lines = []
+                            in_method = False
+                            method_indent = 0
+
+                            for i in range(start_line, end_line + 1):
+                                line = lines[i].decode('utf8', errors='ignore')
+                                stripped = line.strip()
+
+                                # Detect method/function definitions inside the class
+                                if stripped.startswith(('def ', 'async def ')):
+                                    if in_method:
+                                        outline_lines.append(f"{' ' * method_indent}    ...")
+                                    outline_lines.append(f"{i + 1}: {line}")
+                                    in_method = True
+                                    method_indent = len(line) - len(line.lstrip())
+                                elif not in_method:
+                                    # Class-level code (decorators, class vars, docstrings before first method)
+                                    outline_lines.append(f"{i + 1}: {line}")
+
+                            if in_method:
+                                outline_lines.append(f"{' ' * method_indent}    ...")
+
+                            return {
+                                "file": path,
+                                "line_start": start_line + 1,
+                                "line_end": end_line + 1,
+                                "outline": "\n".join(outline_lines),
+                            }
+
+                stack.extend(node.children)
+
+        return None
