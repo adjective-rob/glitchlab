@@ -125,21 +125,8 @@ class Controller:
         # Prelude — available as tool context, NOT global prefix
         self._prelude = PreludeContext(self.repo_path)
 
-    def run(self, task: Task) -> dict[str, Any]:
-        """Execute the full agent pipeline for a task."""
-
-        # --- NEW: Generate Session Identity for Zephyr ---
-        self.run_id = str(uuid.uuid4())
-        bus.emit(
-            event_type="run.started",
-            payload={"task_id": task.task_id, "objective": task.objective},
-            run_id=self.run_id
-        )
-
-        # Ensure we plan against the most recent code.
-        # Soft-fail to avoid breaking offline/CI scenarios.
-        pre_task_git_fetch(self.repo_path)
-
+    def _check_repo_clean(self) -> None:
+        """Raise DirtyRepoError if the repo has uncommitted changes or is behind remote."""
         # --- EXECUTION GUARD (Manual Patch) ---
         # Check for uncommitted changes in the main repo, ignoring .glitchlab/
         status = subprocess.run(
@@ -151,7 +138,7 @@ class Controller:
 
         # Filter out changes that are ONLY inside .glitchlab/ (logs, tasks, etc.)
         dirty_files = [
-            line for line in status.splitlines() 
+            line for line in status.splitlines()
             if not line[3:].startswith(".glitchlab/")
         ]
 
@@ -176,6 +163,23 @@ class Controller:
         except Exception:
             pass
         # --------------------------------------
+
+    def run(self, task: Task) -> dict[str, Any]:
+        """Execute the full agent pipeline for a task."""
+
+        # --- NEW: Generate Session Identity for Zephyr ---
+        self.run_id = str(uuid.uuid4())
+        bus.emit(
+            event_type="run.started",
+            payload={"task_id": task.task_id, "objective": task.objective},
+            run_id=self.run_id
+        )
+
+        # Ensure we plan against the most recent code.
+        # Soft-fail to avoid breaking offline/CI scenarios.
+        pre_task_git_fetch(self.repo_path)
+
+        self._check_repo_clean()
 
         # Initialize structured task state
         self._state = TaskState(
