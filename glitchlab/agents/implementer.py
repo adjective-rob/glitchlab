@@ -257,6 +257,9 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 12. If the plan includes `code_hint`, use it as a starting point for your implementation. Verify the hint against actual code before applying — hints are approximate, not guaranteed correct.
 13. The initial file context shows signatures and structure, not full content. Use `get_function` to read specific functions, or use `read_file` with `start_line`/`end_line` to read a range of a large file. Avoid reading entire large files — it wastes context budget.
 14. NEVER read_file an entire file over 200 lines. Use get_function or read_file with start_line/end_line. Every full-file read costs ~5K tokens — you have a budget.
+15. You MUST attempt your first replace_in_file or write_file by step 8. Reading beyond step 8 without writing means you are stalling. Use what you have and start editing.
+16. Every code_hint for a 'modify' action MUST include the exact function name or line range where the change goes. Example: "In ImplementerAgent.run(), after the `response = self.router.complete()` call (around line 325), add: loop_tokens += response.tokens_used". The implementer will use get_function to read that exact function and apply the hint. Vague hints like "add token tracking to the loop" waste implementer steps.
+17. When the plan includes a code_hint referencing a specific function, your FIRST tool call after think should be get_function for that exact function. Do NOT read_file the entire file.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
