@@ -126,7 +126,7 @@ Rules:
         project_context = ""
         prelude = context.extra.get("prelude")
         if prelude and hasattr(prelude, 'compact') and callable(prelude.compact):
-            compact_result = prelude.compact(topic=context.objective, max_tokens=400)
+            compact_result = prelude.compact(max_tokens=400)
             if compact_result:
                 project_context = f"\n\nProject context:\n{compact_result}\n"
 
