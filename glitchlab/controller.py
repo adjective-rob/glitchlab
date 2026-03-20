@@ -1013,6 +1013,9 @@ class Controller:
             constraints=task.constraints,
             acceptance_criteria=task.acceptance_criteria,
             risk_level=task.risk_level,
+            extra={
+                "prelude": self._prelude,
+            },
         )
 
         raw = self.agents["planner"].run(context)
