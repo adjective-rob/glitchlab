@@ -237,6 +237,7 @@ Investigate and fix. Call `done` when the tests pass."""
         created_files = set()
         think_count = 0
         search_count = 0
+        total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
         max_steps = 8 if fast_mode else 15
 
@@ -263,6 +264,19 @@ Investigate and fix. Call `done` when the tests pass."""
                 tools=DEBUGGER_TOOLS,
                 **step_kwargs
             )
+            
+            step_tokens = response.tokens_used
+            total_tokens += step_tokens
+            if context.extra.get("event_bus"):
+                context.extra["event_bus"].emit(
+                    event_type="agent.loop_step",
+                    payload={
+                        "step": step,
+                        "step_tokens": step_tokens,
+                        "cumulative_tokens": total_tokens
+                    },
+                    agent_id=self.role
+                )
 
             # Append assistant message
             assist_msg = {"role": "assistant"}
@@ -529,6 +543,7 @@ Investigate and fix. Call `done` when the tests pass."""
                         "_agent": "debugger",
                         "_model": response.model,
                         "_tokens": response.tokens_used,
+                        "_loop_tokens": total_tokens,
                         "_cost": response.cost,
                     }
 

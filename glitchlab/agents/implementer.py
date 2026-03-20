@@ -316,6 +316,7 @@ Plan: {steps_text}
         think_count = 0
         write_count = 0
         search_count = 0
+        total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
         max_steps = 10 if fast_mode else 30
         
@@ -352,6 +353,18 @@ Plan: {steps_text}
                 messages=messages,
                 tools=IMPLEMENTER_TOOLS,
                 **step_kwargs
+            )
+            
+            step_tokens = response.tokens_used
+            total_tokens += step_tokens
+            bus.emit(
+                event_type="agent.loop_step",
+                payload={
+                    "step": step,
+                    "step_tokens": step_tokens,
+                    "cumulative_tokens": total_tokens
+                },
+                agent_id=self.role
             )
 
             # Append assistant message
@@ -648,6 +661,7 @@ Plan: {steps_text}
                         "_agent": "implementer",
                         "_model": response.model,
                         "_tokens": response.tokens_used,
+                        "_loop_tokens": total_tokens,
                         "_cost": response.cost,
                         "_messages": messages,
                     }
