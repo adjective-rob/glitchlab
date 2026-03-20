@@ -237,11 +237,7 @@ env/
 Thumbs.db
 
 # Prelude internal state and exports
-.context/.prelude/
-.context/export.md
-.context/export.json
-.context/.watchlog.json
-.context/session.json
+.context/
 
 # Projects
 .glitchlab/tasks/
