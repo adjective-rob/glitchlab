@@ -65,7 +65,7 @@ class PreludeContext:
                         Defaults to ~/.glitchlab/brain if not specified.
         """
         self.repo_path = repo_path.resolve()
-        self.brain_path = (brain_path or Path.home() / ".glitchlab" / "brain").resolve()
+        self.brain_path = brain_path.resolve() if brain_path else None
         self.context_dir = self.repo_path / ".context"
         self._cli_path = shutil.which("prelude")
         self._cached_export: str | None = None
