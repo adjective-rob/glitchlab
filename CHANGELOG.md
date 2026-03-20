@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-03-20
+
+### Added
+- **Failure Context Injection**: The controller now records failed task attempts to `.glitchlab/failures.jsonl`. If a new task objective matches a previous failure, the failure context (steps taken, files read/edited, reason) is automatically injected into the planner's prompt to prevent repeating mistakes.
+
 ## [4.4.0] - 2026-03-20
 
 ### Added

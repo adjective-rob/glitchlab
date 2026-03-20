@@ -1,0 +1,33 @@
+# ADR-0001: Failure Memory Injection
+
+## Status
+Accepted
+
+## Date
+2026-03-20
+
+## Context
+When GLITCHLAB tasks fail (due to implementation failure or errors), the system previously had no persistent memory of these failures. If a user re-ran the same objective, the planner would start from scratch, often repeating the same mistakes or hitting the same roadblocks.
+
+## Decision
+We will implement a "Failure Memory" system that persists structured failure data to the repository and injects it into the planner's context on subsequent attempts.
+
+1.  **Persistence**: Failures are recorded in `.glitchlab/failures.jsonl`. This format allows for easy appending and line-by-line reading.
+2.  **Schema**: Each record includes:
+    *   `task_id`: Unique identifier for the failed run.
+    *   `timestamp`: ISO 8601 timestamp.
+    *   `objective`: The first 100 characters of the task objective.
+    *   `steps_taken`: List of steps executed before failure.
+    *   `files_read`: List of files accessed.
+    *   `files_edited`: List of files modified.
+    *   `last_tool_called`: The final tool invocation before the crash/failure.
+    *   `failure_reason`: The error message or implementation failure reason.
+    *   `model_used`: The LLM model name.
+3.  **Matching Logic**: At startup, the Controller reads the failure log. It performs a fuzzy substring match on the first 60 characters of the current objective against previous failures.
+4.  **Injection**: If a match is found, the failure record is injected into the Planner's user message as "Previous attempt context".
+
+## Consequences
+*   **Improved Resilience**: The planner can avoid known dead-ends and adjust its strategy based on previous errors.
+*   **Debugging**: `.glitchlab/failures.jsonl` provides a historical record of system failures for developers.
+*   **Context Overhead**: Injecting failure context increases the prompt size for the planner, but the benefit of avoiding repeat failures outweighs the token cost.
+*   **Local Storage**: Failure data is stored within the repo, ensuring it travels with the project.

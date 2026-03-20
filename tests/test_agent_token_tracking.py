@@ -46,6 +46,8 @@ def mock_event_bus():
 def test_debugger_token_tracking(mock_router, mock_event_bus):
     agent = DebuggerAgent(router=mock_router)
     context = AgentContext(
+        task_id="test_task",
+        repo_path=".",
         objective="Fix bug",
         working_dir=".",
         previous_output={}, 
@@ -67,6 +69,8 @@ def test_debugger_token_tracking(mock_router, mock_event_bus):
 def test_implementer_token_tracking(mock_global_bus, mock_router):
     agent = ImplementerAgent(router=mock_router)
     context = AgentContext(
+        task_id="test_task",
+        repo_path=".",
         objective="Implement feature",
         working_dir=".",
         previous_output={}, 
