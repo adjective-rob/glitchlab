@@ -1,77 +1,65 @@
 {
-  "task_id": "interactive-20260319-024220",
-  "objective": "update the repository version from 4.3.0 to 4.3.1 across the repository including identity.py try to avoid wasting tokens",
+  "task_id": "interactive-20260320-005231",
+  "objective": "Add per-agent token tracking to the implementer and debugger tool loops. After each router.complete() call inside the loop, accumulate the step's token usage into a local counter. When the agent calls done (implementer) or returns its result (debugger), include the total tokens consumed in the return dict as _loop_tokens. Also emit an agent.loop_step event on the event bus after each LLM call with the step number, tokens used that step, and cumulative tokens.",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Update version from 4.3.0 to 4.3.1 in pyproject.toml",
+      "description": "Add token tracking to the implementer agent's tool loop. Initialize a cumulative token counter before the loop. After each `router.complete()` call, extract token usage from the response, add it to the cumulative counter, and emit an `agent.loop_step` event via the event bus. Include the total tokens in the final return dictionary as `_loop_tokens`.",
       "files": [
-        "pyproject.toml"
+        "glitchlab/agents/implementer.py"
       ],
       "action": "modify",
       "status": "pending",
-      "outcome": ""
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/agents/planner.py",
+        "glitchlab/agents/debugger.py"
+      ],
+      "code_hint": "total_tokens = 0\nfor step in range(max_steps):\n    response = router.complete(...)\n    step_tokens = response.get('usage', {}).get('total_tokens', 0)\n    total_tokens += step_tokens\n    event_bus.emit('agent.loop_step', {'step': step, 'step_tokens': step_tokens, 'cumulative_tokens': total_tokens})\n    ...\nreturn {'status': 'done', '_loop_tokens': total_tokens}"
     },
     {
       "step_number": 2,
-      "description": "Update version from 4.3.0 to 4.3.1 in glitchlab/identity.py",
+      "description": "Add token tracking to the debugger agent's tool loop. Initialize a cumulative token counter before the loop. After each `router.complete()` call, extract token usage from the response, add it to the cumulative counter, and emit an `agent.loop_step` event via the event bus. Include the total tokens in the final return dictionary as `_loop_tokens`.",
       "files": [
-        "glitchlab/identity.py"
+        "glitchlab/agents/debugger.py"
       ],
       "action": "modify",
       "status": "pending",
-      "outcome": ""
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/agents/implementer.py",
+        "glitchlab/agents/planner.py"
+      ],
+      "code_hint": "total_tokens = 0\nfor step in range(max_steps):\n    response = router.complete(...)\n    step_tokens = response.get('usage', {}).get('total_tokens', 0)\n    total_tokens += step_tokens\n    event_bus.emit('agent.loop_step', {'step': step, 'step_tokens': step_tokens, 'cumulative_tokens': total_tokens})\n    ...\nreturn {'status': 'done', '_loop_tokens': total_tokens}"
     }
   ],
   "files_in_scope": [
-    "pyproject.toml",
-    "glitchlab/identity.py",
-    "pyproject.toml",
-    "glitchlab/identity.py"
+    "glitchlab/agents/implementer.py",
+    "glitchlab/agents/debugger.py",
+    "glitchlab/agents/implementer.py",
+    "glitchlab/agents/debugger.py"
   ],
-  "estimated_complexity": "trivial",
+  "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "pyproject.toml",
-    "glitchlab/identity.py",
-    "glitchlab/__init__.py",
-    "tests/test_identity.py"
+    "glitchlab/agents/debugger.py",
+    "glitchlab/agents/implementer.py"
   ],
   "files_created": [],
-  "tests_added": [],
-  "commit_message": "chore: bump version from 4.3.0 to 4.3.1",
-  "implementation_summary": "Updated version from 4.3.0 to 4.3.1 in both pyproject.toml and glitchlab/identity.py.",
-  "test_passing": true,
-  "debug_attempts": 1,
-  "last_error": "test_identity.py was asserting version \"4.3.0\" after identity.py was updated to \"4.3.1\"; glitchlab/__init__.py also still had the old version.",
-  "previous_fixes": [
-    {
-      "diagnosis": "test_identity.py was asserting version \"4.3.0\" after identity.py was updated to \"4.3.1\"; glitchlab/__init__.py also still had the old version.",
-      "root_cause": "The version bump to 4.3.1 was applied to pyproject.toml and identity.py, but two files were missed: tests/test_identity.py (hardcoded expected version string) and glitchlab/__init__.py (package-level __version__).",
-      "fix": {
-        "changes": [
-          {
-            "file": "glitchlab/__init__.py",
-            "action": "modify",
-            "_already_applied": true
-          },
-          {
-            "file": "tests/test_identity.py",
-            "action": "modify",
-            "_already_applied": true
-          }
-        ]
-      },
-      "confidence": "high",
-      "should_retry": true,
-      "summary": "Updated the expected version in tests/test_identity.py from \"4.3.0\" to \"4.3.1\", and updated __version__ in glitchlab/__init__.py from \"4.3.0\" to \"4.3.1\"."
-    }
+  "tests_added": [
+    "tests/test_agent_token_tracking.py"
   ],
+  "commit_message": "feat: add per-agent token tracking to implementer and debugger loops",
+  "implementation_summary": "Added token tracking to the implementer and debugger tool loops. After each router.complete() call, the step's token usage is accumulated into a local counter. When the agent calls done, the total tokens consumed are included in the return dict as _loop_tokens. Also emitted an agent.loop_step event on the event bus after each LLM call with the step number, tokens used that step, and cumulative tokens.",
+  "test_passing": true,
+  "debug_attempts": 0,
+  "last_error": "",
+  "previous_fixes": [],
   "security_verdict": "warn",
-  "version_bump": "patch",
-  "changelog_entry": "## [4.3.1] - 2024\n\n### Changed\n- Updated version from 4.3.0 to 4.3.1 across repository files (pyproject.toml, glitchlab/__init__.py, glitchlab/identity.py, tests/test_identity.py)",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- Per-agent token tracking for `implementer` and `debugger` tool loops.\n- New `_loop_tokens` field in agent return dictionaries containing cumulative token usage.\n- `agent.loop_step` event emission on the event bus after each LLM call, providing step-by-step token metrics.",
   "completed_phases": [
     "plan",
     "implement",
@@ -83,35 +71,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-19T02:42:21.219977+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:52:31.631782+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260319-024220"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260320-005231"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-19T02:42:21.227538+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:52:31.639131+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
-        "total_files": 55,
+        "total_files": 56,
         "languages": {
-          ".py": 53
+          ".py": 54
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-19T02:42:21.318185+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:52:31.735970+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
-        "count": 0
+        "count": 3
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-19T02:42:29.382674+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:52:40.869899+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
         "steps": 2,
         "risk": "low"
@@ -119,43 +107,44 @@
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-19T02:42:44.578855+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:55:24.530603+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
         "changes": 2,
         "tests": 0
       }
     },
     {
-      "type": "tests_failed",
-      "timestamp": "2026-03-19T02:42:48.798746+00:00",
-      "task_id": "interactive-20260319-024220",
+      "type": "tests_passed",
+      "timestamp": "2026-03-20T00:55:28.990887+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "tests_passed",
-      "timestamp": "2026-03-19T02:43:20.337210+00:00",
-      "task_id": "interactive-20260319-024220",
+      "type": "testgen_created",
+      "timestamp": "2026-03-20T00:55:41.795451+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
-        "attempt": 2
+        "file": "tests/test_agent_token_tracking.py",
+        "description": "Tests that the Debugger and Implementer agents correctly track and accumulate token usage across loop steps, emit agent.loop_step events with cumulative tokens, and return _loop_tokens in the final result."
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-03-19T02:43:28.995280+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:55:47.742249+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
         "verdict": "warn"
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-19T02:43:33.051840+00:00",
-      "task_id": "interactive-20260319-024220",
+      "timestamp": "2026-03-20T00:55:50.574590+00:00",
+      "task_id": "interactive-20260320-005231",
       "data": {
-        "bump": "patch"
+        "bump": "minor"
       }
     }
   ]

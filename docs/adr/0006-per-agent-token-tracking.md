@@ -1,0 +1,26 @@
+# ADR-0006: Per-Agent Token Tracking and Loop Observability
+
+## Status
+Accepted
+
+## Date
+2026-03-20
+
+## Context
+As agents (specifically the Implementer and Debugger) operate in multi-step tool loops, there was no granular visibility into token consumption per step or the total cost of a specific agent invocation. Users and system monitors need this data for cost tracking and performance analysis.
+
+## Decision
+We have implemented per-agent token tracking within the tool loops of the `implementer` and `debugger` agents.
+
+1.  **Cumulative Tracking**: A local counter is initialized before the loop starts.
+2.  **Step Accumulation**: After each `router.complete()` call, token usage is extracted from the LLM response and added to the counter.
+3.  **Event Emission**: An `agent.loop_step` event is emitted to the event bus after each step, containing:
+    *   `step_number`: The current iteration index.
+    *   `step_tokens`: Tokens consumed in the current step.
+    *   `cumulative_tokens`: Total tokens consumed so far in this loop.
+4.  **Final Reporting**: The total tokens are returned in the agent's final result dictionary under the key `_loop_tokens`.
+
+## Consequences
+*   **Observability**: Real-time monitoring of agent progress and cost is now possible via the event bus.
+*   **API Change**: Agent return dictionaries now include `_loop_tokens`, which is a minor non-breaking addition.
+*   **Consistency**: Future agents with tool loops should follow this pattern for consistent telemetry.

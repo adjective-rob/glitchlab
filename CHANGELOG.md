@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-03-20
+
+### Added
+- **Per-Agent Token Tracking**: Added cumulative token usage tracking to `implementer` and `debugger` tool loops.
+- **Loop Observability**: Introduced `agent.loop_step` events emitted after each LLM call, providing real-time step-by-step token consumption and cumulative totals.
+- **Enhanced Metadata**: Agent results now include `_loop_tokens` in the return dictionary for final reporting.
+
 ## [4.3.0] - 2026-03-14
 
 ### Changed
