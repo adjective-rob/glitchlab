@@ -175,6 +175,108 @@ class Controller:
             pass
         # --------------------------------------
 
+    def _finalize(self, task: Task, plan: dict, impl: dict, rel: dict, sec: dict,
+                  ws_path: Path, is_doc_only: bool, is_fast_mode: bool, result: dict,
+                  pipeline_halted: bool, tools: ToolExecutor) -> dict:
+        """Commit changes, create PR, archive task. Returns updated result dict."""
+        # ── Phase routing: doc-only defaults for downstream ──
+        if is_doc_only:
+            if not sec:
+                sec = {"verdict": "pass", "issues": []}
+            if not rel:
+                rel = {
+                    "version_bump": "none",
+                    "reasoning": "Maintenance mode — documentation only",
+                    "changelog_entry": "- Documentation updates",
+                }
+
+        if pipeline_halted:
+            return result
+
+        # ── 8. Commit + PR ──
+        self._state.mark_phase("commit")
+        self._state.persist(ws_path)
+
+        commit_msg = impl.get("commit_message", f"glitchlab: {task.task_id}")
+        self._workspace.commit(commit_msg)
+
+        # --- NEW: Rebase Before PR ---
+        if getattr(self.config, "automation", None) and getattr(self.config.automation, "rebase_before_pr", False):
+            console.print("[dim]🔄 Rebasing onto origin/main to prevent conflicts...[/]")
+
+            if not self._workspace.rebase(auto_abort=False):
+                resolved = False
+                if self.test_command:
+                    console.print("[yellow]⚠️ Rebase conflict detected. Handing over to Debugger for auto-resolution...[/]")
+                    # The fix loop will naturally detect the conflict markers as syntax errors/test failures!
+                    resolved = self._run_fix_loop(task, ws_path, tools, impl)
+
+                if not resolved:
+                    # Agent couldn't fix it (or no tests available to verify the fix). Clean up.
+                    self._workspace._worktree_git("rebase", "--abort", check=False)
+                    result["status"] = "rebase_conflict"
+                    console.print("[red]❌ Auto-resolution failed or no tests available. PR aborted.[/]")
+                    return result
+                else:
+                    # Tests passed! The agent successfully removed the markers and fixed the logic.
+                    self._workspace._worktree_git("add", "-A")
+
+                    # Tell Git to use 'true' as the editor to automatically accept the rebase commit message
+                    env = os.environ.copy()
+                    env["GIT_EDITOR"] = "true"
+                    subprocess.run(["git", "rebase", "--continue"], cwd=ws_path, env=env, check=False)
+                    console.print("[bold green]✅ Rebase conflict auto-resolved by agent![/]")
+
+        if getattr(self.config.intervention, "pause_before_pr", True):
+            diff = self._workspace.diff_stat()
+            console.print(Panel(diff, title="Diff Summary", border_style="cyan"))
+            if not self._confirm("Create PR?"):
+                result["status"] = "pr_cancelled"
+                return result
+
+        try:
+            self._workspace.push(force=True)  # Force push required if we just rebased
+            pr_url = self._create_pr(task, impl, rel)
+            result["pr_url"] = pr_url
+            result["status"] = "pr_created"
+            console.print(f"[bold green]✅ PR created: {pr_url}[/]")
+
+            # --- NEW: Auto-Merge ---
+            if getattr(self.config, "automation", None) and getattr(self.config.automation, "auto_merge_pr", False):
+                console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
+                merge_res = subprocess.run(
+                    ["gh", "pr", "merge", pr_url, "--squash"],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True
+                )
+
+                if merge_res.returncode == 0:
+                    result["status"] = "merged"
+                    console.print(f"[bold green]🎉 PR Auto-Merged successfully![/]")
+                else:
+                    # Graceful degradation: If CI/CD branch protections block the merge,
+                    # it just stays open as a PR.
+                    console.print(f"[yellow]⚠️ Auto-merge blocked by GitHub (likely awaiting CI). PR remains open.\n{merge_res.stderr.strip()}[/]")
+
+        except Exception as e:
+            logger.warning(f"PR creation failed: {e}")
+            result["status"] = "committed"
+            result["branch"] = self._workspace.branch_name
+            console.print(f"[yellow]Changes committed to {self._workspace.branch_name}[/]")
+
+        print_budget_summary(self.router.budget.summary())
+        result["events"] = self._state.events
+        result["budget"] = self.router.budget.summary()
+
+        if getattr(task, "file_path", None) and task.file_path.exists() and task.file_path.parent.name == "queue":
+            archive_dir = task.file_path.parent.with_name("archive")
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            task.file_path.rename(archive_dir / task.file_path.name)
+            console.print(f"[dim]Moved task file to {archive_dir / task.file_path.name}[/]")
+
+        return result
+
     def _startup(self, task: Task) -> tuple[Path, "ToolExecutor", str]:
         """Create workspace, build indexes, load constraints. Returns (ws_path, tools, failure_context)."""
         # ── 1. Create workspace ──
@@ -653,101 +755,7 @@ class Controller:
                     result["status"] = f"{step.agent_role}_failed"
                     pipeline_halted = True
 
-            # ── Phase routing: doc-only defaults for downstream ──
-            if is_doc_only:
-                if not sec:
-                    sec = {"verdict": "pass", "issues": []}
-                if not rel:
-                    rel = {
-                        "version_bump": "none",
-                        "reasoning": "Maintenance mode — documentation only",
-                        "changelog_entry": "- Documentation updates",
-                    }
-
-            if pipeline_halted:
-                return result
-
-            # ── 8. Commit + PR ──
-            self._state.mark_phase("commit")
-            self._state.persist(ws_path)
-
-            commit_msg = impl.get("commit_message", f"glitchlab: {task.task_id}")
-            self._workspace.commit(commit_msg)
-
-            # --- NEW: Rebase Before PR ---
-            if getattr(self.config, "automation", None) and getattr(self.config.automation, "rebase_before_pr", False):
-                console.print("[dim]🔄 Rebasing onto origin/main to prevent conflicts...[/]")
-                
-                if not self._workspace.rebase(auto_abort=False):
-                    resolved = False
-                    if self.test_command:
-                        console.print("[yellow]⚠️ Rebase conflict detected. Handing over to Debugger for auto-resolution...[/]")
-                        # The fix loop will naturally detect the conflict markers as syntax errors/test failures!
-                        resolved = self._run_fix_loop(task, ws_path, tools, impl)
-                        
-                    if not resolved:
-                        # Agent couldn't fix it (or no tests available to verify the fix). Clean up.
-                        self._workspace._worktree_git("rebase", "--abort", check=False)
-                        result["status"] = "rebase_conflict"
-                        console.print("[red]❌ Auto-resolution failed or no tests available. PR aborted.[/]")
-                        return result
-                    else:
-                        # Tests passed! The agent successfully removed the markers and fixed the logic.
-                        self._workspace._worktree_git("add", "-A")
-                        
-                        # Tell Git to use 'true' as the editor to automatically accept the rebase commit message
-                        env = os.environ.copy()
-                        env["GIT_EDITOR"] = "true"  
-                        subprocess.run(["git", "rebase", "--continue"], cwd=ws_path, env=env, check=False)
-                        console.print("[bold green]✅ Rebase conflict auto-resolved by agent![/]")
-
-            if getattr(self.config.intervention, "pause_before_pr", True):
-                diff = self._workspace.diff_stat()
-                console.print(Panel(diff, title="Diff Summary", border_style="cyan"))
-                if not self._confirm("Create PR?"):
-                    result["status"] = "pr_cancelled"
-                    return result
-
-            try:
-                self._workspace.push(force=True)  # Force push required if we just rebased
-                pr_url = self._create_pr(task, impl, rel)
-                result["pr_url"] = pr_url
-                result["status"] = "pr_created"
-                console.print(f"[bold green]✅ PR created: {pr_url}[/]")
-                
-                # --- NEW: Auto-Merge ---
-                if getattr(self.config, "automation", None) and getattr(self.config.automation, "auto_merge_pr", False):
-                    console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
-                    merge_res = subprocess.run(
-                        ["gh", "pr", "merge", pr_url, "--squash"],
-                        cwd=self.repo_path,
-                        capture_output=True,
-                        text=True
-                    )
-                    
-                    if merge_res.returncode == 0:
-                        result["status"] = "merged"
-                        console.print(f"[bold green]🎉 PR Auto-Merged successfully![/]")
-                    else:
-                        # Graceful degradation: If CI/CD branch protections block the merge, 
-                        # it just stays open as a PR.
-                        console.print(f"[yellow]⚠️ Auto-merge blocked by GitHub (likely awaiting CI). PR remains open.\n{merge_res.stderr.strip()}[/]")
-
-            except Exception as e:
-                logger.warning(f"PR creation failed: {e}")
-                result["status"] = "committed"
-                result["branch"] = self._workspace.branch_name
-                console.print(f"[yellow]Changes committed to {self._workspace.branch_name}[/]")
-
-            print_budget_summary(self.router.budget.summary())
-            result["events"] = self._state.events
-            result["budget"] = self.router.budget.summary()
-
-            if getattr(task, "file_path", None) and task.file_path.exists() and task.file_path.parent.name == "queue":
-                archive_dir = task.file_path.parent.with_name("archive")
-                archive_dir.mkdir(parents=True, exist_ok=True)
-                task.file_path.rename(archive_dir / task.file_path.name)
-                console.print(f"[dim]Moved task file to {archive_dir / task.file_path.name}[/]")
+            result = self._finalize(task, plan, impl, rel, sec, ws_path, is_doc_only, is_fast_mode, result, pipeline_halted, tools)
 
         except BudgetExceededError as e:
             console.print(f"[red]💸 Budget exceeded: {e}[/]")
