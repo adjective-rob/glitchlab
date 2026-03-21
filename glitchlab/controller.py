@@ -638,7 +638,7 @@ class Controller:
 
             # --- NEW: Auto-Merge ---
             if getattr(self.config, "automation", None) and getattr(self.config.automation, "auto_merge_pr", False):
-                console.print(f"[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
+                console.print("[dim]🚀 Auto-merge enabled. Squashing and merging...[/]")
                 merge_res = subprocess.run(
                     ["gh", "pr", "merge", pr_url, "--squash"],
                     cwd=self.repo_path,
@@ -648,7 +648,7 @@ class Controller:
 
                 if merge_res.returncode == 0:
                     result["status"] = "merged"
-                    console.print(f"[bold green]🎉 PR Auto-Merged successfully![/]")
+                    console.print("[bold green]🎉 PR Auto-Merged successfully![/]")
                 else:
                     # Graceful degradation: If CI/CD branch protections block the merge,
                     # it just stays open as a PR.
@@ -1142,7 +1142,7 @@ class Controller:
                     "content": f"Colleague {target.upper()} responded:\n{colleague_response}"
                 })
                 
-                console.print(f"[bold blue]🔄 Resuming Patch...[/]")
+                console.print("[bold blue]🔄 Resuming Patch...[/]")
                 continue
                 
             break  # Exit loop when Patch successfully calls `done` (or hits a hard error)
