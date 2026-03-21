@@ -175,6 +175,401 @@ class Controller:
             pass
         # --------------------------------------
 
+    def _execute_pipeline(self, task: Task, ws_path: Path, tools: "ToolExecutor",
+                          failure_context: str, result: dict) -> tuple[dict, dict, dict, dict, list, bool, bool, bool, bool, dict]:
+        """Run the dynamic pipeline. Returns (plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result)."""
+        plan: dict = {}
+        impl: dict = {}
+        rel: dict = {}
+        sec: dict = {}
+        applied: list[str] = []
+        is_doc_only = False
+        is_fast_mode = False
+        test_ok = True
+        is_maintenance = task.mode == "maintenance"
+        is_evolution = task.mode == "evolution"
+        pipeline_halted = False
+
+        for step in self.config.pipeline:
+            if pipeline_halted:
+                break
+
+            step_result = self._run_pipeline_step(
+                step, task, ws_path, tools,
+                failure_context=failure_context,
+                plan=plan, impl=impl, rel=rel,
+                is_doc_only=is_doc_only,
+                is_fast_mode=is_fast_mode,
+            )
+
+            if step_result.payload.get("skipped"):
+                # Debugger skip still needs state updates (test phase marking)
+                if step.agent_role == "debugger":
+                    self._state.test_passing = True
+                    self._state.mark_phase("test")
+                    self._state.persist(ws_path)
+                continue
+
+            # --- Per-step post-processing (preserves all existing behavior) ---
+
+            if step.agent_role == "planner":
+                if step_result.status == "error":
+                    result["status"] = "plan_failed"
+                    return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+                plan = step_result.payload
+
+                # Update TaskState with plan output
+                self._state.plan_steps = [
+                    StepState(
+                        step_number=s.get("step_number", 0),
+                        description=s.get("description", ""),
+                        files=s.get("files", []),
+                        action=s.get("action", ""),
+                        do_not_touch=s.get("do_not_touch", []),
+                        code_hint=s.get("code_hint", ""),
+                    )
+                    for s in plan.get("steps", [])
+                ]
+                self._state.files_in_scope = plan.get("files_likely_affected", [])
+                self._state.estimated_complexity = plan.get(
+                    "estimated_complexity", "medium"
+                )
+                self._state.requires_core_change = plan.get(
+                    "requires_core_change", False
+                )
+                self._state.mark_phase("plan")
+                self._state.persist(ws_path)
+
+                # ── Boundary Validation (Plan-Level) ──
+                try:
+                    violations = self.boundary.check_plan(plan, self.allow_core)
+                    if violations:
+                        self._log_event("core_override", {"files": violations})
+                        console.print(
+                            f"[yellow]⚠ Core override granted for: {violations}[/]"
+                        )
+                except BoundaryViolation as e:
+                    console.print(f"[red]🚫 {e}[/]")
+                    result["status"] = "boundary_violation"
+                    return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                # ── Governance Mode Routing ──
+                if is_evolution:
+                    self.config.intervention.pause_before_pr = True
+
+                # Strict doc-only detection
+                objective_lower = task.objective.lower()
+                is_doc_only = (
+                    is_maintenance
+                    and any(
+                        term in objective_lower
+                        for term in ["doc", "documentation", "///"]
+                    )
+                    and task.risk_level == "low"
+                    and all(
+                        s.get("action") == "modify"
+                        for s in plan.get("steps", [])
+                    )
+                    and any(
+                        f.endswith(".rs")
+                        for f in plan.get("files_likely_affected", [])
+                    )
+                )
+
+            elif step.agent_role == "implementer":
+                # ── Maintenance: Surgical Documentation Path ──
+                if is_doc_only:
+                    console.print(
+                        "\n[bold dim]📄 [MAINTENANCE MODE] "
+                        "Surgical documentation update — implementer bypassed.[/]"
+                    )
+
+                    impl = {
+                        "changes": [],
+                        "tests_added": [],
+                        "commit_message": (
+                            f"docs: update documentation for {task.task_id}"
+                        ),
+                        "summary": "Surgical documentation insertion.",
+                    }
+                    applied = []
+
+                    for f in plan.get("files_likely_affected", []):
+                        fpath = ws_path / f
+                        if fpath.exists():
+                            inserted = insert_doc_comments(fpath, self.router)
+                            if inserted:
+                                applied.append(f"DOC {f}")
+
+                    for entry in applied:
+                        console.print(f"  [cyan]{entry}[/]")
+                        attest_controller_action(entry, self.run_id)
+
+                # ── Standard Execution Path ──
+                else:
+                    if step_result.status == "error":
+                        result["status"] = "implementation_failed"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+                    impl = step_result.payload
+
+                    # Update TaskState with implementation output
+                    self._state.files_modified = [
+                        c.get("file", "")
+                        for c in impl.get("changes", [])
+                        if c.get("action") in ("modify", "create")
+                    ]
+                    self._state.files_created = [
+                        c.get("file", "")
+                        for c in impl.get("changes", [])
+                        if c.get("action") == "create"
+                    ]
+                    self._state.tests_added = [
+                        t.get("file", "") for t in impl.get("tests_added", [])
+                    ]
+                    self._state.commit_message = impl.get("commit_message", "")
+                    self._state.implementation_summary = impl.get("summary", "")
+                    self._state.mark_phase("implement")
+                    self._state.persist(ws_path)
+
+                    is_high_complexity = plan.get(
+                        "estimated_complexity", ""
+                    ).lower() in ["high", "large", "unknown"]
+                    if is_high_complexity:
+                        console.print(
+                            "  [dim]High complexity: allowing full-file rewrites.[/]"
+                        )
+
+                    try:
+                        applied = apply_changes(
+                            ws_path,
+                            impl.get("changes", []),
+                            boundary=self.boundary,
+                            allow_core=self.allow_core,
+                            allow_test_modifications=not is_maintenance,
+                            allow_full_rewrite=True,
+                        )
+                        applied += apply_tests(
+                            ws_path,
+                            impl.get("tests_added", []),
+                            allow_test_modifications=not is_maintenance,
+                        )
+                    except BoundaryViolation as e:
+                        console.print(
+                            f"[red]🚫 Boundary Violation during "
+                            f"implementation: {e}[/]"
+                        )
+                        result["status"] = "boundary_violation"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                    for entry in applied:
+                        console.print(f"  [cyan]{entry}[/]")
+                        attest_controller_action(entry, self.run_id)
+
+                # ── Patch & Surgical failure retry (one attempt) ──
+                # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
+                patch_failures = [
+                    a for a in applied if "FAIL" in a or "PATCH_FAILED" in a
+                ]
+
+                if patch_failures:
+                    console.print(
+                        "[yellow]⚠ Edit failed to apply "
+                        "(likely a whitespace mismatch). "
+                        "Attempting one auto-repair...[/]"
+                    )
+
+                    for entry in applied:
+                        console.print(f"  [cyan]{entry}[/]")
+                        attest_controller_action(entry, self.run_id)
+
+                    if any(
+                        "FAIL" in a or "PATCH_FAILED" in a for a in applied
+                    ):
+                        console.print(
+                            "[red]❌ Auto-repair failed. "
+                            "Aborting to prevent corrupted PR.[/]"
+                        )
+                        result["status"] = "implementation_failed"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                    retry_result = self._retry_patch(
+                        task, plan, ws_path, impl, applied
+                    )
+
+                    if retry_result.status == "error":
+                        result["status"] = "implementation_failed"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                    applied = apply_changes(
+                        ws_path,
+                        retry_result.payload.get("changes", []),
+                        boundary=self.boundary,
+                        allow_core=self.allow_core,
+                        allow_test_modifications=not is_maintenance,
+                        allow_full_rewrite=True,
+                    )
+
+                    for entry in applied:
+                        console.print(f"  [cyan]{entry}[/]")
+                        attest_controller_action(entry, self.run_id)
+
+                    if any(a.startswith("PATCH_FAILED") for a in applied):
+                        console.print(
+                            "[red]❌ Patch retry failed. Aborting.[/]"
+                        )
+                        result["status"] = "implementation_failed"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                # Compute fast_mode for downstream agents
+                is_fast_mode = (
+                    len(self._state.files_modified) <= 2
+                    and self._state.estimated_complexity
+                    in ("trivial", "small")
+                )
+                if is_fast_mode:
+                    console.print(
+                        "  [dim]Trivial change detected. "
+                        "Forcing downstream agents into Fast Mode.[/]"
+                    )
+
+            elif step.agent_role == "debugger":
+                test_ok = step_result.payload.get("test_passing", True)
+
+                if not test_ok:
+                    result["status"] = "tests_failed"
+                    console.print(
+                        "[red]❌ Fix loop exhausted. Tests still failing.[/]"
+                    )
+                    if not self._confirm("Continue to PR anyway?"):
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                self._state.test_passing = test_ok
+                self._state.mark_phase("test")
+                self._state.persist(ws_path)
+
+            elif step.agent_role == "testgen":
+                pass
+
+            elif step.agent_role == "security":
+                sec = step_result.payload
+
+                self._state.mark_phase("security")
+
+                if sec.get("verdict") == "block":
+                    self._state.security_verdict = "block"
+                    console.print(
+                        "[red]🚫 Security blocked this change.[/]"
+                    )
+                    print_security_issues(sec)
+
+                    if self.auto_approve:
+                        console.print(
+                            "[red]❌ Auto-approve enabled. "
+                            "Aborting dangerous PR.[/]"
+                        )
+                        result["status"] = "security_blocked"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
+                    if not self._confirm("Override security block?"):
+                        result["status"] = "security_blocked"
+                        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+                else:
+                    # Normalize missing/empty verdict to "warn"
+                    verdict = sec.get("verdict") or "warn"
+                    self._state.security_verdict = verdict
+
+                    if verdict == "warn":
+                        console.print(
+                            "[yellow]⚠ Security review returned warnings.[/]"
+                        )
+                        print_security_issues(sec)
+
+                    # Prevent the generic error-halt from aborting
+                    # the pipeline on a non-blocking verdict.
+                    step_result.status = "success"
+
+            elif step.agent_role == "release":
+                rel = step_result.payload
+
+                self._state.version_bump = rel.get("version_bump", "")
+                self._state.changelog_entry = rel.get("changelog_entry", "")
+                self._state.mark_phase("release")
+
+            elif step.agent_role == "archivist":
+                nova_result = step_result.payload
+
+                if is_maintenance:
+                    nova_result["should_write_adr"] = False
+
+                if (
+                    nova_result
+                    and nova_result.get("should_write_adr")
+                    and nova_result.get("adr")
+                ):
+                    adr_applied = write_adr(
+                        ws_path, nova_result["adr"]
+                    )
+                    if adr_applied:
+                        console.print(f"  [cyan]{adr_applied}[/]")
+                        attest_controller_action(adr_applied, self.run_id)
+
+                # Maintenance mode: forbid file create/delete
+                # and out-of-scope edits
+                if is_maintenance:
+                    allowed_paths = set(
+                        plan.get("files_likely_affected") or []
+                    )
+                    if not allowed_paths:
+                        raise RuntimeError(
+                            "Maintenance mode requires explicit "
+                            "files_likely_affected"
+                        )
+
+                    for mpath in allowed_paths:
+                        self._workspace._git(
+                            "add", mpath, check=False
+                        )
+
+                    diff_output = self._workspace._git(
+                        "diff",
+                        "--cached",
+                        "--name-status",
+                        check=False,
+                    )
+                    lines = (
+                        diff_output.splitlines() if diff_output else []
+                    )
+
+                    created, deleted, touched = [], [], []
+                    for line in lines:
+                        parts = line.split("\t", 1)
+                        if len(parts) != 2:
+                            continue
+                        mstatus, mpath = parts
+                        if mstatus == "A":
+                            created.append(mpath)
+                        elif mstatus == "D":
+                            deleted.append(mpath)
+                        else:
+                            touched.append(mpath)
+
+                    out_of_scope = [
+                        p for p in touched if p not in allowed_paths
+                    ]
+                    if created or deleted or out_of_scope:
+                        raise RuntimeError(
+                            f"Maintenance violation. "
+                            f"created={created} deleted={deleted} "
+                            f"out_of_scope={out_of_scope}"
+                        )
+
+            # Generic halt for any required step that errors
+            if step_result.status == "error" and step.required:
+                result["status"] = f"{step.agent_role}_failed"
+                pipeline_halted = True
+
+        return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
+
     def _finalize(self, task: Task, plan: dict, impl: dict, rel: dict, sec: dict,
                   ws_path: Path, is_doc_only: bool, is_fast_mode: bool, result: dict,
                   pipeline_halted: bool, tools: ToolExecutor) -> dict:
@@ -364,396 +759,9 @@ class Controller:
         try:
             ws_path, tools, failure_context = self._startup(task)
 
-            # ── 2. Dynamic Pipeline ──
-            plan: dict = {}
-            impl: dict = {}
-            rel: dict = {}
-            sec: dict = {}
-            applied: list[str] = []
-            is_doc_only = False
-            is_fast_mode = False
-            test_ok = True
-            is_maintenance = task.mode == "maintenance"
-            is_evolution = task.mode == "evolution"
-            pipeline_halted = False
-
-            for step in self.config.pipeline:
-                if pipeline_halted:
-                    break
-
-                step_result = self._run_pipeline_step(
-                    step, task, ws_path, tools,
-                    failure_context=failure_context,
-                    plan=plan, impl=impl, rel=rel,
-                    is_doc_only=is_doc_only,
-                    is_fast_mode=is_fast_mode,
-                )
-
-                if step_result.payload.get("skipped"):
-                    # Debugger skip still needs state updates (test phase marking)
-                    if step.agent_role == "debugger":
-                        self._state.test_passing = True
-                        self._state.mark_phase("test")
-                        self._state.persist(ws_path)
-                    continue
-
-                # --- Per-step post-processing (preserves all existing behavior) ---
-
-                if step.agent_role == "planner":
-                    if step_result.status == "error":
-                        result["status"] = "plan_failed"
-                        return result
-                    plan = step_result.payload
-
-                    # Update TaskState with plan output
-                    self._state.plan_steps = [
-                        StepState(
-                            step_number=s.get("step_number", 0),
-                            description=s.get("description", ""),
-                            files=s.get("files", []),
-                            action=s.get("action", ""),
-                            do_not_touch=s.get("do_not_touch", []),
-                            code_hint=s.get("code_hint", ""),
-                        )
-                        for s in plan.get("steps", [])
-                    ]
-                    self._state.files_in_scope = plan.get("files_likely_affected", [])
-                    self._state.estimated_complexity = plan.get(
-                        "estimated_complexity", "medium"
-                    )
-                    self._state.requires_core_change = plan.get(
-                        "requires_core_change", False
-                    )
-                    self._state.mark_phase("plan")
-                    self._state.persist(ws_path)
-
-                    # ── Boundary Validation (Plan-Level) ──
-                    try:
-                        violations = self.boundary.check_plan(plan, self.allow_core)
-                        if violations:
-                            self._log_event("core_override", {"files": violations})
-                            console.print(
-                                f"[yellow]⚠ Core override granted for: {violations}[/]"
-                            )
-                    except BoundaryViolation as e:
-                        console.print(f"[red]🚫 {e}[/]")
-                        result["status"] = "boundary_violation"
-                        return result
-
-                    # ── Governance Mode Routing ──
-                    if is_evolution:
-                        self.config.intervention.pause_before_pr = True
-
-                    # Strict doc-only detection
-                    objective_lower = task.objective.lower()
-                    is_doc_only = (
-                        is_maintenance
-                        and any(
-                            term in objective_lower
-                            for term in ["doc", "documentation", "///"]
-                        )
-                        and task.risk_level == "low"
-                        and all(
-                            s.get("action") == "modify"
-                            for s in plan.get("steps", [])
-                        )
-                        and any(
-                            f.endswith(".rs")
-                            for f in plan.get("files_likely_affected", [])
-                        )
-                    )
-
-                elif step.agent_role == "implementer":
-                    # ── Maintenance: Surgical Documentation Path ──
-                    if is_doc_only:
-                        console.print(
-                            "\n[bold dim]📄 [MAINTENANCE MODE] "
-                            "Surgical documentation update — implementer bypassed.[/]"
-                        )
-
-                        impl = {
-                            "changes": [],
-                            "tests_added": [],
-                            "commit_message": (
-                                f"docs: update documentation for {task.task_id}"
-                            ),
-                            "summary": "Surgical documentation insertion.",
-                        }
-                        applied = []
-
-                        for f in plan.get("files_likely_affected", []):
-                            fpath = ws_path / f
-                            if fpath.exists():
-                                inserted = insert_doc_comments(fpath, self.router)
-                                if inserted:
-                                    applied.append(f"DOC {f}")
-
-                        for entry in applied:
-                            console.print(f"  [cyan]{entry}[/]")
-                            attest_controller_action(entry, self.run_id)
-
-                    # ── Standard Execution Path ──
-                    else:
-                        if step_result.status == "error":
-                            result["status"] = "implementation_failed"
-                            return result
-                        impl = step_result.payload
-
-                        # Update TaskState with implementation output
-                        self._state.files_modified = [
-                            c.get("file", "")
-                            for c in impl.get("changes", [])
-                            if c.get("action") in ("modify", "create")
-                        ]
-                        self._state.files_created = [
-                            c.get("file", "")
-                            for c in impl.get("changes", [])
-                            if c.get("action") == "create"
-                        ]
-                        self._state.tests_added = [
-                            t.get("file", "") for t in impl.get("tests_added", [])
-                        ]
-                        self._state.commit_message = impl.get("commit_message", "")
-                        self._state.implementation_summary = impl.get("summary", "")
-                        self._state.mark_phase("implement")
-                        self._state.persist(ws_path)
-
-                        is_high_complexity = plan.get(
-                            "estimated_complexity", ""
-                        ).lower() in ["high", "large", "unknown"]
-                        if is_high_complexity:
-                            console.print(
-                                "  [dim]High complexity: allowing full-file rewrites.[/]"
-                            )
-
-                        try:
-                            applied = apply_changes(
-                                ws_path,
-                                impl.get("changes", []),
-                                boundary=self.boundary,
-                                allow_core=self.allow_core,
-                                allow_test_modifications=not is_maintenance,
-                                allow_full_rewrite=True,
-                            )
-                            applied += apply_tests(
-                                ws_path,
-                                impl.get("tests_added", []),
-                                allow_test_modifications=not is_maintenance,
-                            )
-                        except BoundaryViolation as e:
-                            console.print(
-                                f"[red]🚫 Boundary Violation during "
-                                f"implementation: {e}[/]"
-                            )
-                            result["status"] = "boundary_violation"
-                            return result
-
-                        for entry in applied:
-                            console.print(f"  [cyan]{entry}[/]")
-                            attest_controller_action(entry, self.run_id)
-
-                    # ── Patch & Surgical failure retry (one attempt) ──
-                    # Catch BOTH "FAIL" (surgical) and "PATCH_FAILED" (diffs)
-                    patch_failures = [
-                        a for a in applied if "FAIL" in a or "PATCH_FAILED" in a
-                    ]
-
-                    if patch_failures:
-                        console.print(
-                            "[yellow]⚠ Edit failed to apply "
-                            "(likely a whitespace mismatch). "
-                            "Attempting one auto-repair...[/]"
-                        )
-
-                        for entry in applied:
-                            console.print(f"  [cyan]{entry}[/]")
-                            attest_controller_action(entry, self.run_id)
-
-                        if any(
-                            "FAIL" in a or "PATCH_FAILED" in a for a in applied
-                        ):
-                            console.print(
-                                "[red]❌ Auto-repair failed. "
-                                "Aborting to prevent corrupted PR.[/]"
-                            )
-                            result["status"] = "implementation_failed"
-                            return result
-
-                        retry_result = self._retry_patch(
-                            task, plan, ws_path, impl, applied
-                        )
-
-                        if retry_result.status == "error":
-                            result["status"] = "implementation_failed"
-                            return result
-
-                        applied = apply_changes(
-                            ws_path,
-                            retry_result.payload.get("changes", []),
-                            boundary=self.boundary,
-                            allow_core=self.allow_core,
-                            allow_test_modifications=not is_maintenance,
-                            allow_full_rewrite=True,
-                        )
-
-                        for entry in applied:
-                            console.print(f"  [cyan]{entry}[/]")
-                            attest_controller_action(entry, self.run_id)
-
-                        if any(a.startswith("PATCH_FAILED") for a in applied):
-                            console.print(
-                                "[red]❌ Patch retry failed. Aborting.[/]"
-                            )
-                            result["status"] = "implementation_failed"
-                            return result
-
-                    # Compute fast_mode for downstream agents
-                    is_fast_mode = (
-                        len(self._state.files_modified) <= 2
-                        and self._state.estimated_complexity
-                        in ("trivial", "small")
-                    )
-                    if is_fast_mode:
-                        console.print(
-                            "  [dim]Trivial change detected. "
-                            "Forcing downstream agents into Fast Mode.[/]"
-                        )
-
-                elif step.agent_role == "debugger":
-                    test_ok = step_result.payload.get("test_passing", True)
-
-                    if not test_ok:
-                        result["status"] = "tests_failed"
-                        console.print(
-                            "[red]❌ Fix loop exhausted. Tests still failing.[/]"
-                        )
-                        if not self._confirm("Continue to PR anyway?"):
-                            return result
-
-                    self._state.test_passing = test_ok
-                    self._state.mark_phase("test")
-                    self._state.persist(ws_path)
-
-                elif step.agent_role == "testgen":
-                    pass
-
-                elif step.agent_role == "security":
-                    sec = step_result.payload
-
-                    self._state.mark_phase("security")
-
-                    if sec.get("verdict") == "block":
-                        self._state.security_verdict = "block"
-                        console.print(
-                            "[red]🚫 Security blocked this change.[/]"
-                        )
-                        print_security_issues(sec)
-
-                        if self.auto_approve:
-                            console.print(
-                                "[red]❌ Auto-approve enabled. "
-                                "Aborting dangerous PR.[/]"
-                            )
-                            result["status"] = "security_blocked"
-                            return result
-
-                        if not self._confirm("Override security block?"):
-                            result["status"] = "security_blocked"
-                            return result
-                    else:
-                        # Normalize missing/empty verdict to "warn"
-                        verdict = sec.get("verdict") or "warn"
-                        self._state.security_verdict = verdict
-
-                        if verdict == "warn":
-                            console.print(
-                                "[yellow]⚠ Security review returned warnings.[/]"
-                            )
-                            print_security_issues(sec)
-
-                        # Prevent the generic error-halt from aborting
-                        # the pipeline on a non-blocking verdict.
-                        step_result.status = "success"
-
-                elif step.agent_role == "release":
-                    rel = step_result.payload
-
-                    self._state.version_bump = rel.get("version_bump", "")
-                    self._state.changelog_entry = rel.get("changelog_entry", "")
-                    self._state.mark_phase("release")
-
-                elif step.agent_role == "archivist":
-                    nova_result = step_result.payload
-
-                    if is_maintenance:
-                        nova_result["should_write_adr"] = False
-
-                    if (
-                        nova_result
-                        and nova_result.get("should_write_adr")
-                        and nova_result.get("adr")
-                    ):
-                        adr_applied = write_adr(
-                            ws_path, nova_result["adr"]
-                        )
-                        if adr_applied:
-                            console.print(f"  [cyan]{adr_applied}[/]")
-                            attest_controller_action(adr_applied, self.run_id)
-
-                    # Maintenance mode: forbid file create/delete
-                    # and out-of-scope edits
-                    if is_maintenance:
-                        allowed_paths = set(
-                            plan.get("files_likely_affected") or []
-                        )
-                        if not allowed_paths:
-                            raise RuntimeError(
-                                "Maintenance mode requires explicit "
-                                "files_likely_affected"
-                            )
-
-                        for mpath in allowed_paths:
-                            self._workspace._git(
-                                "add", mpath, check=False
-                            )
-
-                        diff_output = self._workspace._git(
-                            "diff",
-                            "--cached",
-                            "--name-status",
-                            check=False,
-                        )
-                        lines = (
-                            diff_output.splitlines() if diff_output else []
-                        )
-
-                        created, deleted, touched = [], [], []
-                        for line in lines:
-                            parts = line.split("\t", 1)
-                            if len(parts) != 2:
-                                continue
-                            mstatus, mpath = parts
-                            if mstatus == "A":
-                                created.append(mpath)
-                            elif mstatus == "D":
-                                deleted.append(mpath)
-                            else:
-                                touched.append(mpath)
-
-                        out_of_scope = [
-                            p for p in touched if p not in allowed_paths
-                        ]
-                        if created or deleted or out_of_scope:
-                            raise RuntimeError(
-                                f"Maintenance violation. "
-                                f"created={created} deleted={deleted} "
-                                f"out_of_scope={out_of_scope}"
-                            )
-
-                # Generic halt for any required step that errors
-                if step_result.status == "error" and step.required:
-                    result["status"] = f"{step.agent_role}_failed"
-                    pipeline_halted = True
+            plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result = self._execute_pipeline(
+                task, ws_path, tools, failure_context, result
+            )
 
             result = self._finalize(task, plan, impl, rel, sec, ws_path, is_doc_only, is_fast_mode, result, pipeline_halted, tools)
 
