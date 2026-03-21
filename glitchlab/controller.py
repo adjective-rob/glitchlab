@@ -125,6 +125,17 @@ class Controller:
         # Prelude — available as tool context, NOT global prefix
         self._prelude = PreludeContext(self.repo_path)
 
+    def _print_banner(self, task: Task) -> None:
+        """Print the task banner."""
+        console.print(Panel(
+            f"[bold green]Task:[/] {task.objective[:120]}\n"
+            f"[bold]ID:[/] {task.task_id}  |  [bold]Source:[/] {task.source}\n"
+            f"[bold]Risk:[/] {task.risk_level}  |  [bold]Mode:[/] {task.mode.upper()}",
+            title="⚡ GLITCHLAB v4.3.1",
+            subtitle="Build Weird. Ship Clean.",
+            border_style="bright_green",
+        ))
+
     def _check_repo_clean(self) -> None:
         """Raise DirtyRepoError if the repo has uncommitted changes or is behind remote."""
         # --- EXECUTION GUARD (Manual Patch) ---
@@ -195,14 +206,7 @@ class Controller:
             "events": [],
         }
 
-        console.print(Panel(
-            f"[bold green]Task:[/] {task.objective[:120]}\n"
-            f"[bold]ID:[/] {task.task_id}  |  [bold]Source:[/] {task.source}\n"
-            f"[bold]Risk:[/] {task.risk_level}  |  [bold]Mode:[/] {task.mode.upper()}",
-            title="⚡ GLITCHLAB v4.3.1",
-            subtitle="Build Weird. Ship Clean.",
-            border_style="bright_green",
-        ))
+        self._print_banner(task)
 
         try:
             # ── 1. Create workspace ──
