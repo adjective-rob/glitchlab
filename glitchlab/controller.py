@@ -1034,6 +1034,8 @@ class Controller:
 
         objective = "\n\n---\n\n".join(objective_parts)
 
+        symbol_index = SymbolIndex(ws_path)
+
         context = AgentContext(
             task_id=task.task_id,
             run_id=self.run_id,
@@ -1045,6 +1047,7 @@ class Controller:
             risk_level=task.risk_level,
             extra={
                 "prelude": self._prelude,
+                "symbol_index": symbol_index,
             },
         )
 
