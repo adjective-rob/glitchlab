@@ -241,3 +241,8 @@ Thumbs.db
 
 # Projects
 .glitchlab/tasks/
+
+# Claude Stuff
+.claude/
+run-tasks.sh
+tasks_for_claude_code/
