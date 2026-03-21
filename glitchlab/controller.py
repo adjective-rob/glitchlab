@@ -420,17 +420,6 @@ class Controller:
                         result["status"] = "implementation_failed"
                         return plan, impl, rel, sec, applied, is_doc_only, is_fast_mode, test_ok, pipeline_halted, result
 
-                # Compute fast_mode for downstream agents
-                is_fast_mode = (
-                    len(self._state.files_modified) <= 2
-                    and self._state.estimated_complexity
-                    in ("trivial", "small")
-                )
-                if is_fast_mode:
-                    console.print(
-                        "  [dim]Trivial change detected. "
-                        "Forcing downstream agents into Fast Mode.[/]"
-                    )
 
             elif step.agent_role == "debugger":
                 test_ok = step_result.payload.get("test_passing", True)
@@ -1109,10 +1098,7 @@ class Controller:
                 "learned_heuristics": heuristics,
                 "symbol_index": symbol_index,
                 "prelude": self._prelude,
-                "fast_mode": (
-                    len(self._state.files_in_scope) <= 3
-                    and self._state.estimated_complexity in ("trivial", "small")
-                ),
+                "fast_mode": False,
             },
         )
 
@@ -1336,10 +1322,7 @@ Ensure:
                     "tool_executor": tools, # Hand over the keys to the sandbox
                     "prelude": self._prelude,
                     "repo_index": self._repo_index,
-                    "fast_mode": (
-                        len(self._state.files_in_scope) <= 3
-                        and self._state.estimated_complexity in ("trivial", "small")
-                    ),
+                    "fast_mode": False,
                 },
             )
 

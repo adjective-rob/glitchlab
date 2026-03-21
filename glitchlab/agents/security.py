@@ -224,11 +224,6 @@ Diff Preview:
 
 Investigate the modified files using your tools. When satisfied, call `submit_report`."""
 
-        if context.extra.get("fast_mode"):
-            user_content += """
-
-FAST MODE ENABLED: This is a trivial change. DO NOT use `think`, `read_file`, `replace_in_file`, or `search_grep`. Rely strictly on the Diff Preview and immediately call your final submission tool (`submit_report`)."""
-
         return [self._system_msg(), self._user_msg(user_content)]
 
     def run(self, context: AgentContext, *, max_steps: int = 15, **kwargs) -> dict[str, Any]:

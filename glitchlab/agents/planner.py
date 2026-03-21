@@ -156,7 +156,7 @@ Output schema:
       "files": ["path/to/file.py"],
       "action": "modify|create|delete",
       "do_not_touch": ["path/to/adjacent.py", "ClassName.method_name"],
-      "code_hint": "Add `fast_mode: bool` parameter to the extra dict, computed from self._state.files_in_scope <= 3"
+      "code_hint": "Add `verbose: bool` parameter to the extra dict, computed from self._state.risk_level == 'high'"
     }
   ],
   "files_likely_affected": ["path/to/file1", "path/to/file2"],
