@@ -395,16 +395,41 @@ Plan: {steps_text}
             compress_stale_messages(messages)
             hard_compact_messages(messages)
 
-            # Stall detection: if we're past step 15 with no writes, force a think+act nudge
+            # Stall detection: soft nudge at 15, hard kill at 20
             if step >= 15 and write_count == 0 and think_count > 0:
-                messages.append({
-                    "role": "user",
-                    "content": (
-                        "WARNING: You have spent 15+ steps reading and searching without writing any code. "
-                        "You MUST take action now. Use `replace_in_file` to make your changes, or call `done` "
-                        "if the task cannot be completed. Do NOT read more files."
+                if step >= 20:
+                    # Hard circuit breaker — agent is stuck in a read loop
+                    logger.warning(
+                        f"[PATCH] Write-deadline breaker tripped at step {step + 1}. "
+                        f"0 writes after {think_count} thinks and {search_count} searches."
                     )
-                })
+                    bus.emit(
+                        event_type="agent.write_deadline_breaker",
+                        payload={
+                            "step": step + 1,
+                            "think_count": think_count,
+                            "search_count": search_count,
+                            "write_count": 0,
+                        },
+                        agent_id=self.role,
+                    )
+                    return {
+                        "changes": [],
+                        "tests_added": [],
+                        "commit_message": "chore: no changes (write deadline exceeded)",
+                        "summary": f"Implementer read for {step + 1} steps without writing. Circuit breaker tripped.",
+                        "parse_error": True,
+                        "_breaker": "write_deadline",
+                    }
+                else:
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "WARNING: You have spent 15+ steps reading and searching without writing any code. "
+                            "You MUST take action now. Use `replace_in_file` to make your changes, or call `done` "
+                            "if the task cannot be completed. Do NOT read more files."
+                        )
+                    })
 
             # 2. Rolling window search spiral guard
             # Look at the last 6 tool calls across all messages
