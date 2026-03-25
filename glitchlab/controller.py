@@ -24,7 +24,6 @@ It never writes code. It only coordinates.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -362,18 +361,3 @@ class Controller:
             return run_archivist(ctx, task, ps.is_fast_mode)
 
         raise ValueError(f"Unknown pipeline agent_role: {role!r}")
-
-    # -----------------------------------------------------------------------
-    # Event Logging (kept on Controller for backward compat)
-    # -----------------------------------------------------------------------
-
-    def _log_event(self, event_type: str, data: dict | None = None) -> None:
-        event = {
-            "type": event_type,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "task_id": self._state.task_id if hasattr(self, '_state') and self._state else None,
-            "data": data or {},
-        }
-        if hasattr(self, '_state') and self._state:
-            self._state.events.append(event)
-        logger.debug(f"[EVENT] {event_type}: {data}")

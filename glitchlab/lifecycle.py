@@ -24,6 +24,7 @@ from rich.prompt import Confirm
 from glitchlab.controller_utils import calculate_quality_score
 from glitchlab.display import build_pr_body, print_budget_summary
 from glitchlab.event_bus import bus
+from glitchlab.events import emit_event
 from glitchlab.indexer import build_index
 from glitchlab.run_context import RunContext
 from glitchlab.scope import ScopeResolver
@@ -115,7 +116,7 @@ def startup(
     )
     ws_path = ctx.workspace.create()
     ctx.ws_path = ws_path
-    _log_event(ctx, "workspace_created", {"path": str(ws_path)})
+    emit_event(ctx, "workspace_created", {"path": str(ws_path)})
 
     ctx.tools = ToolExecutor(
         allowed_tools=ctx.config.allowed_tools,
@@ -130,7 +131,7 @@ def startup(
         f"  [dim]{ctx.repo_index.total_files} files, "
         f"{len(ctx.repo_index.languages)} languages[/]"
     )
-    _log_event(ctx, "repo_indexed", {
+    emit_event(ctx, "repo_indexed", {
         "total_files": ctx.repo_index.total_files,
         "languages": ctx.repo_index.languages,
     })
@@ -146,7 +147,7 @@ def startup(
         if prelude_constraints:
             task.constraints = list(set(task.constraints + prelude_constraints))
             console.print(f"  [dim]{len(prelude_constraints)} constraints merged[/]")
-        _log_event(ctx, "prelude_constraints_loaded", {
+        emit_event(ctx, "prelude_constraints_loaded", {
             "count": len(prelude_constraints) if prelude_constraints else 0,
         })
 
@@ -399,15 +400,3 @@ def _confirm(ctx: RunContext, prompt: str) -> bool:
     if ctx.auto_approve:
         return True
     return Confirm.ask(f"[bold]{prompt}[/]")
-
-
-def _log_event(ctx: RunContext, event_type: str, data: dict | None = None) -> None:
-    event = {
-        "type": event_type,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "task_id": ctx.state.task_id if ctx.state else None,
-        "data": data or {},
-    }
-    if ctx.state:
-        ctx.state.events.append(event)
-    logger.debug(f"[EVENT] {event_type}: {data}")

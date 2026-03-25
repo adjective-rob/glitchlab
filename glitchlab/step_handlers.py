@@ -29,6 +29,7 @@ from glitchlab.config_loader import PipelineStep
 from glitchlab.controller_utils import attest_controller_action
 from glitchlab.display import print_security_issues
 from glitchlab.doc_inserter import insert_doc_comments, write_adr
+from glitchlab.events import emit_event
 from glitchlab.governance import BoundaryViolation
 from glitchlab.run_context import RunContext
 from glitchlab.task import Task, apply_changes, apply_tests
@@ -111,10 +112,11 @@ def handle_planner_result(
     try:
         violations = ctx.boundary.check_plan(ps.plan, ctx.allow_core)
         if violations:
-            _log_event(ctx, "core_override", {"files": violations})
+            emit_event(ctx, "core_override", {"files": violations})
             console.print(f"[yellow]⚠ Core override granted for: {violations}[/]")
     except BoundaryViolation as e:
         console.print(f"[red]🚫 {e}[/]")
+        emit_event(ctx, "boundary_violation", {"error": str(e)})
         ps.result["status"] = "boundary_violation"
         return HandlerSignal.EARLY_RETURN
 
@@ -333,6 +335,11 @@ def handle_security_result(
     ps.sec = step_result.payload
     ctx.state.mark_phase("security")
 
+    emit_event(ctx, "security_review", {
+        "verdict": ps.sec.get("verdict"),
+        "issues_count": len(ps.sec.get("issues", [])),
+    }, agent_id="security")
+
     if ps.sec.get("verdict") == "block":
         ctx.state.security_verdict = "block"
         console.print("[red]🚫 Security blocked this change.[/]")
@@ -373,6 +380,12 @@ def handle_release_result(
     ctx.state.version_bump = ps.rel.get("version_bump", "")
     ctx.state.changelog_entry = ps.rel.get("changelog_entry", "")
     ctx.state.mark_phase("release")
+
+    emit_event(ctx, "release_assessment", {
+        "version_bump": ps.rel.get("version_bump"),
+        "changelog_entry": ps.rel.get("changelog_entry", "")[:200],
+    }, agent_id="release")
+
     return HandlerSignal.CONTINUE
 
 
@@ -466,15 +479,3 @@ def _confirm(ctx: RunContext, prompt: str) -> bool:
     if ctx.auto_approve:
         return True
     return Confirm.ask(f"[bold]{prompt}[/]")
-
-
-def _log_event(ctx: RunContext, event_type: str, data: dict | None = None) -> None:
-    from datetime import datetime, timezone
-    event = {
-        "type": event_type,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "task_id": ctx.state.task_id,
-        "data": data or {},
-    }
-    ctx.state.events.append(event)
-    logger.debug(f"[EVENT] {event_type}: {data}")

@@ -23,18 +23,10 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
 const { useState, useMemo, useRef } = React;
-const h = React.createElement;
 
-const SAMPLE_DATA = [
-  {"label":"run-start-001","payload":"{\"event_id\":\"2f420073-67ee-431d-952d-c3ef7cc9eb3a\",\"timestamp\":\"2026-03-19T00:56:26.137853+00:00\",\"event_type\":\"run.started\",\"run_id\":\"6e3d23e9-af68-48bf-9002-819b176d212c\",\"agent_id\":\"system\",\"action_id\":null,\"payload\":{\"task_id\":\"interactive-20260319-005626\",\"objective\":\"upgrade to version 4.3.0\"},\"metadata\":{}}","signature":"shJvkcGF6gjRH6ibaf6sI8UB5h7UVsNUHVzqvWOr72W==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T00:56:26+00:00"},
-  {"label":"7ab236b8","payload":"{\"event_id\":\"7ab236b8-29ab-4f53-a2d4-a9e455876ca6\",\"timestamp\":\"2026-03-19T01:07:41.745385+00:00\",\"event_type\":\"run.started\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"system\",\"action_id\":null,\"payload\":{\"task_id\":\"interactive-20260319-010741\",\"objective\":\"upgrade to version 4.3.0 across the entire repository\"},\"metadata\":{}}","signature":"mXNJ7ePFiot9JZUGnQQGjKhP==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:07:41+00:00"},
-  {"label":"act-8d698fd9","payload":"{\"event_id\":\"79bdf177\",\"timestamp\":\"2026-03-19T01:08:15.432909+00:00\",\"event_type\":\"action.completed\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"controller\",\"action_id\":\"act-8d698fd9\",\"payload\":{\"command\":\"controller.write_file\",\"stdout\":\"AGENT_APPLIED pyproject.toml\",\"stderr\":\"\",\"returncode\":0,\"allowed\":true},\"metadata\":{}}","signature":"+mJsDcsMXfIPXH4N==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:08:15+00:00"},
-  {"label":"act-ff711fc4","payload":"{\"event_id\":\"3168ae5c\",\"timestamp\":\"2026-03-19T01:08:15.436189+00:00\",\"event_type\":\"action.completed\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"controller\",\"action_id\":\"act-ff711fc4\",\"payload\":{\"command\":\"controller.write_file\",\"stdout\":\"AGENT_APPLIED glitchlab/identity.py\",\"stderr\":\"\",\"returncode\":0,\"allowed\":true},\"metadata\":{}}","signature":"o6a92p+8DVUb==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:08:15+00:00"},
-  {"label":"act-test-start","payload":"{\"event_id\":\"b0df7b2f\",\"timestamp\":\"2026-03-19T01:08:15.443085+00:00\",\"event_type\":\"action.started\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"system\",\"action_id\":\"act-f28d5565\",\"payload\":{\"command\":\"python -m pytest\",\"working_dir\":\"/home/dev/glitchlab\"},\"metadata\":{}}","signature":"wOi5P5jhFwFX==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:08:15+00:00"},
-  {"label":"act-test-end","payload":"{\"event_id\":\"9c6ec31f\",\"timestamp\":\"2026-03-19T01:08:19.582015+00:00\",\"event_type\":\"action.completed\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"system\",\"action_id\":\"act-f28d5565\",\"payload\":{\"command\":\"python -m pytest\",\"stdout\":\"105 items collected ... 2 failed, 103 passed\",\"stderr\":\"\",\"returncode\":1,\"allowed\":true},\"metadata\":{}}","signature":"XiPRwW/wnVjz==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:08:19+00:00"},
-  {"label":"act-debug","payload":"{\"event_id\":\"60096206\",\"timestamp\":\"2026-03-19T01:08:24.317345+00:00\",\"event_type\":\"action.started\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"debugger\",\"action_id\":\"act-811bee97\",\"payload\":{\"command\":\"python -m pytest\",\"working_dir\":\"/home/dev/glitchlab\"},\"metadata\":{}}","signature":"uMbCmuJoBCKY==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:08:24+00:00"},
-  {"label":"run-complete","payload":"{\"event_id\":\"c1234567\",\"timestamp\":\"2026-03-19T01:11:30.000000+00:00\",\"event_type\":\"run.completed\",\"run_id\":\"977de3e0-5056-42d0-8c3c-af977cf4eff2\",\"agent_id\":\"system\",\"action_id\":null,\"payload\":{\"task_id\":\"interactive-20260319-010741\",\"status\":\"pr_created\",\"pr_url\":\"https://github.com/adjective-rob/glitchlab/pull/42\"},\"metadata\":{\"quality_score\":{\"score\":80,\"tokens_used\":230080,\"debug_attempts\":1}}}","signature":"fakeSig==","signer":"1/QL5bc6bfAIWy3uJ1KYEgGW9Sy9TwFyLDx7Bu+1eNQ=","timestamp":"2026-03-19T01:11:30+00:00"}
-];
+// ---------------------------------------------------------------------------
+// Event Parsing
+// ---------------------------------------------------------------------------
 
 function parseEvents(rawLines) {
   const events = [];
@@ -60,16 +52,78 @@ function groupByRun(events) {
   return Object.values(runs).sort((a, b) => (b.startTime || '').localeCompare(a.startTime || ''));
 }
 
-const AGENT_COLORS = { system:'#6b7280', controller:'#8b5cf6', planner:'#f59e0b', implementer:'#3b82f6', debugger:'#ef4444', security:'#10b981', release:'#06b6d4', archivist:'#a855f7', testgen:'#14b8a6' };
-const EVENT_ICONS = { 'run.started':'⚡', 'run.completed':'🏁', 'action.started':'▶', 'action.completed':'✓' };
-const STATUS_COLORS = { pr_created:'#10b981', merged:'#10b981', committed:'#f59e0b', security_blocked:'#ef4444', security_failed:'#ef4444', tests_failed:'#ef4444', plan_failed:'#6b7280', error:'#ef4444', budget_exceeded:'#f59e0b' };
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const AGENT_COLORS = {
+  system:'#6b7280', controller:'#8b5cf6', planner:'#f59e0b', implementer:'#3b82f6',
+  debugger:'#ef4444', security:'#10b981', release:'#06b6d4', archivist:'#a855f7',
+  testgen:'#14b8a6',
+};
+
+const EVENT_ICONS = {
+  'run.started':'⚡', 'run.completed':'🏁',
+  'action.started':'▶', 'action.completed':'✓',
+  'pipeline.step_started':'◆', 'pipeline.step_completed':'◇', 'pipeline.step_skipped':'◌',
+  'plan_created':'🧠', 'implementation_created':'🔧', 'tests_passed':'✅', 'tests_failed':'❌',
+  'debug_completed':'🐛', 'testgen_created':'🛡', 'security_review':'🔒', 'release_assessment':'📦',
+  'workspace_created':'📂', 'repo_indexed':'🗂', 'prelude_constraints_loaded':'📋',
+  'core_override':'⚠', 'boundary_violation':'🚫',
+};
+
+// Pipeline-internal events (emitted via emit_event) — show with richer context
+const PIPELINE_EVENTS = new Set([
+  'plan_created', 'implementation_created', 'tests_passed', 'tests_failed',
+  'debug_completed', 'testgen_created', 'security_review', 'release_assessment',
+  'workspace_created', 'repo_indexed', 'prelude_constraints_loaded',
+  'core_override', 'boundary_violation',
+]);
+
+const STATUS_COLORS = {
+  pr_created:'#10b981', merged:'#10b981', committed:'#f59e0b',
+  security_blocked:'#ef4444', security_failed:'#ef4444', tests_failed:'#ef4444',
+  plan_failed:'#6b7280', error:'#ef4444', budget_exceeded:'#f59e0b',
+};
+
+// ---------------------------------------------------------------------------
+// Formatters
+// ---------------------------------------------------------------------------
 
 function formatTime(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'}); } catch{return ts;} }
 function formatDate(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'}); } catch{return ts;} }
 function duration(s,e) { if(!s||!e)return '—'; const ms=new Date(e)-new Date(s); if(ms<1000)return ms+'ms'; if(ms<60000)return (ms/1000).toFixed(1)+'s'; return (ms/60000).toFixed(1)+'m'; }
 
+function eventSummary(ev) {
+  const p = ev.payload || {};
+  switch(ev.event_type) {
+    case 'plan_created': return `${p.steps||0} steps, risk=${p.risk||'?'}`;
+    case 'implementation_created': return `${p.changes||0} changes, ${p.tests||0} tests`;
+    case 'tests_passed': return `attempt ${p.attempt||'?'}`;
+    case 'tests_failed': return `attempt ${p.attempt||'?'}`;
+    case 'debug_completed': return `${p.status||'?'} — ${(p.diagnosis||'').slice(0,60)}`;
+    case 'testgen_created': return p.file||'';
+    case 'security_review': return `verdict=${p.verdict||'?'}, ${p.issues_count||0} issues`;
+    case 'release_assessment': return `bump=${p.version_bump||'none'}`;
+    case 'repo_indexed': return `${p.total_files||0} files`;
+    case 'prelude_constraints_loaded': return `${p.count||0} constraints`;
+    case 'boundary_violation': return p.error||'';
+    case 'core_override': return (p.files||[]).join(', ');
+    case 'pipeline.step_started': return `${p.agent_role||'?'}`;
+    case 'pipeline.step_completed': return `${p.agent_role||'?'} → ${p.status||'?'}`;
+    case 'pipeline.step_skipped': return `${p.agent_role||'?'} (${p.skip_reason||'?'})`;
+    case 'action.completed': return p.command||'';
+    case 'action.started': return p.command||'';
+    default: return '';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
+
 function SignatureBadge({sig}) {
-  const short = sig ? sig.slice(0,12)+'...' : 'unsigned';
+  const short = sig ? sig.slice(0,12)+'…' : 'unsigned';
   const has = !!sig;
   return <span style={{display:'inline-flex',alignItems:'center',gap:4,padding:'2px 8px',borderRadius:3,background:has?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)',border:'1px solid '+(has?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'),fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:has?'#6ee7b7':'#fca5a5'}}>
     <span style={{fontSize:10}}>{has?'🔏':'⚠'}</span>{short}
@@ -98,114 +152,212 @@ function QualityGauge({score}) {
   </div>;
 }
 
-function EventRow({ev,isLast}) {
-  const [expanded,setExpanded]=useState(false);
-  const icon=EVENT_ICONS[ev.event_type]||'•';
-  const isError=ev.payload?.returncode&&ev.payload.returncode!==0;
-  const command=ev.payload?.command||'';
-  const stdout=ev.payload?.stdout||'';
+function EventTypeBadge({type}) {
+  const isPipeline = PIPELINE_EVENTS.has(type);
+  const isStep = type.startsWith('pipeline.step_');
+  const isAction = type.startsWith('action.');
+  const isRun = type.startsWith('run.');
+
+  let bg, border, color;
+  if (isRun) { bg='rgba(245,158,11,0.1)'; border='rgba(245,158,11,0.3)'; color='#fbbf24'; }
+  else if (isPipeline) { bg='rgba(99,102,241,0.1)'; border='rgba(99,102,241,0.3)'; color='#a5b4fc'; }
+  else if (isStep) { bg='rgba(139,92,246,0.1)'; border='rgba(139,92,246,0.3)'; color='#c4b5fd'; }
+  else if (isAction) { bg='rgba(59,130,246,0.08)'; border='rgba(59,130,246,0.25)'; color='#93c5fd'; }
+  else { bg='rgba(255,255,255,0.04)'; border='rgba(255,255,255,0.1)'; color='#9ca3af'; }
+
+  return <span className="mono" style={{fontSize:11,padding:'1px 6px',borderRadius:3,background:bg,border:'1px solid '+border,color}}>{type}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline Progress Bar — shows which agents fired for a run
+// ---------------------------------------------------------------------------
+
+function PipelineBar({events}) {
+  const PIPELINE_ORDER = ['planner','implementer','debugger','testgen','security','release','archivist'];
+  const completed = new Set();
+  const skipped = new Set();
+
+  for (const ev of events) {
+    if (ev.event_type === 'pipeline.step_completed') completed.add(ev.payload?.agent_role);
+    if (ev.event_type === 'pipeline.step_skipped') skipped.add(ev.payload?.agent_role);
+  }
+
+  return <div style={{display:'flex',gap:2,alignItems:'center'}}>
+    {PIPELINE_ORDER.map(role => {
+      const c = AGENT_COLORS[role]||'#6b7280';
+      const done = completed.has(role);
+      const skip = skipped.has(role);
+      const opacity = done ? 1 : skip ? 0.3 : 0.1;
+      return <div key={role} title={`${role}${skip?' (skipped)':done?' (done)':''}`} style={{
+        width:32, height:6, borderRadius:2,
+        background: skip ? `repeating-linear-gradient(90deg,${c}44 0px,${c}44 3px,transparent 3px,transparent 6px)` : c,
+        opacity,
+        transition:'opacity 0.3s',
+      }}/>;
+    })}
+  </div>;
+}
+
+// ---------------------------------------------------------------------------
+// Event Row
+// ---------------------------------------------------------------------------
+
+function EventRow({ev, isLast}) {
+  const [expanded, setExpanded] = useState(false);
+  const icon = EVENT_ICONS[ev.event_type] || '•';
+  const isError = ev.payload?.returncode && ev.payload.returncode !== 0;
+  const summary = eventSummary(ev);
 
   return <div style={{position:'relative',paddingLeft:28}}>
-    {!isLast&&<div style={{position:'absolute',left:9,top:20,bottom:-4,width:1,background:'rgba(255,255,255,0.08)'}}/>}
-    <div style={{position:'absolute',left:4,top:6,width:12,height:12,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:isError?'rgba(239,68,68,0.2)':'rgba(255,255,255,0.06)',border:'1px solid '+(isError?'rgba(239,68,68,0.5)':'rgba(255,255,255,0.15)'),fontSize:7}}>
+    {!isLast && <div style={{position:'absolute',left:9,top:20,bottom:-4,width:1,background:'rgba(255,255,255,0.06)'}}/>}
+    <div style={{position:'absolute',left:4,top:6,width:12,height:12,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',background:isError?'rgba(239,68,68,0.2)':'rgba(255,255,255,0.04)',border:'1px solid '+(isError?'rgba(239,68,68,0.4)':'rgba(255,255,255,0.1)'),fontSize:7}}>
       <span>{icon}</span>
     </div>
-    <div onClick={()=>setExpanded(!expanded)} style={{padding:'6px 10px',marginBottom:2,borderRadius:4,cursor:'pointer',background:expanded?'rgba(255,255,255,0.03)':'transparent',transition:'background 0.15s'}}>
+    <div onClick={()=>setExpanded(!expanded)} style={{padding:'5px 10px',marginBottom:1,borderRadius:4,cursor:'pointer',background:expanded?'rgba(255,255,255,0.03)':'transparent',transition:'background 0.15s'}}>
       <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-        <span className="mono" style={{fontSize:10,color:'#6b7280',minWidth:60}}>{formatTime(ev.timestamp)}</span>
+        <span className="mono" style={{fontSize:10,color:'#4b5563',minWidth:56}}>{formatTime(ev.timestamp)}</span>
         <AgentBadge agent={ev.agent_id}/>
-        <span className="mono" style={{fontSize:12,color:'#e5e7eb'}}>{ev.event_type}</span>
-        {command&&<span className="mono" style={{fontSize:11,color:isError?'#fca5a5':'#9ca3af',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:300}}>{command}</span>}
+        <EventTypeBadge type={ev.event_type}/>
+        {summary && <span className="mono" style={{fontSize:11,color:isError?'#fca5a5':'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:350}}>{summary}</span>}
         <span style={{marginLeft:'auto'}}><SignatureBadge sig={ev._envelope?.signature}/></span>
       </div>
-      {expanded&&<div style={{marginTop:8,padding:12,borderRadius:4,background:'rgba(0,0,0,0.3)',border:'1px solid rgba(255,255,255,0.06)',fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:'#9ca3af',maxHeight:300,overflow:'auto',whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
-        {stdout?<div><div style={{color:'#6b7280',marginBottom:4,fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em'}}>stdout</div><div style={{color:isError?'#fca5a5':'#d1d5db'}}>{stdout.slice(0,2000)}</div></div>
-        :<div style={{color:'#4b5563'}}>{JSON.stringify(ev.payload,null,2)}</div>}
+      {expanded && <div style={{marginTop:8,padding:12,borderRadius:4,background:'rgba(0,0,0,0.4)',border:'1px solid rgba(255,255,255,0.06)',fontSize:11,fontFamily:"'JetBrains Mono',monospace",color:'#9ca3af',maxHeight:300,overflow:'auto',whiteSpace:'pre-wrap',wordBreak:'break-all'}}>
+        <div style={{color:'#4b5563'}}>{JSON.stringify(ev.payload, null, 2)}</div>
         <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid rgba(255,255,255,0.06)'}}>
-          <div style={{color:'#6b7280',marginBottom:4,fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em'}}>envelope</div>
-          <div style={{color:'#6b7280'}}>label: {ev._envelope?.label}{'\n'}signer: {ev._envelope?.signer}{'\n'}sig: {ev._envelope?.signature}</div>
+          <div style={{color:'#374151',marginBottom:4,fontSize:10,textTransform:'uppercase',letterSpacing:'0.1em'}}>envelope</div>
+          <div style={{color:'#4b5563'}}>label: {ev._envelope?.label}{'\n'}signer: {ev._envelope?.signer}{'\n'}sig: {ev._envelope?.signature}</div>
         </div>
       </div>}
     </div>
   </div>;
 }
 
+// ---------------------------------------------------------------------------
+// Run Card
+// ---------------------------------------------------------------------------
+
 function RunCard({run}) {
-  const [open,setOpen]=useState(false);
-  const agents=[...new Set(run.events.map(e=>e.agent_id))];
-  const actionCount=run.events.filter(e=>e.event_type==='action.completed').length;
-  const errorCount=run.events.filter(e=>e.payload?.returncode&&e.payload.returncode!==0).length;
-  const dur=duration(run.startTime,run.endTime);
+  const [open, setOpen] = useState(false);
+  const agents = [...new Set(run.events.map(e => e.agent_id))];
+  const actionCount = run.events.filter(e => e.event_type === 'action.completed').length;
+  const pipelineEvents = run.events.filter(e => PIPELINE_EVENTS.has(e.event_type));
+  const errorCount = run.events.filter(e => e.payload?.returncode && e.payload.returncode !== 0).length;
+  const dur = duration(run.startTime, run.endTime);
+
+  // Derive key outcomes from pipeline events
+  const secReview = run.events.find(e => e.event_type === 'security_review');
+  const relAssess = run.events.find(e => e.event_type === 'release_assessment');
+  const testResult = run.events.find(e => e.event_type === 'tests_passed' || e.event_type === 'tests_failed');
 
   return <div style={{background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:8,overflow:'hidden',marginBottom:12,transition:'border-color 0.2s'}}
     onMouseEnter={e=>e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'}
     onMouseLeave={e=>e.currentTarget.style.borderColor='rgba(255,255,255,0.06)'}>
+
+    {/* Header */}
     <div onClick={()=>setOpen(!open)} style={{padding:'16px 20px',cursor:'pointer',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap',borderBottom:open?'1px solid rgba(255,255,255,0.06)':'none'}}>
       <span className="mono" style={{fontSize:14,color:'#f3f4f6',fontWeight:600,display:'flex',alignItems:'center',gap:6}}>
         <span style={{color:open?'#f59e0b':'#6b7280',transition:'transform 0.2s,color 0.2s',display:'inline-block',transform:open?'rotate(90deg)':'rotate(0)'}}>▸</span>
-        {run.taskId||run.id.slice(0,8)}
+        {run.taskId || run.id.slice(0,8)}
       </span>
       <StatusBadge status={run.status}/>
       <span style={{fontSize:11,color:'#6b7280'}}>{formatDate(run.startTime)} {formatTime(run.startTime)}</span>
-      <span style={{fontSize:11,color:'#4b5563'}}>{dur} · {actionCount} actions · {errorCount>0?<span style={{color:'#ef4444'}}>{errorCount} errors</span>:<span style={{color:'#6b7280'}}>0 errors</span>}</span>
-      <div style={{marginLeft:'auto',display:'flex',gap:4}}>{agents.filter(a=>a!=='system').map(a=><AgentBadge key={a} agent={a}/>)}</div>
-    </div>
-    {open&&<div style={{padding:'12px 20px 20px'}}>
-      {run.objective&&<div style={{padding:'10px 14px',marginBottom:16,borderRadius:4,background:'rgba(245,158,11,0.05)',border:'1px solid rgba(245,158,11,0.15)',fontSize:13,color:'#fbbf24',lineHeight:1.5}}>{run.objective}</div>}
-      <div style={{display:'flex',gap:24,marginBottom:16,padding:'10px 14px',background:'rgba(255,255,255,0.02)',borderRadius:4,flexWrap:'wrap'}}>
-        {[{l:'Duration',v:dur},{l:'Events',v:run.events.length},{l:'Agents',v:agents.length}].map(({l,v})=><div key={l}><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>{l}</div><div className="mono" style={{fontSize:14,color:'#e5e7eb',fontWeight:600}}>{v}</div></div>)}
-        {run.qualityScore&&<div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Quality</div><QualityGauge score={run.qualityScore}/></div>}
-        {run.qualityScore?.tokens_used&&<div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Tokens</div><div className="mono" style={{fontSize:14,color:'#e5e7eb',fontWeight:600}}>{run.qualityScore.tokens_used.toLocaleString()}</div></div>}
-        {run.qualityScore?.debug_attempts>0&&<div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Debug Loops</div><div className="mono" style={{fontSize:14,color:'#f59e0b',fontWeight:600}}>{run.qualityScore.debug_attempts}</div></div>}
+      <span style={{fontSize:11,color:'#4b5563'}}>
+        {dur} · {actionCount} actions · {pipelineEvents.length} pipeline · {errorCount > 0 ? <span style={{color:'#ef4444'}}>{errorCount} errors</span> : <span style={{color:'#6b7280'}}>0 errors</span>}
+      </span>
+      <div style={{marginLeft:'auto',display:'flex',gap:4}}>
+        {agents.filter(a => a !== 'system').map(a => <AgentBadge key={a} agent={a}/>)}
       </div>
-      <div style={{marginTop:4}}>{run.events.map((ev,i)=><EventRow key={ev.event_id||i} ev={ev} isLast={i===run.events.length-1}/>)}</div>
+    </div>
+
+    {/* Expanded */}
+    {open && <div style={{padding:'12px 20px 20px'}}>
+      {run.objective && <div style={{padding:'10px 14px',marginBottom:16,borderRadius:4,background:'rgba(245,158,11,0.05)',border:'1px solid rgba(245,158,11,0.15)',fontSize:13,color:'#fbbf24',lineHeight:1.5}}>{run.objective}</div>}
+
+      {/* Pipeline Progress */}
+      <div style={{marginBottom:16,padding:'10px 14px',background:'rgba(255,255,255,0.02)',borderRadius:4}}>
+        <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>Pipeline</div>
+        <PipelineBar events={run.events}/>
+      </div>
+
+      {/* Stats Row */}
+      <div style={{display:'flex',gap:24,marginBottom:16,padding:'10px 14px',background:'rgba(255,255,255,0.02)',borderRadius:4,flexWrap:'wrap'}}>
+        {[
+          {l:'Duration', v:dur},
+          {l:'Events', v:run.events.length},
+          {l:'Signed', v:run.events.filter(e=>e._envelope?.signature).length},
+          {l:'Agents', v:agents.length},
+        ].map(({l,v}) => <div key={l}><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>{l}</div><div className="mono" style={{fontSize:14,color:'#e5e7eb',fontWeight:600}}>{v}</div></div>)}
+
+        {secReview && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Security</div><div className="mono" style={{fontSize:14,fontWeight:600,color:secReview.payload?.verdict==='pass'?'#10b981':secReview.payload?.verdict==='block'?'#ef4444':'#f59e0b'}}>{secReview.payload?.verdict||'?'}</div></div>}
+
+        {relAssess && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Version</div><div className="mono" style={{fontSize:14,color:'#06b6d4',fontWeight:600}}>{relAssess.payload?.version_bump||'none'}</div></div>}
+
+        {testResult && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Tests</div><div className="mono" style={{fontSize:14,fontWeight:600,color:testResult.event_type==='tests_passed'?'#10b981':'#ef4444'}}>{testResult.event_type==='tests_passed'?'pass':'fail'} (#{testResult.payload?.attempt||'?'})</div></div>}
+
+        {run.qualityScore && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Quality</div><QualityGauge score={run.qualityScore}/></div>}
+
+        {run.qualityScore?.tokens_used && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Tokens</div><div className="mono" style={{fontSize:14,color:'#e5e7eb',fontWeight:600}}>{run.qualityScore.tokens_used.toLocaleString()}</div></div>}
+
+        {run.qualityScore?.debug_attempts > 0 && <div><div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:2}}>Debug Loops</div><div className="mono" style={{fontSize:14,color:'#f59e0b',fontWeight:600}}>{run.qualityScore.debug_attempts}</div></div>}
+      </div>
+
+      {/* Event Timeline */}
+      <div style={{marginTop:4}}>
+        {run.events.map((ev, i) => <EventRow key={ev.event_id || i} ev={ev} isLast={i === run.events.length - 1}/>)}
+      </div>
     </div>}
   </div>;
 }
 
-function App() {
-  const [rawLines,setRawLines]=useState(null);
-  const [filter,setFilter]=useState('');
-  const [dragging,setDragging]=useState(false);
-  const fileRef=useRef(null);
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
 
-  const handleFile=(file)=>{
-    const reader=new FileReader();
-    reader.onload=(e)=>{
-      const text=e.target.result;
-      const lines=[];let buffer='';let depth=0;
-      for(const ch of text){buffer+=ch;if(ch==='{')depth++;if(ch==='}')depth--;if(depth===0&&buffer.trim()){lines.push(buffer.trim());buffer='';}}
-      if(buffer.trim())lines.push(buffer.trim());
+function App() {
+  const [rawLines, setRawLines] = useState(null);
+  const [filter, setFilter] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFile = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const lines = []; let buffer = ''; let depth = 0;
+      for (const ch of text) { buffer += ch; if (ch === '{') depth++; if (ch === '}') depth--; if (depth === 0 && buffer.trim()) { lines.push(buffer.trim()); buffer = ''; } }
+      if (buffer.trim()) lines.push(buffer.trim());
       setRawLines(lines);
     };
     reader.readAsText(file);
   };
 
-  const events=useMemo(()=>rawLines?parseEvents(rawLines):parseEvents(SAMPLE_DATA),[rawLines]);
-  const runs=useMemo(()=>groupByRun(events),[events]);
-  const filteredRuns=useMemo(()=>{
-    if(!filter)return runs;
-    const q=filter.toLowerCase();
-    return runs.filter(r=>r.taskId.toLowerCase().includes(q)||r.objective.toLowerCase().includes(q)||r.status.toLowerCase().includes(q)||r.id.toLowerCase().includes(q));
-  },[runs,filter]);
+  const events = useMemo(() => rawLines ? parseEvents(rawLines) : [], [rawLines]);
+  const runs = useMemo(() => groupByRun(events), [events]);
+  const filteredRuns = useMemo(() => {
+    if (!filter) return runs;
+    const q = filter.toLowerCase();
+    return runs.filter(r => r.taskId.toLowerCase().includes(q) || r.objective.toLowerCase().includes(q) || r.status.toLowerCase().includes(q) || r.id.toLowerCase().includes(q));
+  }, [runs, filter]);
 
-  const totalEvents=events.length;
-  const totalRuns=runs.length;
-  const signers=[...new Set(events.map(e=>e._envelope?.signer).filter(Boolean))];
+  const totalEvents = events.length;
+  const totalRuns = runs.length;
+  const signers = [...new Set(events.map(e => e._envelope?.signer).filter(Boolean))];
+  const signedCount = events.filter(e => e._envelope?.signature).length;
 
   return <div
-    onDragOver={e=>{e.preventDefault();setDragging(true);}}
-    onDragLeave={()=>setDragging(false)}
-    onDrop={e=>{e.preventDefault();setDragging(false);if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);}}
+    onDragOver={e => { e.preventDefault(); setDragging(true); }}
+    onDragLeave={() => setDragging(false)}
+    onDrop={e => { e.preventDefault(); setDragging(false); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); }}
     style={{minHeight:'100vh',position:'relative'}}>
 
-    {dragging&&<div style={{position:'fixed',inset:0,zIndex:999,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',border:'3px dashed rgba(245,158,11,0.5)'}}>
+    {dragging && <div style={{position:'fixed',inset:0,zIndex:999,background:'rgba(0,0,0,0.85)',display:'flex',alignItems:'center',justifyContent:'center',border:'3px dashed rgba(245,158,11,0.5)'}}>
       <div style={{fontSize:24,color:'#f59e0b',fontWeight:700}}>Drop audit.jsonl</div>
     </div>}
 
-    <input ref={fileRef} type="file" accept=".jsonl,.json,.log" style={{display:'none'}} onChange={e=>{if(e.target.files[0])handleFile(e.target.files[0]);}}/>
+    <input ref={fileRef} type="file" accept=".jsonl,.json,.log" style={{display:'none'}} onChange={e => { if (e.target.files[0]) handleFile(e.target.files[0]); }}/>
 
     <div style={{maxWidth:1100,margin:'0 auto',padding:'32px 24px'}}>
+      {/* Header */}
       <div style={{marginBottom:32}}>
         <div style={{display:'flex',alignItems:'baseline',gap:12,marginBottom:4}}>
           <h1 className="mono" style={{fontSize:28,fontWeight:700,letterSpacing:'-0.03em',color:'#f3f4f6'}}>
@@ -215,12 +367,19 @@ function App() {
         </div>
         <p style={{fontSize:13,color:'#4b5563',maxWidth:500}}>
           Zephyr-signed execution provenance. Every agent action, cryptographically attested.
-          {!rawLines&&<span style={{color:'#f59e0b'}}> Drop your audit.jsonl to view real data.</span>}
+          {!rawLines && <span style={{color:'#f59e0b'}}> Drop your audit.jsonl or use <span className="mono" style={{fontSize:11}}>serve.py --repo</span> to auto-load.</span>}
         </p>
       </div>
 
+      {/* Stats Bar */}
       <div style={{display:'flex',gap:1,marginBottom:24,borderRadius:6,overflow:'hidden',border:'1px solid rgba(255,255,255,0.06)'}}>
-        {[{label:'Runs',value:totalRuns,color:'#f59e0b'},{label:'Events',value:totalEvents,color:'#3b82f6'},{label:'Signers',value:signers.length,color:'#10b981'},{label:'Source',value:rawLines?'audit.jsonl':'sample data',color:'#6b7280'}].map(({label,value,color})=>
+        {[
+          {label:'Runs', value:totalRuns, color:'#f59e0b'},
+          {label:'Events', value:totalEvents, color:'#3b82f6'},
+          {label:'Signed', value:signedCount, color:'#10b981'},
+          {label:'Signers', value:signers.length, color:'#8b5cf6'},
+          {label:'Source', value:rawLines ? 'audit.jsonl' : 'no data', color:'#6b7280'},
+        ].map(({label, value, color}) =>
           <div key={label} style={{flex:1,padding:'14px 16px',background:'rgba(255,255,255,0.02)'}}>
             <div style={{fontSize:10,color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:4}}>{label}</div>
             <div className="mono" style={{fontSize:18,fontWeight:700,color}}>{value}</div>
@@ -228,20 +387,23 @@ function App() {
         )}
       </div>
 
+      {/* Filter */}
       <div style={{marginBottom:20}}>
-        <input type="text" placeholder="Filter by task ID, objective, or status..." value={filter} onChange={e=>setFilter(e.target.value)}
+        <input type="text" placeholder="Filter by task ID, objective, or status…" value={filter} onChange={e => setFilter(e.target.value)}
           style={{width:'100%',padding:'10px 14px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:6,color:'#e5e7eb',fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:'none'}}
-          onFocus={e=>e.target.style.borderColor='rgba(245,158,11,0.4)'}
-          onBlur={e=>e.target.style.borderColor='rgba(255,255,255,0.08)'}/>
+          onFocus={e => e.target.style.borderColor = 'rgba(245,158,11,0.4)'}
+          onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}/>
       </div>
 
-      {filteredRuns.length===0?
+      {/* Runs */}
+      {filteredRuns.length === 0 ?
         <div style={{padding:48,textAlign:'center',color:'#4b5563',border:'1px dashed rgba(255,255,255,0.08)',borderRadius:8}}>
-          <div style={{fontSize:32,marginBottom:12}}>📭</div>
-          <div style={{fontSize:14}}>No matching runs</div>
+          <div style={{fontSize:32,marginBottom:12}}>{rawLines ? '📭' : '📂'}</div>
+          <div style={{fontSize:14}}>{rawLines ? 'No matching runs' : 'Drop audit.jsonl to view attestation data'}</div>
         </div>
-      :filteredRuns.map(run=><RunCard key={run.id} run={run}/>)}
+      : filteredRuns.map(run => <RunCard key={run.id} run={run}/>)}
 
+      {/* Footer */}
       <div style={{marginTop:40,paddingTop:20,borderTop:'1px solid rgba(255,255,255,0.04)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <span style={{fontSize:11,color:'#374151'}}>GLITCHLAB Attestation Dashboard · Zephyr SBOF</span>
         <span style={{fontSize:11,color:'#374151'}}>Adjective LLC</span>

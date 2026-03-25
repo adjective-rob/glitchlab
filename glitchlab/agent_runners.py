@@ -22,6 +22,7 @@ from glitchlab.agents import AgentContext, BaseAgent, AgentResult
 from glitchlab.controller_utils import attest_controller_action
 from glitchlab.display import print_plan
 from glitchlab.doc_inserter import insert_doc_comments
+from glitchlab.events import emit_event
 from glitchlab.history import extract_patterns_from_messages
 from glitchlab.run_context import RunContext
 from glitchlab.symbols import SymbolIndex
@@ -72,7 +73,7 @@ def run_planner(ctx: RunContext, task: Task, failure_context: str = "") -> Agent
     )
 
     raw = ctx.agents["planner"].run(context)
-    _log_event(ctx, "plan_created", {
+    emit_event(ctx, "plan_created", {
         "steps": len(raw.get("steps", [])),
         "risk": raw.get("risk_level"),
     })
@@ -193,7 +194,7 @@ def run_implementer(ctx: RunContext, task: Task, plan: dict) -> AgentResult:
                     change["_doc_inserted"] = True
                     change["content"] = None
 
-    _log_event(ctx, "implementation_created", {
+    emit_event(ctx, "implementation_created", {
         "changes": len(impl_result.payload.get("changes", [])),
         "tests": len(impl_result.payload.get("tests_added", [])),
     })
@@ -255,7 +256,7 @@ def run_testgen(ctx: RunContext, task: Task, is_doc_only: bool) -> None:
         fpath.parent.mkdir(parents=True, exist_ok=True)
         fpath.write_text(content)
         ctx.state.tests_added.append(test_file)
-        _log_event(ctx, "testgen_created", {"file": test_file, "description": desc})
+        emit_event(ctx, "testgen_created", {"file": test_file, "description": desc}, agent_id="testgen")
         console.print(f"  [cyan]TESTGEN {test_file}[/]")
         console.print(f"  [dim]Generated: {desc}[/]")
         attest_controller_action(f"TESTGEN {test_file}", ctx.run_id)
@@ -285,12 +286,12 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
 
         if result.success:
             console.print("[green]✅ Tests pass![/]")
-            _log_event(ctx, "tests_passed", {"attempt": attempt})
+            emit_event(ctx, "tests_passed", {"attempt": attempt}, agent_id="debugger")
             return True
 
         error_output = result.stderr or result.stdout
         console.print(f"[red]❌ Tests failed (attempt {attempt})[/]")
-        _log_event(ctx, "tests_failed", {"attempt": attempt})
+        emit_event(ctx, "tests_failed", {"attempt": attempt}, agent_id="debugger")
 
         if attempt >= max_attempts:
             break
@@ -321,6 +322,14 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
         # Debugger now runs its own 10-step loop internally
         raw_debug = ctx.agents["debugger"].run(context)
         debug_result = AgentResult.from_raw(raw_debug)
+
+        emit_event(ctx, "debug_completed", {
+            "attempt": attempt,
+            "status": debug_result.status,
+            "diagnosis": debug_result.payload.get("diagnosis", ""),
+            "root_cause": debug_result.payload.get("root_cause", ""),
+            "files_fixed": [c.get("file") for c in debug_result.payload.get("fix", {}).get("changes", []) if c.get("file")],
+        }, agent_id="debugger")
 
         # Record debug turn for TaskHistory
         ctx.state.previous_fixes.append(debug_result.payload)
@@ -608,18 +617,3 @@ def run_delegated_agent(
             f"Colleague {target} encountered an error and "
             f"could not complete the request: {e}"
         )
-
-
-# ---------------------------------------------------------------------------
-# Shared helper
-# ---------------------------------------------------------------------------
-
-def _log_event(ctx: RunContext, event_type: str, data: dict | None = None) -> None:
-    event = {
-        "type": event_type,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "task_id": ctx.state.task_id,
-        "data": data or {},
-    }
-    ctx.state.events.append(event)
-    logger.debug(f"[EVENT] {event_type}: {data}")
