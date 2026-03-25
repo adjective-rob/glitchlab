@@ -133,7 +133,7 @@ def test_planner_loop_exhaustion_returns_parse_error(tmp_path):
     """Planner: if loop exhausts without submit_plan, return parse_error."""
     mock_router = MagicMock()
 
-    # Return think calls for all 8 steps — never submit
+    # Return think calls for all 5 steps — never submit
     think_tc = _make_tool_call("tc_1", "think", {"analysis": "Still thinking..."})
     mock_router.complete.return_value = _make_response(tool_calls=[think_tc])
 
@@ -143,7 +143,7 @@ def test_planner_loop_exhaustion_returns_parse_error(tmp_path):
 
     assert result["parse_error"] is True
     assert result["risk_level"] == "high"
-    assert mock_router.complete.call_count == 8
+    assert mock_router.complete.call_count == 5
 
 
 def test_planner_plain_text_fallback(tmp_path):
