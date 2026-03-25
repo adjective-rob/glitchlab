@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-03-25
+
+### Changed
+- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `agent_runners`, `lifecycle`, and `events`.
+- **Version Bump**: Updated version string to 4.4.0 across `glitchlab/__init__.py`, `glitchlab/identity.py`, `pyproject.toml`, `glitchlab/lifecycle.py`, and tests.
+
+### Changed
+- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `agent_runners`, `lifecycle`, and `events`.
+- **Version Bump**: Updated version string to 4.4.0 across `glitchlab/__init__.py`, `glitchlab/identity.py`, `pyproject.toml`, `glitchlab/lifecycle.py`, and tests.
+
 ### Added
 - **Module Documentation**: Added module-level docstrings to `glitchlab/display.py`, `glitchlab/controller_utils.py`, and `glitchlab/doc_inserter.py` to improve codebase maintainability and explain the role of each module in the controller decomposition.
 

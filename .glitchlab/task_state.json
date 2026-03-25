@@ -1,74 +1,102 @@
 {
-  "task_id": "interactive-20260325-025716",
-  "objective": "Add module-level docstrings to glitchlab/display.py, glitchlab/controller_utils.py, and glitchlab/doc_inserter.py explaining what each module does, its public API, and how it fits into the controller decomposition. Keep docstrings concise — 3-5 lines max per module.",
-  "mode": "maintenance",
+  "task_id": "interactive-20260325-035126",
+  "objective": "Bump GLITCHLAB version from 4.3.1 to 4.4.0 across the entire codebase. Update glitchlab/init.py (version), glitchlab/identity.py (if it has a version string), pyproject.toml (version field), and the banner string in glitchlab/lifecycle.py that references v4.3.1. This is a minor version bump reflecting the v3 controller decomposition (run_context, step_handlers, agent_runners, lifecycle, events modules).",
+  "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Add a module-level docstring to glitchlab/display.py explaining its role in UI/console output for the controller.",
+      "description": "Update version in glitchlab/__init__.py",
       "files": [
-        "glitchlab/display.py"
+        "glitchlab/__init__.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [],
-      "code_hint": "\"\"\"\nHandles console output and rich UI formatting for the GlitchLab controller.\nPublic API includes functions for rendering status, errors, and agent progress.\nFits into the controller decomposition by abstracting all display logic away from core execution.\n\"\"\""
+      "code_hint": "Change __version__ = \"4.3.1\" to __version__ = \"4.4.0\""
     },
     {
       "step_number": 2,
-      "description": "Add a module-level docstring to glitchlab/controller_utils.py explaining its utility functions.",
+      "description": "Update version in glitchlab/identity.py",
       "files": [
-        "glitchlab/controller_utils.py"
+        "glitchlab/identity.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [],
-      "code_hint": "\"\"\"\nProvides utility functions and helpers for the main GlitchLab controller.\nPublic API includes shared routines for state management and configuration parsing.\nFits into the controller decomposition by extracting reusable logic to keep the main controller lean.\n\"\"\""
+      "code_hint": "Change __version__ = \"4.3.1\" to __version__ = \"4.4.0\""
     },
     {
       "step_number": 3,
-      "description": "Add a module-level docstring to glitchlab/doc_inserter.py explaining its role in documentation injection.",
+      "description": "Update version in pyproject.toml",
       "files": [
-        "glitchlab/doc_inserter.py"
+        "pyproject.toml"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [],
-      "code_hint": "\"\"\"\nManages the injection of documentation and context into files or agent prompts.\nPublic API includes methods for parsing and inserting docstrings or comments.\nFits into the controller decomposition by handling source code modification tasks independently.\n\"\"\""
+      "code_hint": "Change version = \"4.3.1\" to version = \"4.4.0\""
+    },
+    {
+      "step_number": 4,
+      "description": "Update version in glitchlab/lifecycle.py",
+      "files": [
+        "glitchlab/lifecycle.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [],
+      "code_hint": "Change title=\"⚡ GLITCHLAB v4.3.1\" to title=\"⚡ GLITCHLAB v4.4.0\""
+    },
+    {
+      "step_number": 5,
+      "description": "Update version in tests/test_identity.py",
+      "files": [
+        "tests/test_identity.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [],
+      "code_hint": "Change assert __version__ == \"4.3.1\" to assert __version__ == \"4.4.0\""
     }
   ],
   "files_in_scope": [
-    "glitchlab/display.py",
-    "glitchlab/controller_utils.py",
-    "glitchlab/doc_inserter.py",
-    "glitchlab/display.py",
-    "glitchlab/controller_utils.py",
-    "glitchlab/doc_inserter.py"
+    "glitchlab/__init__.py",
+    "glitchlab/identity.py",
+    "pyproject.toml",
+    "glitchlab/lifecycle.py",
+    "tests/test_identity.py",
+    "glitchlab/__init__.py",
+    "glitchlab/identity.py",
+    "pyproject.toml",
+    "glitchlab/lifecycle.py",
+    "tests/test_identity.py"
   ],
   "estimated_complexity": "trivial",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/display.py",
-    "glitchlab/controller_utils.py",
-    "glitchlab/doc_inserter.py"
+    "glitchlab/identity.py",
+    "tests/test_identity.py",
+    "glitchlab/lifecycle.py",
+    "pyproject.toml",
+    "glitchlab/__init__.py"
   ],
   "files_created": [],
-  "tests_added": [
-    "tests/test_module_docstrings.py"
-  ],
-  "commit_message": "docs: add module-level docstrings to controller decomposition modules",
-  "implementation_summary": "Added module-level docstrings to `glitchlab/display.py`, `glitchlab/controller_utils.py`, and `glitchlab/doc_inserter.py` explaining their roles, public APIs, and how they fit into the controller decomposition.",
+  "tests_added": [],
+  "commit_message": "chore: bump GLITCHLAB version to 4.4.0",
+  "implementation_summary": "Bumped GLITCHLAB version from 4.3.1 to 4.4.0 in glitchlab/__init__.py, glitchlab/identity.py, pyproject.toml, glitchlab/lifecycle.py, and tests/test_identity.py.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
   "security_verdict": "pass",
-  "version_bump": "patch",
-  "changelog_entry": "### Added\n- **Module Documentation**: Added module-level docstrings to `glitchlab/display.py`, `glitchlab/controller_utils.py`, and `glitchlab/doc_inserter.py` to improve codebase maintainability and explain the role of each module in the controller decomposition.",
+  "version_bump": "minor",
+  "changelog_entry": "## [4.4.0] - 2026-03-20\n\n### Changed\n- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `agent_runners`, `lifecycle`, and `events`.\n- **Version Bump**: Updated version string to 4.4.0 across `glitchlab/__init__.py`, `glitchlab/identity.py`, `pyproject.toml`, `glitchlab/lifecycle.py`, and tests.",
   "completed_phases": [
     "plan",
     "implement",
@@ -80,64 +108,73 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-25T02:57:16.661734+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:51:26.758435+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260325-025716"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260325-035126"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-25T02:57:16.667847+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:51:26.765449+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
-        "total_files": 62,
+        "total_files": 64,
         "languages": {
-          ".py": 60
+          ".py": 62
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-25T02:57:16.766786+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:51:26.866704+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
         "count": 3
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-25T02:57:35.893830+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:51:47.423459+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
-        "steps": 3,
+        "steps": 5,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-25T03:05:00.782157+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:52:15.015749+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
-        "changes": 3,
+        "changes": 5,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-03-25T03:05:05.168166+00:00",
-      "task_id": "interactive-20260325-025716",
+      "timestamp": "2026-03-25T03:52:19.234691+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-25T03:05:14.178992+00:00",
-      "task_id": "interactive-20260325-025716",
+      "type": "security_review",
+      "timestamp": "2026-03-25T03:52:32.769611+00:00",
+      "task_id": "interactive-20260325-035126",
       "data": {
-        "file": "tests/test_module_docstrings.py",
-        "description": "Verifies that glitchlab.display, glitchlab.controller_utils, and glitchlab.doc_inserter have module-level docstrings explaining their roles, public APIs, and controller decomposition, within the 3-5 lines limit."
+        "verdict": "pass",
+        "issues_count": 0
+      }
+    },
+    {
+      "type": "release_assessment",
+      "timestamp": "2026-03-25T03:52:39.149468+00:00",
+      "task_id": "interactive-20260325-035126",
+      "data": {
+        "version_bump": "minor",
+        "changelog_entry": "## [4.4.0] - 2026-03-20\n\n### Changed\n- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `ag"
       }
     }
   ]
