@@ -114,6 +114,27 @@ def run_implementer(ctx: RunContext, task: Task, plan: dict) -> AgentResult:
     plan_dnt = plan.get("do_not_touch", [])
     if plan_dnt:
         impl_constraints.append(f"DO NOT TOUCH these files/symbols: {', '.join(plan_dnt)}")
+    
+    # Rewrite heuristic — prefer write_file over surgical edits for small files
+    for f in plan.get("files_likely_affected", []):
+        fpath = ctx.ws_path / f
+        if fpath.exists() and fpath.stat().st_size > 0:
+            line_count = len(fpath.read_text().splitlines())
+            if line_count < 200:
+                impl_constraints.append(
+                    f"File {f} is {line_count} lines — use write_file to rewrite it entirely instead of multiple replace_in_file calls."
+                )
+
+    # Multi-edit heuristic — if 3+ plan steps touch the same file, rewrite instead
+    from collections import Counter
+    file_touch_counts = Counter(
+        f for step in plan.get("steps", []) for f in step.get("files", [])
+    )
+    for f, count in file_touch_counts.items():
+        if count >= 3:
+            impl_constraints.append(
+                f"File {f} is touched by {count} plan steps — use write_file to rewrite it entirely instead of {count} separate replace_in_file calls."
+            )
 
     # Memory Injection
     heuristics = ctx.history.build_heuristics(plan.get("files_likely_affected", []))
