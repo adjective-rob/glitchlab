@@ -644,6 +644,27 @@ def audit(
     console.print(f"  1. Run batch:        [cyan]glitchlab batch --repo {repo_path} --tasks-dir {out_dir}[/]")
     console.print(f"  2. Monitor:          [cyan]glitchlab history --repo {repo_path} --stats[/]")
 
+@app.command()
+def doctor():
+    from glitchlab.registry import AGENT_REGISTRY
+    from glitchlab.step_handlers import STEP_HANDLERS
+    from glitchlab.config_loader import load_config
+    from rich.console import Console
+    from rich.table import Table
+    import sys
+    config = load_config()
+    console = Console()
+    table = Table('Role', 'Registry', 'Handler')
+    failed = False
+    for step in config.pipeline:
+        role = step.agent_role
+        in_reg = role in AGENT_REGISTRY
+        in_hand = role in STEP_HANDLERS
+        if not in_reg or not in_hand: failed = True
+        table.add_row(role, '[green]✓[/green]' if in_reg else '[red]✗[/red]', '[green]✓[/green]' if in_hand else '[red]✗[/red]')
+    console.print(table)
+    if failed: sys.exit(1)
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

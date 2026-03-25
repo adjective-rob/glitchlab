@@ -1,102 +1,44 @@
 {
-  "task_id": "interactive-20260325-035126",
-  "objective": "Bump GLITCHLAB version from 4.3.1 to 4.4.0 across the entire codebase. Update glitchlab/init.py (version), glitchlab/identity.py (if it has a version string), pyproject.toml (version field), and the banner string in glitchlab/lifecycle.py that references v4.3.1. This is a minor version bump reflecting the v3 controller decomposition (run_context, step_handlers, agent_runners, lifecycle, events modules).",
-  "mode": "evolution",
+  "task_id": "interactive-20260325-045325",
+  "objective": "Add a doctor command to glitchlab/cli.py. It should import AGENT_REGISTRY from glitchlab.registry, STEP_HANDLERS from glitchlab.step_handlers, and the config loader. For each step in the pipeline config, check if the agent_role exists as a key in AGENT_REGISTRY and STEP_HANDLERS. Print a Rich table with columns: Role, Registry, Handler. Use green checkmarks or red X for status. Exit code 1 if any check fails.",
+  "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Update version in glitchlab/__init__.py",
+      "description": "Add a `doctor` command to the Typer app in `glitchlab/cli.py`. Import `AGENT_REGISTRY` from `glitchlab.registry`, `STEP_HANDLERS` from `glitchlab.step_handlers`, and `load_config` from `glitchlab.config_loader`. The command should load the config, iterate over `config.pipeline`, and check if each `step.agent_role` exists in both `AGENT_REGISTRY` and `STEP_HANDLERS`. It should display a Rich table with columns 'Role', 'Registry', and 'Handler' using green checkmarks or red Xs, and exit with code 1 if any check fails.",
       "files": [
-        "glitchlab/__init__.py"
+        "glitchlab/cli.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [],
-      "code_hint": "Change __version__ = \"4.3.1\" to __version__ = \"4.4.0\""
-    },
-    {
-      "step_number": 2,
-      "description": "Update version in glitchlab/identity.py",
-      "files": [
-        "glitchlab/identity.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [],
-      "code_hint": "Change __version__ = \"4.3.1\" to __version__ = \"4.4.0\""
-    },
-    {
-      "step_number": 3,
-      "description": "Update version in pyproject.toml",
-      "files": [
-        "pyproject.toml"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [],
-      "code_hint": "Change version = \"4.3.1\" to version = \"4.4.0\""
-    },
-    {
-      "step_number": 4,
-      "description": "Update version in glitchlab/lifecycle.py",
-      "files": [
-        "glitchlab/lifecycle.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [],
-      "code_hint": "Change title=\"⚡ GLITCHLAB v4.3.1\" to title=\"⚡ GLITCHLAB v4.4.0\""
-    },
-    {
-      "step_number": 5,
-      "description": "Update version in tests/test_identity.py",
-      "files": [
-        "tests/test_identity.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [],
-      "code_hint": "Change assert __version__ == \"4.3.1\" to assert __version__ == \"4.4.0\""
+      "code_hint": "@app.command()\ndef doctor():\n    from glitchlab.registry import AGENT_REGISTRY\n    from glitchlab.step_handlers import STEP_HANDLERS\n    from glitchlab.config_loader import load_config\n    from rich.console import Console\n    from rich.table import Table\n    import sys\n    config = load_config()\n    console = Console()\n    table = Table('Role', 'Registry', 'Handler')\n    failed = False\n    for step in config.pipeline:\n        role = step.agent_role\n        in_reg = role in AGENT_REGISTRY\n        in_hand = role in STEP_HANDLERS\n        if not in_reg or not in_hand: failed = True\n        table.add_row(role, '[green]✓[/green]' if in_reg else '[red]✗[/red]', '[green]✓[/green]' if in_hand else '[red]✗[/red]')\n    console.print(table)\n    if failed: sys.exit(1)"
     }
   ],
   "files_in_scope": [
-    "glitchlab/__init__.py",
-    "glitchlab/identity.py",
-    "pyproject.toml",
-    "glitchlab/lifecycle.py",
-    "tests/test_identity.py",
-    "glitchlab/__init__.py",
-    "glitchlab/identity.py",
-    "pyproject.toml",
-    "glitchlab/lifecycle.py",
-    "tests/test_identity.py"
+    "glitchlab/cli.py",
+    "glitchlab/cli.py"
   ],
-  "estimated_complexity": "trivial",
+  "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/identity.py",
-    "tests/test_identity.py",
-    "glitchlab/lifecycle.py",
-    "pyproject.toml",
-    "glitchlab/__init__.py"
+    "glitchlab/cli.py"
   ],
   "files_created": [],
-  "tests_added": [],
-  "commit_message": "chore: bump GLITCHLAB version to 4.4.0",
-  "implementation_summary": "Bumped GLITCHLAB version from 4.3.1 to 4.4.0 in glitchlab/__init__.py, glitchlab/identity.py, pyproject.toml, glitchlab/lifecycle.py, and tests/test_identity.py.",
+  "tests_added": [
+    "tests/test_cli_doctor.py"
+  ],
+  "commit_message": "feat(cli): add doctor command to validate pipeline configuration",
+  "implementation_summary": "Added a `doctor` command to `glitchlab/cli.py` that checks if all agent roles defined in the pipeline configuration exist in both `AGENT_REGISTRY` and `STEP_HANDLERS`. It prints a Rich table with the status and exits with code 1 if any check fails.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "pass",
+  "security_verdict": "warn",
   "version_bump": "minor",
-  "changelog_entry": "## [4.4.0] - 2026-03-20\n\n### Changed\n- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `agent_runners`, `lifecycle`, and `events`.\n- **Version Bump**: Updated version string to 4.4.0 across `glitchlab/__init__.py`, `glitchlab/identity.py`, `pyproject.toml`, `glitchlab/lifecycle.py`, and tests.",
+  "changelog_entry": "### Added\n- New `doctor` command to the CLI to validate agent roles in pipeline configurations against the registry and step handlers.",
   "completed_phases": [
     "plan",
     "implement",
@@ -108,16 +50,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-25T03:51:26.758435+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:53:26.397940+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260325-035126"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260325-045325"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-25T03:51:26.765449+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:53:26.406113+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
         "total_files": 64,
         "languages": {
@@ -127,54 +69,63 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-25T03:51:26.866704+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:53:26.509580+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
         "count": 3
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-25T03:51:47.423459+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:53:52.421552+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
-        "steps": 5,
+        "steps": 1,
         "risk": "low"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-25T03:52:15.015749+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:55:07.946545+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
-        "changes": 5,
+        "changes": 1,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-03-25T03:52:19.234691+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:55:11.981019+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "security_review",
-      "timestamp": "2026-03-25T03:52:32.769611+00:00",
-      "task_id": "interactive-20260325-035126",
+      "type": "testgen_created",
+      "timestamp": "2026-03-25T04:55:18.359588+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
-        "verdict": "pass",
-        "issues_count": 0
+        "file": "tests/test_cli_doctor.py",
+        "description": "Tests the doctor command to ensure it correctly checks AGENT_REGISTRY and STEP_HANDLERS for each pipeline step and exits with code 1 if any are missing."
+      }
+    },
+    {
+      "type": "security_review",
+      "timestamp": "2026-03-25T04:55:23.916001+00:00",
+      "task_id": "interactive-20260325-045325",
+      "data": {
+        "verdict": "warn",
+        "issues_count": 1
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-25T03:52:39.149468+00:00",
-      "task_id": "interactive-20260325-035126",
+      "timestamp": "2026-03-25T04:55:26.494652+00:00",
+      "task_id": "interactive-20260325-045325",
       "data": {
         "version_bump": "minor",
-        "changelog_entry": "## [4.4.0] - 2026-03-20\n\n### Changed\n- **Controller Decomposition**: Completed the v3 controller decomposition, refactoring the core logic into specialized modules: `run_context`, `step_handlers`, `ag"
+        "changelog_entry": "### Added\n- New `doctor` command to the CLI to validate agent roles in pipeline configurations against the registry and step handlers."
       }
     }
   ]
