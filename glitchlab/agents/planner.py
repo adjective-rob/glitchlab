@@ -199,7 +199,7 @@ Rules:
         workspace_dir = Path(context.working_dir)
         symbol_index = context.extra.get("symbol_index")
 
-        max_steps = 8
+        max_steps = 5
 
         for step in range(max_steps):
             step_kwargs = dict(kwargs)
@@ -208,6 +208,14 @@ Rules:
 
             if step == 0:
                 step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
+
+            # Circuit breaker: force submission on final step
+            if step == max_steps - 1:
+                messages.append({
+                    "role": "user",
+                    "content": "FINAL STEP. You MUST call submit_plan now with your best plan. No more reading or thinking.",
+                })
+                step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "submit_plan"}}
 
             response = self.router.complete(
                 role=self.role,
