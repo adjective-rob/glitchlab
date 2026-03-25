@@ -1,6 +1,6 @@
 __codename__ = "GLITCHLAB"
 __tagline__ = "The Agentic Dev Engine"
-__version__ = "4.3.1"
+__version__ = "4.4.0"
 
 BANNER = r"""
    ▄████  ██▓     ██▓▄▄▄█████▓ ▄████▄   ██░ ██  ██▓    ▄▄▄       ▄▄▄▄

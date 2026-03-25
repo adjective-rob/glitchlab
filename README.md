@@ -1,4 +1,4 @@
-# **⚡ GLITCHLAB** v4.3.0
+# **⚡ GLITCHLAB** v4.4.0
 
 **The Agentic Dev Engine — Build Weird. Ship Clean.**  
  A local, repo-agnostic, multi-agent development engine that evolves codebases under strict governance.
