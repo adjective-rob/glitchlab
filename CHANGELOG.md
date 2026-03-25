@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Module Documentation**: Added module-level docstrings to `glitchlab/display.py`, `glitchlab/controller_utils.py`, and `glitchlab/doc_inserter.py` to improve codebase maintainability and explain the role of each module in the controller decomposition.
+
 ## [4.5.0] - 2026-03-20
 
 ### Added

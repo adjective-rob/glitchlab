@@ -1,5 +1,7 @@
 """
-GLITCHLAB Controller Utilities — Git helpers, quality scoring, attestation.
+Provides utility functions and helpers for the main GlitchLab controller.
+Public API includes shared routines for state management and configuration parsing.
+Fits into the controller decomposition by extracting reusable logic to keep the main controller lean.
 """
 
 from __future__ import annotations

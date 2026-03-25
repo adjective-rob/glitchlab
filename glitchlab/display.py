@@ -1,5 +1,7 @@
 """
-GLITCHLAB Display Helpers — Rich console output for the Controller.
+Handles console output and rich UI formatting for the GlitchLab controller.
+Public API includes functions for rendering status, errors, and agent progress.
+Fits into the controller decomposition by abstracting all display logic away from core execution.
 """
 
 from __future__ import annotations

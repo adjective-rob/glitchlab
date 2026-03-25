@@ -1,3 +1,9 @@
+"""
+Manages the injection of documentation and context into files or agent prompts.
+Public API includes methods for parsing and inserting docstrings or comments.
+Fits into the controller decomposition by handling source code modification tasks independently.
+"""
+
 import json
 import re
 from datetime import datetime, timezone
