@@ -1,6 +1,6 @@
 {
-  "task_id": "interactive-20260326-214135",
-  "objective": "In glitchlab/agents/implementer.py, find the run_check tool handler inside the run() method where a successful run_check result is appended to messages. After the command succeeds (exit code 0), append this sentence to the result string: \"Verification passed. If your changes are complete, call done now.\" Only touch glitchlab/agents/implementer.py. Verify: python -m ruff check glitchlab/agents/implementer.py && python -m pytest tests/ -x -q",
+  "task_id": "interactive-20260326-214649",
+  "objective": "In glitchlab/auditor/task_writer.py, find where mode: surgical is being added to task_data and remove it. The Task Pydantic model only accepts 'maintenance' or 'evolution' for the mode field. Do not add mode to task_data at all — the surgical pipeline is triggered by the --surgical CLI flag, not a task YAML field. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/agents/implementer.py"
+    "glitchlab/auditor/task_writer.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/agents/test_implementer_run_check_success_message.py"
+    "tests/auditor/test_task_writer_create_task_omits_mode.py"
   ],
-  "commit_message": "chore: nudge implementer to call done after successful verification",
-  "implementation_summary": "Updated glitchlab/agents/implementer.py so successful run_check results append: \"Verification passed. If your changes are complete, call done now.\" Verified with ruff; pytest failure is pre-existing and unrelated to this file.",
+  "commit_message": "fix(auditor): stop writing surgical mode into generated task data",
+  "implementation_summary": "Removed the code in glitchlab/auditor/task_writer.py that injected mode='surgical' into task_data. Ruff passes for the touched file. Full pytest verification did not pass due to an unrelated pre-existing failure in tests/agents/test_implementer_run_check_success_message.py within glitchlab/agents/implementer.py.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,35 +30,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T21:41:36.123001+00:00",
-      "task_id": "interactive-20260326-214135",
+      "timestamp": "2026-03-26T21:46:50.012154+00:00",
+      "task_id": "interactive-20260326-214649",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-214135"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-214649"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T21:41:36.133761+00:00",
-      "task_id": "interactive-20260326-214135",
+      "timestamp": "2026-03-26T21:46:50.022702+00:00",
+      "task_id": "interactive-20260326-214649",
       "data": {
-        "total_files": 68,
+        "total_files": 69,
         "languages": {
-          ".py": 66
+          ".py": 67
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T21:41:36.233610+00:00",
-      "task_id": "interactive-20260326-214135",
+      "timestamp": "2026-03-26T21:46:50.118869+00:00",
+      "task_id": "interactive-20260326-214649",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T21:42:50.447599+00:00",
-      "task_id": "interactive-20260326-214135",
+      "timestamp": "2026-03-26T21:47:24.874257+00:00",
+      "task_id": "interactive-20260326-214649",
       "data": {
         "changes": 1,
         "tests": 0
@@ -66,11 +66,11 @@
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-26T21:42:59.706134+00:00",
-      "task_id": "interactive-20260326-214135",
+      "timestamp": "2026-03-26T21:47:33.539495+00:00",
+      "task_id": "interactive-20260326-214649",
       "data": {
-        "file": "tests/agents/test_implementer_run_check_success_message.py",
-        "description": "Tests that a successful run_check tool result includes the new completion prompt telling the agent to call done."
+        "file": "tests/auditor/test_task_writer_create_task_omits_mode.py",
+        "description": "Tests that TaskWriter creates a task YAML through its public write_tasks flow without injecting a mode field, preventing invalid mode='surgical' task data from being written."
       }
     }
   ]
