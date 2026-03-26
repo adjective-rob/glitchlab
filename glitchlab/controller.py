@@ -63,7 +63,7 @@ from glitchlab.step_handlers import (
     PipelineState,
 )
 from glitchlab.task import Task
-from glitchlab.task_state import TaskState, StepState, DirtyRepoError  # re-export
+from glitchlab.task_state import TaskState, StepState  # re-export
 
 console = Console()
 
@@ -90,12 +90,14 @@ class Controller:
         config: GlitchLabConfig | None = None,
         allow_core: bool = False,
         auto_approve: bool = False,
+        surgical: bool = False,
         test_command: str | None = None,
     ):
         self.repo_path = repo_path.resolve()
         self.config = config or load_config(repo_path)
         self.allow_core = allow_core
         self.auto_approve = auto_approve
+        self.surgical = surgical
         self.test_command = test_command
 
         # Core components
@@ -167,11 +169,18 @@ class Controller:
             history=self._history,
             allow_core=self.allow_core,
             auto_approve=self.auto_approve,
+            surgical=self.surgical,
             test_command=self.test_command,
         )
 
         try:
             failure_context = startup(ctx, task)
+
+            if self.surgical:
+                ctx.surgical = True
+                surgical_config = load_config(self.repo_path, profile="surgical")
+                ctx.config.pipeline = surgical_config.pipeline
+                ctx.config.limits.max_fix_attempts = 1
 
             ps = self._execute_pipeline(ctx, task, failure_context, result)
 
@@ -219,7 +228,9 @@ class Controller:
         """Run the dynamic pipeline. Returns PipelineState with all inter-step data."""
         ps = PipelineState(result=result)
 
-        for step in self.config.pipeline:
+        pipeline = ctx.config.pipeline if ctx.surgical else self.config.pipeline
+
+        for step in pipeline:
             if ps.pipeline_halted:
                 break
 

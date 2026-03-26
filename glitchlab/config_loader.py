@@ -105,12 +105,13 @@ def _deep_merge(base: dict, override: dict) -> dict:
     return merged
 
 
-def load_config(repo_path: Path | None = None) -> GlitchLabConfig:
+def load_config(repo_path: Path | None = None, profile: str | None = None) -> GlitchLabConfig:
     """
     Load config by merging:
       1. Built-in defaults (glitchlab/config.yaml)
       2. Repo-level overrides (<repo>/.glitchlab/config.yaml)
-      3. Environment variable overrides
+      3. Optional profile overrides (glitchlab/profiles/{profile}.yaml)
+      4. Environment variable overrides
     """
     # 1. Built-in defaults
     with open(_DEFAULT_CONFIG_PATH, "r") as f:
@@ -124,7 +125,17 @@ def load_config(repo_path: Path | None = None) -> GlitchLabConfig:
                 overrides: dict[str, Any] = yaml.safe_load(f) or {}
             base = _deep_merge(base, overrides)
 
-    # 3. Env overrides for API keys (informational — LiteLLM reads these directly)
+    # 3. Optional profile overrides
+    if profile is not None:
+        repo_root = repo_path if repo_path is not None else Path(__file__).resolve().parent.parent
+        profile_path = repo_root / "glitchlab" / "profiles" / f"{profile}.yaml"
+        if not profile_path.exists():
+            raise FileNotFoundError(f"Profile config not found: {profile_path}")
+        with open(profile_path, "r") as f:
+            profile_data: dict[str, Any] = yaml.safe_load(f) or {}
+        base = _deep_merge(base, profile_data)
+
+    # 4. Env overrides for API keys (informational — LiteLLM reads these directly)
     # We just validate they exist.
     config = GlitchLabConfig(**base)
     return config

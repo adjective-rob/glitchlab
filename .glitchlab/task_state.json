@@ -1,46 +1,105 @@
 {
-  "task_id": "interactive-20260326-143905",
-  "objective": "In tests/test_cli_doctor.py, change @patch('glitchlab.cli.AGENT_REGISTRY', ...) to @patch('glitchlab.registry.AGENT_REGISTRY', ...) and @patch('glitchlab.cli.STEP_HANDLERS', ...) to @patch('glitchlab.step_handlers.STEP_HANDLERS', ...) in both test functions. Only touch tests/test_cli_doctor.py. Verify: python -m pytest tests/test_cli_doctor.py -v",
+  "task_id": "interactive-20260326-185939",
+  "objective": "Wire up surgical mode in GlitchLab. Four changes: 1) glitchlab/config_loader.py — add an optional profile parameter to load_config(). If profile is not None, look for glitchlab/profiles/{profile}.yaml relative to the repo path, load it as a dict, and deep-merge it on top of the base config before returning using the existing _deep_merge() helper. If the profile file does not exist raise FileNotFoundError with a clear message. 2) glitchlab/run_context.py — add surgical: bool = False as a field on the RunContext dataclass. 3) glitchlab/cli.py — add surgical: bool = typer.Option(False, \"--surgical\", help=\"Run surgical pipeline\") to both the run command and the interactive command, and pass surgical=surgical when constructing the Controller. 4) glitchlab/controller.py — add surgical: bool = False parameter to Controller.__init__() and store as self.surgical. In Controller.run(), if self.surgical is True: set ctx.surgical = True, call load_config with profile=\"surgical\" to get the surgical pipeline, replace ctx.config.pipeline with the surgical pipeline, set ctx.config.limits.max_fix_attempts to 1, and skip the planner step entirely by jumping straight to _execute_pipeline(). Also pass surgical=self.surgical into RunContext construction. Do not touch any agent files, step_handlers.py, the existing pipeline logic, or config.yaml. Verify: python -m ruff check glitchlab/config_loader.py glitchlab/run_context.py glitchlab/cli.py glitchlab/controller.py && python -m pytest tests/ -x -q",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Update the two test functions in tests/test_cli_doctor.py so their patch decorators target the source modules that own the registries, replacing any patch target of glitchlab.cli.AGENT_REGISTRY with glitchlab.registry.AGENT_REGISTRY and glitchlab.cli.STEP_HANDLERS with glitchlab.step_handlers.STEP_HANDLERS, without altering test behavior or any other assertions.",
+      "description": "Extend config loading so an optional profile overlay can be merged on top of the base configuration using the existing merge helper. Update `load_config` to accept `profile: str | None = None`, resolve `glitchlab/profiles/{profile}.yaml` relative to the repo path when provided, parse it into a dict, deep-merge it over the base config payload, and raise `FileNotFoundError` with a clear path-specific message if the profile file is missing.",
       "files": [
-        "tests/test_cli_doctor.py"
+        "glitchlab/config_loader.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [
-        "glitchlab/cli.py",
-        "glitchlab/registry.py",
-        "glitchlab/step_handlers.py"
+        "glitchlab/config.yaml",
+        "glitchlab/parallel.py",
+        "glitchlab/cli.py"
       ],
-      "code_hint": "# in both test functions\n@patch('glitchlab.registry.AGENT_REGISTRY', ...)\n@patch('glitchlab.step_handlers.STEP_HANDLERS', ...)\n# leave the rest of each test unchanged"
+      "code_hint": "def load_config(repo_path: Path | None = None, profile: str | None = None) -> GlitchLabConfig:\n    base_data = yaml.safe_load(config_path.read_text()) or {}\n    if profile is not None:\n        profile_path = repo_root / 'glitchlab' / 'profiles' / f'{profile}.yaml'\n        if not profile_path.exists(): raise FileNotFoundError(f'Profile config not found: {profile_path}')\n        base_data = _deep_merge(base_data, yaml.safe_load(profile_path.read_text()) or {})"
+    },
+    {
+      "step_number": 2,
+      "description": "Add surgical mode state to the shared run context by introducing a new boolean dataclass field with a default of `False`, preserving existing defaults and field ordering semantics so current call sites remain valid.",
+      "files": [
+        "glitchlab/run_context.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/step_handlers.py",
+        "glitchlab/lifecycle.py",
+        "glitchlab/agent_runners.py"
+      ],
+      "code_hint": "@dataclass\nclass RunContext:\n    ...\n    surgical: bool = False\n    ..."
+    },
+    {
+      "step_number": 3,
+      "description": "Expose surgical mode on the CLI by adding a `--surgical` Typer option to both the `run` and `interactive` commands, and thread the boolean through when instantiating `Controller` without changing any unrelated command behavior.",
+      "files": [
+        "glitchlab/cli.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/agents/planner.py",
+        "glitchlab/step_handlers.py",
+        "glitchlab/config.yaml"
+      ],
+      "code_hint": "def run(..., surgical: bool = typer.Option(False, '--surgical', help='Run surgical pipeline')):\n    controller = Controller(..., surgical=surgical)\n\ndef interactive(..., surgical: bool = typer.Option(False, '--surgical', help='Run surgical pipeline')):\n    controller = Controller(..., surgical=surgical)"
+    },
+    {
+      "step_number": 4,
+      "description": "Teach the controller to support surgical execution without altering the normal pipeline path: add `surgical: bool = False` to `Controller.__init__`, store it on the instance, pass it into `RunContext`, and in `Controller.run()` branch early when surgical mode is enabled to mark the context as surgical, load the `surgical` profile via `load_config(..., profile='surgical')`, replace `ctx.config.pipeline` with the profile pipeline, force `ctx.config.limits.max_fix_attempts = 1`, skip planner execution entirely, and jump directly into `_execute_pipeline()`.",
+      "files": [
+        "glitchlab/controller.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/agents",
+        "glitchlab/step_handlers.py",
+        "glitchlab/config.yaml"
+      ],
+      "code_hint": "class Controller:\n    def __init__(..., surgical: bool = False):\n        self.surgical = surgical\n\n    def run(...):\n        ctx = RunContext(..., surgical=self.surgical)\n        if self.surgical:\n            ctx.surgical = True\n            surgical_config = load_config(self.repo_path, profile='surgical')\n            ctx.config.pipeline = surgical_config.pipeline\n            ctx.config.limits.max_fix_attempts = 1\n            return self._execute_pipeline(ctx, task, pipeline_state, ...)"
     }
   ],
   "files_in_scope": [
-    "tests/test_cli_doctor.py",
-    "tests/test_cli_doctor.py"
+    "glitchlab/config_loader.py",
+    "glitchlab/run_context.py",
+    "glitchlab/cli.py",
+    "glitchlab/controller.py",
+    "glitchlab/config_loader.py",
+    "glitchlab/run_context.py",
+    "glitchlab/cli.py",
+    "glitchlab/controller.py"
   ],
-  "estimated_complexity": "trivial",
+  "estimated_complexity": "medium",
   "requires_core_change": false,
-  "files_modified": [],
+  "files_modified": [
+    "glitchlab/controller.py",
+    "glitchlab/cli.py",
+    "glitchlab/run_context.py",
+    "glitchlab/config_loader.py"
+  ],
   "files_created": [],
   "tests_added": [
-    "tests/test_cli_doctor.py"
+    "tests/test_surgical_mode_cli_and_controller.py"
   ],
-  "commit_message": "test: fix doctor patch targets to source registries",
-  "implementation_summary": "Updated tests/test_cli_doctor.py so both doctor tests patch AGENT_REGISTRY from glitchlab.registry and STEP_HANDLERS from glitchlab.step_handlers, touching no other files. Verified with python -m pytest tests/test_cli_doctor.py -v (2 passed).",
+  "commit_message": "feat: add surgical controller mode",
+  "implementation_summary": "Added profile-aware config loading, threaded a surgical flag through RunContext and CLI/controller construction, and updated controller execution to support surgical runs by applying the surgical profile, forcing one fix attempt, and executing the pipeline without planner setup. Verified full test suite passes.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "pass",
-  "version_bump": "patch",
-  "changelog_entry": "### Fixed\n- Updated tests/test_cli_doctor.py to patch AGENT_REGISTRY and STEP_HANDLERS from their new module locations in glitchlab.registry and glitchlab.step_handlers respectively. This change affects only tests and does not impact the public API.",
+  "security_verdict": "warn",
+  "version_bump": "minor",
+  "changelog_entry": "### Added\n- Surgical mode support: Added an optional `profile` parameter to `load_config()` to load and merge profile-specific config overrides.\n- Added `surgical: bool` flag to `RunContext` dataclass and threaded it through CLI commands and `Controller` initialization.\n- Controller now supports surgical mode by loading the \"surgical\" profile, limiting fix attempts to 1, and skipping the planner step to directly execute the surgical pipeline.\n- CLI commands `run` and `interactive` accept a `--surgical` option to enable surgical mode.\n",
   "completed_phases": [
     "plan",
     "implement",
@@ -52,16 +111,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T14:39:05.897631+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T18:59:39.488420+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-143905"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-185939"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T14:39:05.907784+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T18:59:39.498290+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
         "total_files": 67,
         "languages": {
@@ -71,63 +130,63 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T14:39:06.018868+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T18:59:39.607583+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
         "count": 3
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-26T14:39:24.858068+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:00:14.676045+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "steps": 1,
-        "risk": "low"
+        "steps": 4,
+        "risk": "medium"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T14:40:59.042624+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:11:01.289034+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "changes": 0,
+        "changes": 4,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-03-26T14:41:03.321449+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:11:05.426000+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
         "attempt": 1
       }
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-26T14:41:07.548110+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:11:20.651457+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "file": "tests/test_cli_doctor.py",
-        "description": "Verifies the doctor CLI command reads AGENT_REGISTRY from glitchlab.registry and STEP_HANDLERS from glitchlab.step_handlers by patching those public module locations and asserting the command output reflects the patched values."
+        "file": "tests/test_surgical_mode_cli_and_controller.py",
+        "description": "Tests the public surgical-mode flow end to end enough to catch regressions: the CLI --surgical flag is accepted and passed into Controller construction, and Controller.run() applies the surgical profile, marks the RunContext as surgical, swaps in the surgical pipeline, and forces max_fix_attempts to 1."
       }
     },
     {
       "type": "security_review",
-      "timestamp": "2026-03-26T14:41:12.326140+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:11:58.962616+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "verdict": "pass",
-        "issues_count": 0
+        "verdict": "warn",
+        "issues_count": 1
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-26T14:41:17.221579+00:00",
-      "task_id": "interactive-20260326-143905",
+      "timestamp": "2026-03-26T19:12:10.876161+00:00",
+      "task_id": "interactive-20260326-185939",
       "data": {
-        "version_bump": "patch",
-        "changelog_entry": "### Fixed\n- Updated tests/test_cli_doctor.py to patch AGENT_REGISTRY and STEP_HANDLERS from their new module locations in glitchlab.registry and glitchlab.step_handlers respectively. This change affec"
+        "version_bump": "minor",
+        "changelog_entry": "### Added\n- Surgical mode support: Added an optional `profile` parameter to `load_config()` to load and merge profile-specific config overrides.\n- Added `surgical: bool` flag to `RunContext` dataclass"
       }
     }
   ]

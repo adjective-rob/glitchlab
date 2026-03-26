@@ -58,6 +58,23 @@ Interactive mode:
 
 `glitchlab interactive --repo .`
 
+
+#### Surgical Mode
+
+Run the pipeline in surgical mode to apply a minimal, focused fix using a specialized surgical pipeline profile. Use the `--surgical` flag with the `run` or `interactive` commands:
+
+```bash
+glitchlab run --repo . --issue 42 --surgical
+```
+
+or
+
+```bash
+glitchlab interactive --repo . --surgical
+```
+
+This mode loads the `surgical` profile configuration, limits fix attempts to one, and skips the planning step for a streamlined fix process.
+
 ### **5\. Check Status**
 
 `glitchlab status --repo .`

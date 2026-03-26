@@ -89,6 +89,7 @@ def run(
     task_file: Optional[Path] = typer.Option(None, "--task-file", "-f", help="Path to task YAML"),
     allow_core: bool = typer.Option(False, "--allow-core", help="Allow modifications to protected core paths"),
     auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
+    surgical: bool = typer.Option(False, "--surgical", help="Run surgical pipeline"),
     auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t", help="Test command to run (e.g. 'cargo test')"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
@@ -137,6 +138,7 @@ def run(
         config=config,
         allow_core=allow_core,
         auto_approve=auto_approve,
+        surgical=surgical,
         test_command=test_cmd,
     )
 
@@ -158,6 +160,7 @@ def interactive(
     repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
     allow_core: bool = typer.Option(False, "--allow-core"),
     auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
+    surgical: bool = typer.Option(False, "--surgical", help="Run surgical pipeline"),
     auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
     test_cmd: Optional[str] = typer.Option(None, "--test", "-t"),
     verbose: bool = typer.Option(False, "--verbose", "-v"),
@@ -192,6 +195,7 @@ def interactive(
         config=config,
         allow_core=allow_core,
         auto_approve=auto_approve,
+        surgical=surgical,
         test_command=test_cmd,
     )
 
