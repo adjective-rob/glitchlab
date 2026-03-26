@@ -1,0 +1,27 @@
+# Surgical profile — implementer → testgen → archivist only.
+# No planner, no debugger, no security scan, no release agent.
+# Use for single-file already-diagnosed changes.
+
+pipeline:
+  - name: implementer
+    agent_role: implementer
+    required: true
+    fallback_tier: high
+
+  - name: testgen
+    agent_role: testgen
+    required: false
+    fallback_tier: low
+
+  - name: archivist
+    agent_role: archivist
+    required: false
+    fallback_tier: low
+
+limits:
+  max_fix_attempts: 0
+
+intervention:
+  pause_after_plan: false
+  pause_before_pr: false
+  pause_on_core_change: false
