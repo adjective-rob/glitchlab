@@ -27,8 +27,8 @@ class RoutingConfig(BaseModel):
     testgen: str = "anthropic/claude-haiku-4-5"
 
 class FallbacksConfig(BaseModel):
-    high_tier: str = "openai/gpt-5.2"
-    low_tier: str = "openai/gpt-5-nano"
+    high_tier: str = "openai/gpt-5.4"
+    low_tier: str = "openai/gpt-5.4-mini"
 
 class LimitsConfig(BaseModel):
     max_fix_attempts: int = 4
