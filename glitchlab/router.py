@@ -279,6 +279,7 @@ class Router:
             "release": config.routing.release,
             "archivist": config.routing.archivist,
             "testgen": config.routing.testgen,
+            "auditor": config.routing.auditor,
         }
 
         # Build fallback tier map from pipeline config
