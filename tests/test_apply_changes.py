@@ -102,7 +102,7 @@ def test_file_creation_with_content(tmp_path):
 
 
 def test_file_creation_missing_content_returns_fail(tmp_path):
-    """File creation with missing content returns FAIL."""
+    """File creation with missing content returns a deterministic validation error."""
     changes = [
         {
             "file": "empty.py",
@@ -110,10 +110,9 @@ def test_file_creation_missing_content_returns_fail(tmp_path):
         }
     ]
 
-    result = apply_changes(tmp_path, changes)
+    with pytest.raises(ValueError, match="Invalid change payload"):
+        apply_changes(tmp_path, changes)
 
-    assert len(result) == 1
-    assert "FAIL" in result[0]
     assert not (tmp_path / "empty.py").exists()
 
 
@@ -197,6 +196,31 @@ def test_allow_full_rewrite_false_blocks_fallback(tmp_path):
     assert "FAIL" in result[0]
     assert "full rewrite blocked" in result[0]
     assert target.read_text() == "original\n"
+
+
+def test_apply_changes_rejects_missing_action(tmp_path):
+    """Missing action should fail deterministically instead of defaulting to modify."""
+    target = tmp_path / "x.py"
+    target.write_text("print('before')\n")
+
+    changes = [{"file": "x.py", "content": "print('after')\n"}]
+
+    with pytest.raises(ValueError, match="Invalid change payload"):
+        apply_changes(tmp_path, changes)
+
+
+def test_apply_changes_rejects_missing_file_or_content(tmp_path):
+    """Missing required fields should be rejected for create/modify payloads."""
+    (tmp_path / "existing.py").write_text("print('before')\n")
+
+    with pytest.raises(ValueError, match="Invalid change payload"):
+        apply_changes(tmp_path, [{"action": "create", "content": "print('new')\n"}])
+
+    with pytest.raises(ValueError, match="Invalid change payload"):
+        apply_changes(tmp_path, [{"action": "create", "file": "new.py"}])
+
+    with pytest.raises(ValueError, match="Invalid change payload"):
+        apply_changes(tmp_path, [{"action": "modify", "file": "existing.py"}])
 
 
 def test_normalize_change_promotes_patch_to_content():
