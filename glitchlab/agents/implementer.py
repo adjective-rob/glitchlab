@@ -455,7 +455,9 @@ Plan: {steps_text}
                 payload={
                     "step": step,
                     "step_tokens": step_tokens,
-                    "cumulative_tokens": total_tokens
+                    "cumulative_tokens": total_tokens,
+                    "write_count": write_count,
+                    "reads_without_write": step - write_count,
                 },
                 agent_id=self.role
             )

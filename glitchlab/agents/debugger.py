@@ -236,6 +236,7 @@ Investigate and fix. Call `done` when the tests pass."""
         modified_files = set()
         created_files = set()
         think_count = 0
+        write_count = 0
         search_count = 0
         total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
@@ -253,7 +254,41 @@ Investigate and fix. Call `done` when the tests pass."""
             recent_tools = [m.get("name") for m in messages if m.get("role") == "tool"][-6:]
             search_count = recent_tools.count("search_grep")
 
-            # 3. Deterministic First Step: Force 'think' on step 0
+            # 3. Write-deadline circuit breaker
+            if step >= 8 and write_count == 0 and think_count > 0:
+                if step >= 12:
+                    logger.warning(
+                        f"[REROUTE] Write-deadline breaker tripped at step {step + 1}. "
+                        f"0 writes after {think_count} thinks and {search_count} searches."
+                    )
+                    bus.emit(
+                        event_type="agent.write_deadline_breaker",
+                        payload={
+                            "step": step + 1,
+                            "think_count": think_count,
+                            "search_count": search_count,
+                            "write_count": 0,
+                        },
+                        agent_id=self.role,
+                    )
+                    return {
+                        "diagnosis": "Debugger exceeded read deadline without writing a fix.",
+                        "root_cause": "Unknown — circuit breaker tripped.",
+                        "fix_summary": f"No fix applied after {step + 1} steps.",
+                        "confidence": "low",
+                        "_breaker": "write_deadline",
+                    }
+                else:
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "WARNING: You have spent 8+ steps reading without applying any fix. "
+                            "You MUST use replace_in_file or write_file now, or call done if unfixable. "
+                            "Do NOT read more files."
+                        )
+                    })
+
+            # 4. Deterministic First Step: Force 'think' on step 0
             step_kwargs = dict(kwargs)
             if step == 0:
                 step_kwargs["tool_choice"] = {"type": "function", "function": {"name": "think"}}
@@ -267,16 +302,17 @@ Investigate and fix. Call `done` when the tests pass."""
             
             step_tokens = response.tokens_used
             total_tokens += step_tokens
-            if context.extra.get("event_bus"):
-                context.extra["event_bus"].emit(
-                    event_type="agent.loop_step",
-                    payload={
-                        "step": step,
-                        "step_tokens": step_tokens,
-                        "cumulative_tokens": total_tokens
-                    },
-                    agent_id=self.role
-                )
+            bus.emit(
+                event_type="agent.loop_step",
+                payload={
+                    "step": step,
+                    "step_tokens": step_tokens,
+                    "cumulative_tokens": total_tokens,
+                    "write_count": write_count,
+                    "reads_without_write": step - write_count,
+                },
+                agent_id=self.role
+            )
 
             # Append assistant message
             assist_msg = {"role": "assistant"}
@@ -422,6 +458,7 @@ Investigate and fix. Call `done` when the tests pass."""
                             created_files.add(path)
                         else:
                             modified_files.add(path)
+                        write_count += 1
                         res = f"Successfully updated {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
@@ -450,6 +487,7 @@ Investigate and fix. Call `done` when the tests pass."""
                                 new_content = content.replace(find_str, replace_str)
                                 fpath.write_text(new_content, encoding='utf-8')
                                 modified_files.add(path)
+                                write_count += 1
                                 res = f"Success: Replaced {count} occurrence(s) in {path}."
                     except Exception as e:
                         res = f"Error replacing in file: {e}"

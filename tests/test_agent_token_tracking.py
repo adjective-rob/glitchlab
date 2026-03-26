@@ -43,27 +43,32 @@ def mock_event_bus():
     bus = MagicMock()
     return bus
 
-def test_debugger_token_tracking(mock_router, mock_event_bus):
+@patch("glitchlab.agents.debugger.bus")
+def test_debugger_token_tracking(mock_global_bus, mock_router):
     agent = DebuggerAgent(router=mock_router)
     context = AgentContext(
         task_id="test_task",
         repo_path=".",
         objective="Fix bug",
         working_dir=".",
-        previous_output={}, 
-        extra={"event_bus": mock_event_bus, "test_command": "pytest"}
+        previous_output={},
+        extra={"test_command": "pytest"}
     )
-    
+
     result = agent.run(context)
-    
+
     assert result["_loop_tokens"] == 250
-    
-    loop_step_events = [call for call in mock_event_bus.emit.call_args_list if call.kwargs.get("event_type") == "agent.loop_step"]
+
+    loop_step_events = [call for call in mock_global_bus.emit.call_args_list if call.kwargs.get("event_type") == "agent.loop_step"]
     assert len(loop_step_events) == 2
     assert loop_step_events[0].kwargs["payload"]["step_tokens"] == 100
     assert loop_step_events[0].kwargs["payload"]["cumulative_tokens"] == 100
+    assert loop_step_events[0].kwargs["payload"]["write_count"] == 0
+    assert loop_step_events[0].kwargs["payload"]["reads_without_write"] == 0
     assert loop_step_events[1].kwargs["payload"]["step_tokens"] == 150
     assert loop_step_events[1].kwargs["payload"]["cumulative_tokens"] == 250
+    assert loop_step_events[1].kwargs["payload"]["write_count"] == 0
+    assert loop_step_events[1].kwargs["payload"]["reads_without_write"] == 1
 
 @patch("glitchlab.agents.implementer.bus")
 def test_implementer_token_tracking(mock_global_bus, mock_router):
@@ -85,5 +90,9 @@ def test_implementer_token_tracking(mock_global_bus, mock_router):
     assert len(loop_step_events) == 2
     assert loop_step_events[0].kwargs["payload"]["step_tokens"] == 100
     assert loop_step_events[0].kwargs["payload"]["cumulative_tokens"] == 100
+    assert loop_step_events[0].kwargs["payload"]["write_count"] == 0
+    assert loop_step_events[0].kwargs["payload"]["reads_without_write"] == 0
     assert loop_step_events[1].kwargs["payload"]["step_tokens"] == 150
     assert loop_step_events[1].kwargs["payload"]["cumulative_tokens"] == 250
+    assert loop_step_events[1].kwargs["payload"]["write_count"] == 0
+    assert loop_step_events[1].kwargs["payload"]["reads_without_write"] == 1
