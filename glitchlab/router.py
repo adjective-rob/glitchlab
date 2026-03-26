@@ -331,7 +331,7 @@ class Router:
             "planner": 0.15,
             "implementer": 0.60,
             "debugger": 0.30,
-            "auditor": 0.10,
+            "auditor": 0.75,
             "security": 0.30,
             "release": 0.10,
             "archivist": 0.10,
