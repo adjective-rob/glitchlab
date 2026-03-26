@@ -139,6 +139,19 @@ def run_implementer(ctx: RunContext, task: Task, plan: dict) -> AgentResult:
     # Memory Injection
     heuristics = ctx.history.build_heuristics(plan.get("files_likely_affected", []))
 
+    # Brain hints (persistent cross-run codebase memory)
+    brain_hints = ""
+    try:
+        from glitchlab.brain_writer import read_brain_hints
+        brain_dir = Path(ctx.config.context.brain).expanduser()
+        brain_hints = read_brain_hints(
+            brain_dir, ctx.repo_path.name, plan.get("files_likely_affected", [])
+        )
+    except Exception:
+        pass
+    if brain_hints:
+        heuristics = (heuristics + "\n\n" + brain_hints).strip() if heuristics else brain_hints
+
     # Pass structured task state AND the tool executor
     context = AgentContext(
         task_id=task.task_id,
@@ -204,6 +217,8 @@ def run_implementer(ctx: RunContext, task: Task, plan: dict) -> AgentResult:
         patterns = extract_patterns_from_messages(messages, outcome)
         if patterns:
             ctx.history.record_patterns(task.task_id, patterns)
+        # Stash messages for brain writer in post_run (non-underscore key survives from_raw filter)
+        impl_result.payload["impl_messages"] = messages
 
     # For doc-comment tasks, use surgical insertion
     for change in impl_result.payload.get("changes", []):
