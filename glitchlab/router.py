@@ -272,14 +272,8 @@ class Router:
         self.context_monitor = ContextMonitor(safe_headroom_tokens=8192)
         
         self._role_model_map = {
-            "planner": config.routing.planner,
-            "implementer": config.routing.implementer,
-            "debugger": config.routing.debugger,
-            "security": config.routing.security,
-            "release": config.routing.release,
-            "archivist": config.routing.archivist,
-            "testgen": config.routing.testgen,
-            "auditor": config.routing.auditor,
+            field_name: getattr(config.routing, field_name)
+            for field_name in type(config.routing).model_fields
         }
 
         # Build fallback tier map from pipeline config
