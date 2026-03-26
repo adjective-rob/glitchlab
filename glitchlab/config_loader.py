@@ -25,6 +25,8 @@ class RoutingConfig(BaseModel):
     release: str = "anthropic/claude-haiku-4-5"
     archivist: str = "anthropic/claude-haiku-4-5"
     testgen: str = "anthropic/claude-haiku-4-5"
+    auditor: str = "openai/gpt-5.4-mini"
+    auditor: str = "anthropic/claude-haiku-4-5"
 
 class FallbacksConfig(BaseModel):
     high_tier: str = "openai/gpt-5.4"
