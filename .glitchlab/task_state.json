@@ -1,17 +1,21 @@
 {
-  "task_id": "interactive-20260326-213344",
-  "objective": "Improve glitchlab/auditor/task_writer.py to generate more tasks per scan. Three changes: 1) In the system_prompt string, replace \"max 2-3 files per task\" with \"aim to generate 8-12 tasks per scan\" and add this sentence: \"For large_file findings, create one refactor task per file. For todo findings, create one cleanup task. Group missing_doc findings into at most 2 tasks. Prioritize tasks that touch single files and tag them with mode: surgical in the task data.\" 2) In the create_task tool handler, add mode: surgical to task_data when the constraints list contains only one file path (detect by checking if exactly one constraint mentions a filename ending in .py, .rs, .ts, or .js). 3) Change max_steps from 20 to 30. Do not touch scanner.py, cli.py, or any agent files. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
-  "mode": "maintenance",
+  "task_id": "interactive-20260326-214135",
+  "objective": "In glitchlab/agents/implementer.py, find the run_check tool handler inside the run() method where a successful run_check result is appended to messages. After the command succeeds (exit code 0), append this sentence to the result string: \"Verification passed. If your changes are complete, call done now.\" Only touch glitchlab/agents/implementer.py. Verify: python -m ruff check glitchlab/agents/implementer.py && python -m pytest tests/ -x -q",
+  "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [],
   "files_in_scope": [],
   "estimated_complexity": "medium",
   "requires_core_change": false,
-  "files_modified": [],
+  "files_modified": [
+    "glitchlab/agents/implementer.py"
+  ],
   "files_created": [],
-  "tests_added": [],
-  "commit_message": "",
-  "implementation_summary": "",
+  "tests_added": [
+    "tests/agents/test_implementer_run_check_success_message.py"
+  ],
+  "commit_message": "chore: nudge implementer to call done after successful verification",
+  "implementation_summary": "Updated glitchlab/agents/implementer.py so successful run_check results append: \"Verification passed. If your changes are complete, call done now.\" Verified with ruff; pytest failure is pre-existing and unrelated to this file.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -20,21 +24,22 @@
   "version_bump": "",
   "changelog_entry": "",
   "completed_phases": [
+    "implement",
     "commit"
   ],
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T21:33:44.947090+00:00",
-      "task_id": "interactive-20260326-213344",
+      "timestamp": "2026-03-26T21:41:36.123001+00:00",
+      "task_id": "interactive-20260326-214135",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-213344"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-214135"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T21:33:44.957528+00:00",
-      "task_id": "interactive-20260326-213344",
+      "timestamp": "2026-03-26T21:41:36.133761+00:00",
+      "task_id": "interactive-20260326-214135",
       "data": {
         "total_files": 68,
         "languages": {
@@ -44,19 +49,28 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T21:33:45.058967+00:00",
-      "task_id": "interactive-20260326-213344",
+      "timestamp": "2026-03-26T21:41:36.233610+00:00",
+      "task_id": "interactive-20260326-214135",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T21:34:32.894292+00:00",
-      "task_id": "interactive-20260326-213344",
+      "timestamp": "2026-03-26T21:42:50.447599+00:00",
+      "task_id": "interactive-20260326-214135",
       "data": {
-        "changes": 0,
+        "changes": 1,
         "tests": 0
+      }
+    },
+    {
+      "type": "testgen_created",
+      "timestamp": "2026-03-26T21:42:59.706134+00:00",
+      "task_id": "interactive-20260326-214135",
+      "data": {
+        "file": "tests/agents/test_implementer_run_check_success_message.py",
+        "description": "Tests that a successful run_check tool result includes the new completion prompt telling the agent to call done."
       }
     }
   ]

@@ -885,6 +885,8 @@ Plan: {steps_text}
                             res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
                             if tool_res.returncode != 0:
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
+                            else:
+                                res += " Verification passed. If your changes are complete, call done now."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
                     else:
