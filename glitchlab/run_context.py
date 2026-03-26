@@ -9,7 +9,7 @@ to all pipeline components.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -50,4 +50,5 @@ class RunContext:
     # Run options
     allow_core: bool = False
     auto_approve: bool = False
+    surgical: bool = False
     test_command: str | None = None
