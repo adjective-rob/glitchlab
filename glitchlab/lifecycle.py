@@ -302,6 +302,20 @@ def post_run(
         metadata={"quality_score": quality_score},
     )
 
+    # Brain writer: persist codebase memory on successful runs
+    if result.get("status") in ("pr_created", "committed", "merged"):
+        try:
+            from glitchlab.brain_writer import upsert_brain
+            from glitchlab.history import extract_patterns_from_messages
+            brain_dir = Path(ctx.config.context.brain).expanduser()
+            repo_name = ctx.repo_path.name
+            impl_messages = result.get("impl_messages", [])
+            if impl_messages:
+                patterns = extract_patterns_from_messages(impl_messages, "pass")
+                upsert_brain(brain_dir, repo_name, patterns, result)
+        except Exception as e:
+            logger.warning(f"[BRAIN] Brain writer failed (non-fatal): {e}")
+
     return result
 
 
