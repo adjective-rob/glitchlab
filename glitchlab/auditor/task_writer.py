@@ -176,7 +176,7 @@ Plan your work, read necessary files, write the tasks, and call `done`.
 
             try:
                 response = self.router.complete(
-                    role="planner",  # Use planner budget/model limits
+                    role="auditor",
                     messages=messages,
                     tools=AUDITOR_TOOLS,
                     **step_kwargs

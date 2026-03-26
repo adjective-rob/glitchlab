@@ -9,6 +9,7 @@ routing:
   planner: "openai/gpt-5.4"
   implementer: "openai/gpt-5.4"
   debugger: "openai/gpt-5.4"
+  auditor: "openai/gpt-5.4-mini"
   security: "openai/gpt-5.4-mini"
   release: "openai/gpt-5.4-mini"
   archivist: "openai/gpt-5.4-mini"

@@ -1,6 +1,6 @@
 {
-  "task_id": "interactive-20260326-214649",
-  "objective": "In glitchlab/auditor/task_writer.py, find where mode: surgical is being added to task_data and remove it. The Task Pydantic model only accepts 'maintenance' or 'evolution' for the mode field. Do not add mode to task_data at all — the surgical pipeline is triggered by the --surgical CLI flag, not a task YAML field. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
+  "task_id": "interactive-20260326-225607",
+  "objective": "Three changes: 1) In glitchlab/config.yaml, add auditor: \"openai/gpt-5.4-mini\" to the routing block alongside the existing agent routes. 2) In glitchlab/auditor/task_writer.py, change role=\"planner\" to role=\"auditor\" in the router.complete() call inside the write_tasks method. 3) In glitchlab/router.py, find the role_limits dict and add \"auditor\": 0.75 so the auditor gets its own token budget separate from the planner. Only touch these three files. Verify: python -m ruff check glitchlab/config_loader.py glitchlab/auditor/task_writer.py glitchlab/router.py && python -m pytest tests/ -x -q",
   "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,16 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
+    "glitchlab/router.py",
+    "glitchlab/config.yaml",
     "glitchlab/auditor/task_writer.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/auditor/test_task_writer_create_task_omits_mode.py"
+    "tests/auditor/test_task_writer_uses_auditor_role.py"
   ],
-  "commit_message": "fix(auditor): stop writing surgical mode into generated task data",
-  "implementation_summary": "Removed the code in glitchlab/auditor/task_writer.py that injected mode='surgical' into task_data. Ruff passes for the touched file. Full pytest verification did not pass due to an unrelated pre-existing failure in tests/agents/test_implementer_run_check_success_message.py within glitchlab/agents/implementer.py.",
+  "commit_message": "chore: add dedicated auditor routing and budget",
+  "implementation_summary": "Updated only the requested files: added `auditor: \"openai/gpt-5.4-mini\"` to `glitchlab/config.yaml`, changed the `router.complete()` call in `glitchlab/auditor/task_writer.py` to use `role=\"auditor\"`, and set auditor's `role_limits` entry to `0.75` in `glitchlab/router.py`. Verification: Ruff passed, but the requested pytest run failed due to an unrelated existing failure in `tests/agents/test_implementer_run_check_success_message.py` (`TypeError` in `glitchlab/agents/implementer.py`), which is outside the allowed files.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,47 +32,47 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T21:46:50.012154+00:00",
-      "task_id": "interactive-20260326-214649",
+      "timestamp": "2026-03-26T22:56:07.559453+00:00",
+      "task_id": "interactive-20260326-225607",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-214649"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-225607"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T21:46:50.022702+00:00",
-      "task_id": "interactive-20260326-214649",
+      "timestamp": "2026-03-26T22:56:07.568861+00:00",
+      "task_id": "interactive-20260326-225607",
       "data": {
-        "total_files": 69,
+        "total_files": 70,
         "languages": {
-          ".py": 67
+          ".py": 68
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T21:46:50.118869+00:00",
-      "task_id": "interactive-20260326-214649",
+      "timestamp": "2026-03-26T22:56:07.668570+00:00",
+      "task_id": "interactive-20260326-225607",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T21:47:24.874257+00:00",
-      "task_id": "interactive-20260326-214649",
+      "timestamp": "2026-03-26T22:56:47.171773+00:00",
+      "task_id": "interactive-20260326-225607",
       "data": {
-        "changes": 1,
+        "changes": 3,
         "tests": 0
       }
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-26T21:47:33.539495+00:00",
-      "task_id": "interactive-20260326-214649",
+      "timestamp": "2026-03-26T22:56:52.261104+00:00",
+      "task_id": "interactive-20260326-225607",
       "data": {
-        "file": "tests/auditor/test_task_writer_create_task_omits_mode.py",
-        "description": "Tests that TaskWriter creates a task YAML through its public write_tasks flow without injecting a mode field, preventing invalid mode='surgical' task data from being written."
+        "file": "tests/auditor/test_task_writer_uses_auditor_role.py",
+        "description": "Verifies the auditor task writer calls the router using the public auditor role and that the router can resolve the configured auditor model, catching regressions in both the task writer role change and auditor routing config."
       }
     }
   ]
