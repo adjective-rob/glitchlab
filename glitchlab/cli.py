@@ -513,6 +513,148 @@ def history(
     console.print(table)
 
 # ---------------------------------------------------------------------------
+# Compare
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def compare(
+    repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
+    task_a: str = typer.Argument(..., help="First task ID to compare"),
+    task_b: str = typer.Argument(..., help="Second task ID to compare"),
+):
+    """Compare two task runs — cost, loop steps, planner accuracy, tool divergence."""
+    _configure_logging(False)
+    repo = repo.resolve()
+    hist = TaskHistory(repo)
+    all_entries = hist.get_all()
+    entry_a = next((e for e in all_entries if e.get("task_id") == task_a), None)
+    entry_b = next((e for e in all_entries if e.get("task_id") == task_b), None)
+    if not entry_a:
+        console.print(f"[red]Task '{task_a}' not found in history.[/]")
+        raise typer.Exit(1)
+    if not entry_b:
+        console.print(f"[red]Task '{task_b}' not found in history.[/]")
+        raise typer.Exit(1)
+
+    def _budget(e: dict) -> dict:
+        return e.get("budget", {})
+
+    def _events(e: dict) -> dict:
+        return e.get("events_summary", {})
+
+    def _quality(e: dict) -> int:
+        q = e.get("quality_score", {})
+        return q.get("score", 0) if isinstance(q, dict) else int(q or 0)
+
+    def _cost(e: dict) -> float:
+        return _budget(e).get("estimated_cost", 0.0)
+
+    def _tokens(e: dict) -> int:
+        return _budget(e).get("total_tokens", 0)
+
+    def _fix_attempts(e: dict) -> int:
+        return _events(e).get("fix_attempts", 0)
+
+    def _loop_steps(e: dict) -> int:
+        return _budget(e).get("role_usage", {}).get("implementer", 0)
+
+    # --- Header ---
+    console.print(Panel(
+        f"[bold]Comparing:[/] [cyan]{task_a}[/] vs [cyan]{task_b}[/]",
+        title="⚡ GLITCHLAB Compare",
+        border_style="bright_green",
+    ))
+
+    # --- Side-by-side metrics table ---
+    table = Table(border_style="cyan", show_header=True)
+    table.add_column("Metric", style="bold")
+    table.add_column(task_a, style="cyan")
+    table.add_column(task_b, style="magenta")
+
+    def _delta(val_a: float, val_b: float, lower_is_better: bool = True) -> str:
+        if val_a == val_b:
+            return "="
+        better = val_a < val_b if lower_is_better else val_a > val_b
+        arrow = "▲" if val_a > val_b else "▼"
+        color = "green" if better else "red"
+        return f"[{color}]{arrow}[/]"
+
+    cost_a, cost_b = _cost(entry_a), _cost(entry_b)
+    tok_a, tok_b = _tokens(entry_a), _tokens(entry_b)
+    fix_a, fix_b = _fix_attempts(entry_a), _fix_attempts(entry_b)
+    q_a, q_b = _quality(entry_a), _quality(entry_b)
+    status_a = entry_a.get("status", "?")
+    status_b = entry_b.get("status", "?")
+
+    table.add_row("Status", status_a, status_b)
+    table.add_row("Cost", f"${cost_a:.4f} {_delta(cost_a, cost_b)}", f"${cost_b:.4f}")
+    table.add_row("Tokens", f"{tok_a:,} {_delta(tok_a, tok_b)}", f"{tok_b:,}")
+    table.add_row("Debug attempts", f"{fix_a} {_delta(fix_a, fix_b)}", f"{fix_b}")
+    table.add_row(
+        "Quality score",
+        f"{q_a} {_delta(q_a, q_b, lower_is_better=False)}",
+        f"{q_b}",
+    )
+    console.print(table)
+
+    # --- Planner accuracy ---
+    def _planner_accuracy(e: dict) -> tuple[int, int]:
+        evs = e.get("events_summary", {})
+        planned = evs.get("plan_steps", 0)
+        return planned, evs.get("fix_attempts", 0)
+
+    pa_a, err_a = _planner_accuracy(entry_a)
+    pa_b, err_b = _planner_accuracy(entry_b)
+    console.print("\n[bold]Planner:[/]")
+    console.print(f"  {task_a}: {pa_a} plan steps, {err_a} fix attempt(s)")
+    console.print(f"  {task_b}: {pa_b} plan steps, {err_b} fix attempt(s)")
+
+    # --- Budget role breakdown ---
+    roles_a = _budget(entry_a).get("role_usage", {})
+    roles_b = _budget(entry_b).get("role_usage", {})
+    all_roles = sorted(set(list(roles_a.keys()) + list(roles_b.keys())))
+    if roles_a or roles_b:
+        role_table = Table(title="Token usage by role", border_style="dim")
+        role_table.add_column("Role")
+        role_table.add_column(task_a, style="cyan")
+        role_table.add_column(task_b, style="magenta")
+        for role in all_roles:
+            ra = roles_a.get(role, 0)
+            rb = roles_b.get(role, 0)
+            role_table.add_row(role, f"{ra:,}", f"{rb:,}")
+        console.print(role_table)
+
+    # --- Divergence hint ---
+    console.print("\n[bold]Divergence summary:[/]")
+    if cost_a > cost_b * 2:
+        console.print(
+            f"  [yellow]⚠  {task_a} cost {cost_a / cost_b:.1f}× more than {task_b}[/]"
+        )
+    if fix_a > fix_b:
+        console.print(
+            f"  [yellow]⚠  {task_a} needed {fix_a - fix_b} more debug attempt(s)[/]"
+        )
+    if fix_a == 0 and fix_b == 0 and cost_a > cost_b:
+        console.print(
+            "  [dim]Both converged without debug loops."
+            " Cost difference likely in implementer exploration.[/]"
+        )
+    if q_a < 50:
+        console.print(
+            f"  [red]✗  {task_a} quality score is low ({q_a})"
+            " — check for breaker trips or parse errors.[/]"
+        )
+    if q_b < 50:
+        console.print(
+            f"  [red]✗  {task_b} quality score is low ({q_b})"
+            " — check for breaker trips or parse errors.[/]"
+        )
+    if q_a >= 80 and q_b >= 80:
+        console.print("  [green]✓  Both runs converged cleanly.[/]")
+
+
+# ---------------------------------------------------------------------------
 # Audit
 # ---------------------------------------------------------------------------
 
