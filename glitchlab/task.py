@@ -159,6 +159,8 @@ def apply_changes(
         surgical_blocks = change.get("surgical_blocks") or []
         full_content = change.get("content")
 
+        if change.get("_already_applied"):
+            continue
         if not action or not filename:
             raise ValueError(f"Invalid change payload: {change}")
         if action in {"create", "modify"} and not full_content and not surgical_blocks:
