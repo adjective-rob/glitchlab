@@ -259,15 +259,6 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                             "risk": risk,
                             "source": "auditor"
                         }
-                        file_constraint_count = sum(
-                            1
-                            for constraint in constraints
-                            if isinstance(constraint, str)
-                            and re.search(r"\b[^\s]+\.(?:py|rs|ts|js)\b", constraint)
-                        )
-                        if file_constraint_count == 1:
-                            task_data["mode"] = "surgical"
-                        
                         # Validate via Pydantic model implicitly
                         Task(**task_data) 
 
