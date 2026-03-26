@@ -170,8 +170,8 @@ def run_implementer(ctx: RunContext, task: Task, plan: dict) -> AgentResult:
             "symbol_index": symbol_index,
             "prelude": ctx.prelude,
             "fast_mode": (
-                len(ctx.state.files_in_scope) <= 3
-                and ctx.state.estimated_complexity in ("trivial", "small")
+                ctx.state.estimated_complexity in ("trivial", "small")
+                or len(ctx.state.files_in_scope) <= 3
             ),
         },
     )

@@ -52,6 +52,9 @@ allowed_tools:
   - "npm run build"
   - "python -m pytest"
   - "python -m ruff"
+  - "python -c"
+  - "python -"
+  - "pip install"
   - "go test"
   - "go build"
   - "go vet"
@@ -66,9 +69,9 @@ allowed_tools:
   - "make"
   - "prelude export"
   - "prelude update"
-  - "python -c"
-  - "pip install"
   - "ls"
+  - "cat"
+  - "head"
 
 # Blocked patterns — these are never allowed regardless of allowlist.
 blocked_patterns:
