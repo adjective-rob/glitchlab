@@ -15,8 +15,8 @@ routing:
   testgen: "gemini/gemini-3.1-pro-preview"
 
 fallbacks:
-  high_tier: "openai/gpt-5.2"
-  low_tier: "openai/gpt-5-nano"
+  high_tier: "openai/gpt-5.4"
+  low_tier: "openai/gpt-5.4-mini"
 
 # Budget + safety limits per task
 limits:
