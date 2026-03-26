@@ -192,6 +192,7 @@ Rules:
 3. Use `search_grep` to trace data flow or check for cross-file vulnerabilities.
 4. Be thorough but don't false-positive on idiomatic patterns. Severity must be honest.
 5. When you have finished your audit, use the `submit_report` tool to output your JSON verdict.
+6. If you have gathered enough information to make a security assessment, call `submit_report` immediately. Do not read more files after you have formed your verdict.
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
