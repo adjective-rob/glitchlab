@@ -143,7 +143,7 @@ def test_planner_loop_exhaustion_returns_parse_error(tmp_path):
 
     assert result["parse_error"] is True
     assert result["risk_level"] == "high"
-    assert mock_router.complete.call_count == 5
+    assert mock_router.complete.call_count == 10
 
 
 def test_planner_plain_text_fallback(tmp_path):
