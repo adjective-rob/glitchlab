@@ -9,9 +9,9 @@ routing:
   planner: "openai/gpt-5.4"
   implementer: "openai/gpt-5.4"
   debugger: "openai/gpt-5.4"
-  security: "openai/gpt-4.1-mini"
-  release: "openai/gpt-4.1-mini"
-  archivist: "openai/gpt-4.1-mini"
+  security: "openai/gpt-5.4-mini"
+  release: "openai/gpt-5.4-mini"
+  archivist: "openai/gpt-5.4-mini"
   testgen: "openai/gpt-5.4"
 
 fallbacks:
