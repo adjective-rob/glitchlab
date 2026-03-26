@@ -199,7 +199,7 @@ Rules:
         workspace_dir = Path(context.working_dir)
         symbol_index = context.extra.get("symbol_index")
 
-        max_steps = 5
+        max_steps = 10
 
         for step in range(max_steps):
             step_kwargs = dict(kwargs)

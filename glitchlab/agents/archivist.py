@@ -206,7 +206,7 @@ When finished, call `done` with architecture_notes, should_write_adr, adr (or nu
         workspace_dir = Path(context.working_dir)
 
         think_count = 0
-        max_steps = 20
+        max_steps = 40
 
         modified_files: set[str] = set()
         created_files: set[str] = set()
