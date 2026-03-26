@@ -153,9 +153,16 @@ def apply_changes(
     """
     applied = []
     for change in changes:
-        filename = change.get("file", "")
-        if not filename:
-            continue
+        change = _normalize_change(change)
+        action = change.get("action")
+        filename = change.get("file")
+        surgical_blocks = change.get("surgical_blocks") or []
+        full_content = change.get("content")
+
+        if not action or not filename:
+            raise ValueError(f"Invalid change payload: {change}")
+        if action in {"create", "modify"} and not full_content and not surgical_blocks:
+            raise ValueError(f"Invalid change payload: {change}")
 
         # ── SAFETY CHECK: Detect native agent modifications ──
         # If an agent used 'write_file' tool, skip manual application.
@@ -169,11 +176,6 @@ def apply_changes(
             boundary.check([filename], allow_core)
 
         fpath = working_dir / filename
-        action = change.get("action", "modify")
-
-        # New v2.1 Logic: Extract Surgical Blocks
-        surgical_blocks = change.get("surgical_blocks", [])
-        full_content = change.get("content")
 
         if action == "create":
             if not full_content:

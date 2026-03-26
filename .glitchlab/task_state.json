@@ -1,105 +1,65 @@
 {
-  "task_id": "interactive-20260326-185939",
-  "objective": "Wire up surgical mode in GlitchLab. Four changes: 1) glitchlab/config_loader.py — add an optional profile parameter to load_config(). If profile is not None, look for glitchlab/profiles/{profile}.yaml relative to the repo path, load it as a dict, and deep-merge it on top of the base config before returning using the existing _deep_merge() helper. If the profile file does not exist raise FileNotFoundError with a clear message. 2) glitchlab/run_context.py — add surgical: bool = False as a field on the RunContext dataclass. 3) glitchlab/cli.py — add surgical: bool = typer.Option(False, \"--surgical\", help=\"Run surgical pipeline\") to both the run command and the interactive command, and pass surgical=surgical when constructing the Controller. 4) glitchlab/controller.py — add surgical: bool = False parameter to Controller.__init__() and store as self.surgical. In Controller.run(), if self.surgical is True: set ctx.surgical = True, call load_config with profile=\"surgical\" to get the surgical pipeline, replace ctx.config.pipeline with the surgical pipeline, set ctx.config.limits.max_fix_attempts to 1, and skip the planner step entirely by jumping straight to _execute_pipeline(). Also pass surgical=self.surgical into RunContext construction. Do not touch any agent files, step_handlers.py, the existing pipeline logic, or config.yaml. Verify: python -m ruff check glitchlab/config_loader.py glitchlab/run_context.py glitchlab/cli.py glitchlab/controller.py && python -m pytest tests/ -x -q",
-  "mode": "maintenance",
-  "risk_level": "low",
+  "task_id": "test-apply-changes-001",
+  "objective": "Strengthen apply_changes test coverage around malformed or incomplete change payloads by replacing the lingering placeholder/HACK area in tests/test_apply_changes.py with explicit regression tests that exercise normalization and failure behavior without relying on brittle fixtures.",
+  "mode": "evolution",
+  "risk_level": "medium",
   "plan_steps": [
     {
       "step_number": 1,
-      "description": "Extend config loading so an optional profile overlay can be merged on top of the base configuration using the existing merge helper. Update `load_config` to accept `profile: str | None = None`, resolve `glitchlab/profiles/{profile}.yaml` relative to the repo path when provided, parse it into a dict, deep-merge it over the base config payload, and raise `FileNotFoundError` with a clear path-specific message if the profile file is missing.",
+      "description": "Replace the placeholder/HACK section in tests/test_apply_changes.py with explicit regression tests that construct malformed or incomplete change dictionaries inline and assert the current intended failure contract around change normalization/apply logic, while preserving existing valid create/modify and surgical-block coverage.",
       "files": [
-        "glitchlab/config_loader.py"
+        "tests/test_apply_changes.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [
-        "glitchlab/config.yaml",
-        "glitchlab/parallel.py",
-        "glitchlab/cli.py"
+        "tests/test_surgical_mode_cli_and_controller.py",
+        "tests/test_tool_executor.py",
+        "valid apply_changes test cases already covering successful create/modify flows"
       ],
-      "code_hint": "def load_config(repo_path: Path | None = None, profile: str | None = None) -> GlitchLabConfig:\n    base_data = yaml.safe_load(config_path.read_text()) or {}\n    if profile is not None:\n        profile_path = repo_root / 'glitchlab' / 'profiles' / f'{profile}.yaml'\n        if not profile_path.exists(): raise FileNotFoundError(f'Profile config not found: {profile_path}')\n        base_data = _deep_merge(base_data, yaml.safe_load(profile_path.read_text()) or {})"
+      "code_hint": "def test_apply_changes_rejects_missing_action(...):\n    changes = [{\"file\": \"x.py\", \"content\": \"hi\"}]\n    result = ...\n    assert ...  # FAIL result or expected exception\n\ndef test_apply_changes_rejects_missing_file_or_content(...): ..."
     },
     {
       "step_number": 2,
-      "description": "Add surgical mode state to the shared run context by introducing a new boolean dataclass field with a default of `False`, preserving existing defaults and field ordering semantics so current call sites remain valid.",
+      "description": "If the new regression tests reveal that malformed payload handling is accidental or inconsistent, make the smallest possible production adjustment in glitchlab/task.py so the normalization/apply path validates required keys for each change shape and fails deterministically without altering valid change semantics.",
       "files": [
-        "glitchlab/run_context.py"
+        "glitchlab/task.py"
       ],
       "action": "modify",
       "status": "pending",
       "outcome": "",
       "do_not_touch": [
-        "glitchlab/step_handlers.py",
-        "glitchlab/lifecycle.py",
-        "glitchlab/agent_runners.py"
+        "glitchlab/controller.py",
+        "glitchlab/cli.py",
+        "any logic governing valid surgical block application"
       ],
-      "code_hint": "@dataclass\nclass RunContext:\n    ...\n    surgical: bool = False\n    ..."
-    },
-    {
-      "step_number": 3,
-      "description": "Expose surgical mode on the CLI by adding a `--surgical` Typer option to both the `run` and `interactive` commands, and thread the boolean through when instantiating `Controller` without changing any unrelated command behavior.",
-      "files": [
-        "glitchlab/cli.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [
-        "glitchlab/agents/planner.py",
-        "glitchlab/step_handlers.py",
-        "glitchlab/config.yaml"
-      ],
-      "code_hint": "def run(..., surgical: bool = typer.Option(False, '--surgical', help='Run surgical pipeline')):\n    controller = Controller(..., surgical=surgical)\n\ndef interactive(..., surgical: bool = typer.Option(False, '--surgical', help='Run surgical pipeline')):\n    controller = Controller(..., surgical=surgical)"
-    },
-    {
-      "step_number": 4,
-      "description": "Teach the controller to support surgical execution without altering the normal pipeline path: add `surgical: bool = False` to `Controller.__init__`, store it on the instance, pass it into `RunContext`, and in `Controller.run()` branch early when surgical mode is enabled to mark the context as surgical, load the `surgical` profile via `load_config(..., profile='surgical')`, replace `ctx.config.pipeline` with the profile pipeline, force `ctx.config.limits.max_fix_attempts = 1`, skip planner execution entirely, and jump directly into `_execute_pipeline()`.",
-      "files": [
-        "glitchlab/controller.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [
-        "glitchlab/agents",
-        "glitchlab/step_handlers.py",
-        "glitchlab/config.yaml"
-      ],
-      "code_hint": "class Controller:\n    def __init__(..., surgical: bool = False):\n        self.surgical = surgical\n\n    def run(...):\n        ctx = RunContext(..., surgical=self.surgical)\n        if self.surgical:\n            ctx.surgical = True\n            surgical_config = load_config(self.repo_path, profile='surgical')\n            ctx.config.pipeline = surgical_config.pipeline\n            ctx.config.limits.max_fix_attempts = 1\n            return self._execute_pipeline(ctx, task, pipeline_state, ...)"
+      "code_hint": "# in the existing change-normalization/apply helper\nrequired = ...  # action/file and content or block payload as already expected\nif missing_required_fields:\n    raise ValueError(f\"Invalid change payload: {change}\")  # or map to existing FAIL result path\n# leave valid create/modify normalization untouched"
     }
   ],
   "files_in_scope": [
-    "glitchlab/config_loader.py",
-    "glitchlab/run_context.py",
-    "glitchlab/cli.py",
-    "glitchlab/controller.py",
-    "glitchlab/config_loader.py",
-    "glitchlab/run_context.py",
-    "glitchlab/cli.py",
-    "glitchlab/controller.py"
+    "tests/test_apply_changes.py",
+    "glitchlab/task.py",
+    "tests/test_apply_changes.py",
+    "glitchlab/task.py"
   ],
-  "estimated_complexity": "medium",
+  "estimated_complexity": "small",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/controller.py",
-    "glitchlab/cli.py",
-    "glitchlab/run_context.py",
-    "glitchlab/config_loader.py"
+    "glitchlab/task.py",
+    "tests/test_apply_changes.py"
   ],
   "files_created": [],
-  "tests_added": [
-    "tests/test_surgical_mode_cli_and_controller.py"
-  ],
-  "commit_message": "feat: add surgical controller mode",
-  "implementation_summary": "Added profile-aware config loading, threaded a surgical flag through RunContext and CLI/controller construction, and updated controller execution to support surgical runs by applying the surgical profile, forcing one fix attempt, and executing the pipeline without planner setup. Verified full test suite passes.",
+  "tests_added": [],
+  "commit_message": "test: strengthen malformed apply_changes payload coverage",
+  "implementation_summary": "Replaced the missing-content create expectation with a deterministic validation regression in tests/test_apply_changes.py and tightened apply_changes validation in glitchlab/task.py so malformed create/modify payloads fail consistently after normalization. Verified with tests/test_apply_changes.py passing.",
   "test_passing": true,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "warn",
-  "version_bump": "minor",
-  "changelog_entry": "### Added\n- Surgical mode support: Added an optional `profile` parameter to `load_config()` to load and merge profile-specific config overrides.\n- Added `surgical: bool` flag to `RunContext` dataclass and threaded it through CLI commands and `Controller` initialization.\n- Controller now supports surgical mode by loading the \"surgical\" profile, limiting fix attempts to 1, and skipping the planner step to directly execute the surgical pipeline.\n- CLI commands `run` and `interactive` accept a `--surgical` option to enable surgical mode.\n",
+  "security_verdict": "pass",
+  "version_bump": "patch",
+  "changelog_entry": "### Fixed\n- Strengthened apply_changes test coverage around malformed or incomplete change payloads by replacing placeholder tests with explicit regression tests.\n- Tightened apply_changes validation to ensure malformed create/modify payloads fail consistently after normalization.",
   "completed_phases": [
     "plan",
     "implement",
@@ -111,82 +71,73 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T18:59:39.488420+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:19:51.412887+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-185939"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/test-apply-changes-001"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T18:59:39.498290+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:19:51.422662+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "total_files": 67,
+        "total_files": 68,
         "languages": {
-          ".py": 65
+          ".py": 66
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T18:59:39.607583+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:19:51.519678+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
         "count": 3
       }
     },
     {
       "type": "plan_created",
-      "timestamp": "2026-03-26T19:00:14.676045+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:20:17.854494+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "steps": 4,
+        "steps": 2,
         "risk": "medium"
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T19:11:01.289034+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:21:33.871926+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "changes": 4,
+        "changes": 2,
         "tests": 0
       }
     },
     {
       "type": "tests_passed",
-      "timestamp": "2026-03-26T19:11:05.426000+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:21:34.288257+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
         "attempt": 1
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-26T19:11:20.651457+00:00",
-      "task_id": "interactive-20260326-185939",
-      "data": {
-        "file": "tests/test_surgical_mode_cli_and_controller.py",
-        "description": "Tests the public surgical-mode flow end to end enough to catch regressions: the CLI --surgical flag is accepted and passed into Controller construction, and Controller.run() applies the surgical profile, marks the RunContext as surgical, swaps in the surgical pipeline, and forces max_fix_attempts to 1."
-      }
-    },
-    {
       "type": "security_review",
-      "timestamp": "2026-03-26T19:11:58.962616+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:21:40.518182+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "verdict": "warn",
-        "issues_count": 1
+        "verdict": "pass",
+        "issues_count": 0
       }
     },
     {
       "type": "release_assessment",
-      "timestamp": "2026-03-26T19:12:10.876161+00:00",
-      "task_id": "interactive-20260326-185939",
+      "timestamp": "2026-03-26T21:21:43.370920+00:00",
+      "task_id": "test-apply-changes-001",
       "data": {
-        "version_bump": "minor",
-        "changelog_entry": "### Added\n- Surgical mode support: Added an optional `profile` parameter to `load_config()` to load and merge profile-specific config overrides.\n- Added `surgical: bool` flag to `RunContext` dataclass"
+        "version_bump": "patch",
+        "changelog_entry": "### Fixed\n- Strengthened apply_changes test coverage around malformed or incomplete change payloads by replacing placeholder tests with explicit regression tests.\n- Tightened apply_changes validation "
       }
     }
   ]
