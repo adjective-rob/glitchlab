@@ -281,7 +281,7 @@ def handle_implementer_result(
     # Compute fast_mode for downstream agents
     ps.is_fast_mode = (
         len(ctx.state.files_modified) <= 2
-        and ctx.state.estimated_complexity in ("trivial", "small")
+        or ctx.state.estimated_complexity in ("trivial", "small")
     )
     if ps.is_fast_mode:
         console.print(
