@@ -1,86 +1,40 @@
 {
-  "task_id": "test-apply-changes-001",
-  "objective": "Strengthen apply_changes test coverage around malformed or incomplete change payloads by replacing the lingering placeholder/HACK area in tests/test_apply_changes.py with explicit regression tests that exercise normalization and failure behavior without relying on brittle fixtures.",
-  "mode": "evolution",
-  "risk_level": "medium",
-  "plan_steps": [
-    {
-      "step_number": 1,
-      "description": "Replace the placeholder/HACK section in tests/test_apply_changes.py with explicit regression tests that construct malformed or incomplete change dictionaries inline and assert the current intended failure contract around change normalization/apply logic, while preserving existing valid create/modify and surgical-block coverage.",
-      "files": [
-        "tests/test_apply_changes.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [
-        "tests/test_surgical_mode_cli_and_controller.py",
-        "tests/test_tool_executor.py",
-        "valid apply_changes test cases already covering successful create/modify flows"
-      ],
-      "code_hint": "def test_apply_changes_rejects_missing_action(...):\n    changes = [{\"file\": \"x.py\", \"content\": \"hi\"}]\n    result = ...\n    assert ...  # FAIL result or expected exception\n\ndef test_apply_changes_rejects_missing_file_or_content(...): ..."
-    },
-    {
-      "step_number": 2,
-      "description": "If the new regression tests reveal that malformed payload handling is accidental or inconsistent, make the smallest possible production adjustment in glitchlab/task.py so the normalization/apply path validates required keys for each change shape and fails deterministically without altering valid change semantics.",
-      "files": [
-        "glitchlab/task.py"
-      ],
-      "action": "modify",
-      "status": "pending",
-      "outcome": "",
-      "do_not_touch": [
-        "glitchlab/controller.py",
-        "glitchlab/cli.py",
-        "any logic governing valid surgical block application"
-      ],
-      "code_hint": "# in the existing change-normalization/apply helper\nrequired = ...  # action/file and content or block payload as already expected\nif missing_required_fields:\n    raise ValueError(f\"Invalid change payload: {change}\")  # or map to existing FAIL result path\n# leave valid create/modify normalization untouched"
-    }
-  ],
-  "files_in_scope": [
-    "tests/test_apply_changes.py",
-    "glitchlab/task.py",
-    "tests/test_apply_changes.py",
-    "glitchlab/task.py"
-  ],
-  "estimated_complexity": "small",
+  "task_id": "interactive-20260326-213344",
+  "objective": "Improve glitchlab/auditor/task_writer.py to generate more tasks per scan. Three changes: 1) In the system_prompt string, replace \"max 2-3 files per task\" with \"aim to generate 8-12 tasks per scan\" and add this sentence: \"For large_file findings, create one refactor task per file. For todo findings, create one cleanup task. Group missing_doc findings into at most 2 tasks. Prioritize tasks that touch single files and tag them with mode: surgical in the task data.\" 2) In the create_task tool handler, add mode: surgical to task_data when the constraints list contains only one file path (detect by checking if exactly one constraint mentions a filename ending in .py, .rs, .ts, or .js). 3) Change max_steps from 20 to 30. Do not touch scanner.py, cli.py, or any agent files. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
+  "mode": "maintenance",
+  "risk_level": "low",
+  "plan_steps": [],
+  "files_in_scope": [],
+  "estimated_complexity": "medium",
   "requires_core_change": false,
-  "files_modified": [
-    "glitchlab/task.py",
-    "tests/test_apply_changes.py"
-  ],
+  "files_modified": [],
   "files_created": [],
   "tests_added": [],
-  "commit_message": "test: strengthen malformed apply_changes payload coverage",
-  "implementation_summary": "Replaced the missing-content create expectation with a deterministic validation regression in tests/test_apply_changes.py and tightened apply_changes validation in glitchlab/task.py so malformed create/modify payloads fail consistently after normalization. Verified with tests/test_apply_changes.py passing.",
-  "test_passing": true,
+  "commit_message": "",
+  "implementation_summary": "",
+  "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
   "previous_fixes": [],
-  "security_verdict": "pass",
-  "version_bump": "patch",
-  "changelog_entry": "### Fixed\n- Strengthened apply_changes test coverage around malformed or incomplete change payloads by replacing placeholder tests with explicit regression tests.\n- Tightened apply_changes validation to ensure malformed create/modify payloads fail consistently after normalization.",
+  "security_verdict": "",
+  "version_bump": "",
+  "changelog_entry": "",
   "completed_phases": [
-    "plan",
-    "implement",
-    "test",
-    "security",
-    "release",
     "commit"
   ],
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-26T21:19:51.412887+00:00",
-      "task_id": "test-apply-changes-001",
+      "timestamp": "2026-03-26T21:33:44.947090+00:00",
+      "task_id": "interactive-20260326-213344",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/test-apply-changes-001"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260326-213344"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-26T21:19:51.422662+00:00",
-      "task_id": "test-apply-changes-001",
+      "timestamp": "2026-03-26T21:33:44.957528+00:00",
+      "task_id": "interactive-20260326-213344",
       "data": {
         "total_files": 68,
         "languages": {
@@ -90,54 +44,19 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-26T21:19:51.519678+00:00",
-      "task_id": "test-apply-changes-001",
+      "timestamp": "2026-03-26T21:33:45.058967+00:00",
+      "task_id": "interactive-20260326-213344",
       "data": {
         "count": 3
       }
     },
     {
-      "type": "plan_created",
-      "timestamp": "2026-03-26T21:20:17.854494+00:00",
-      "task_id": "test-apply-changes-001",
-      "data": {
-        "steps": 2,
-        "risk": "medium"
-      }
-    },
-    {
       "type": "implementation_created",
-      "timestamp": "2026-03-26T21:21:33.871926+00:00",
-      "task_id": "test-apply-changes-001",
+      "timestamp": "2026-03-26T21:34:32.894292+00:00",
+      "task_id": "interactive-20260326-213344",
       "data": {
-        "changes": 2,
+        "changes": 0,
         "tests": 0
-      }
-    },
-    {
-      "type": "tests_passed",
-      "timestamp": "2026-03-26T21:21:34.288257+00:00",
-      "task_id": "test-apply-changes-001",
-      "data": {
-        "attempt": 1
-      }
-    },
-    {
-      "type": "security_review",
-      "timestamp": "2026-03-26T21:21:40.518182+00:00",
-      "task_id": "test-apply-changes-001",
-      "data": {
-        "verdict": "pass",
-        "issues_count": 0
-      }
-    },
-    {
-      "type": "release_assessment",
-      "timestamp": "2026-03-26T21:21:43.370920+00:00",
-      "task_id": "test-apply-changes-001",
-      "data": {
-        "version_bump": "patch",
-        "changelog_entry": "### Fixed\n- Strengthened apply_changes test coverage around malformed or incomplete change payloads by replacing placeholder tests with explicit regression tests.\n- Tightened apply_changes validation "
       }
     }
   ]

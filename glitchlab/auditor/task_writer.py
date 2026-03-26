@@ -14,12 +14,10 @@ import json
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
 from rich.console import Console
 
 import yaml
 from loguru import logger
-from pydantic import ValidationError
 
 from glitchlab.router import Router
 from glitchlab.controller import Task  # Import the strict Pydantic schema
@@ -138,9 +136,10 @@ class TaskWriter:
 You operate in a tool-calling loop to generate high-quality development tasks.
 
 Your responsibilities:
-1. Evaluate static scanner findings. Prune irrelevant ones, and group the real issues into cohesive tasks (max 2-3 files per task).
+1. Evaluate static scanner findings. Prune irrelevant ones, and group the real issues into cohesive tasks (aim to generate 8-12 tasks per scan).
 2. Creatively consider NEW features, refactors, or architectural improvements that would benefit the codebase.
 3. Break these ideas down into small, actionable tasks.
+For large_file findings, create one refactor task per file. For todo findings, create one cleanup task. Group missing_doc findings into at most 2 tasks. Prioritize tasks that touch single files and tag them with mode: surgical in the task data.
 4. Use `read_file` and `search_grep` to validate your ideas and understand the codebase before writing a task.
 5. Use `create_task` to write each task. Give them meaningful IDs (e.g., 'feature-xyz-001', 'refactor-auth-002').
 6. Call `done` when finished.
@@ -165,7 +164,7 @@ Plan your work, read necessary files, write the tasks, and call `done`.
 
         logger.info("[AUDITOR] Starting agentic task generation loop...")
 
-        max_steps = 20
+        max_steps = 30
         think_count = 0
 
         for step in range(max_steps):
@@ -248,16 +247,26 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                     
                     try:
                         risk = tc_args.get("risk", "low")
-                        if risk not in ("low", "medium", "high"): risk = "medium"
+                        if risk not in ("low", "medium", "high"):
+                            risk = "medium"
 
+                        constraints = tc_args.get("constraints", [])
                         task_data = {
                             "id": safe_id,
                             "objective": tc_args.get("objective", "Generated task"),
-                            "constraints": tc_args.get("constraints", []),
+                            "constraints": constraints,
                             "acceptance": tc_args.get("acceptance", []),
                             "risk": risk,
                             "source": "auditor"
                         }
+                        file_constraint_count = sum(
+                            1
+                            for constraint in constraints
+                            if isinstance(constraint, str)
+                            and re.search(r"\b[^\s]+\.(?:py|rs|ts|js)\b", constraint)
+                        )
+                        if file_constraint_count == 1:
+                            task_data["mode"] = "surgical"
                         
                         # Validate via Pydantic model implicitly
                         Task(**task_data) 
