@@ -507,7 +507,7 @@ def run_security(
         },
     )
 
-    raw = ctx.agents["security"].run(context, max_steps=5 if is_fast_mode else 15)
+    raw = ctx.agents["security"].run(context, max_steps=10 if is_fast_mode else 30)
     return AgentResult.from_raw(raw)
 
 
@@ -536,7 +536,7 @@ def run_release(
         },
     )
 
-    raw = ctx.agents["release"].run(context, max_steps=5 if is_fast_mode else 10)
+    raw = ctx.agents["release"].run(context, max_steps=10 if is_fast_mode else 20)
     return AgentResult.from_raw(raw)
 
 
