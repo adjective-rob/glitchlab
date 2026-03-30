@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from rich.console import Console
 
@@ -301,7 +302,8 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                             "constraints": constraints,
                             "acceptance": tc_args.get("acceptance", []),
                             "risk": risk,
-                            "source": "auditor"
+                            "source": "auditor",
+                            "generated_at": datetime.now(timezone.utc).isoformat(),
                         }
                         # Validate via Pydantic model implicitly
                         Task(**task_data) 
