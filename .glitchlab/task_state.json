@@ -1,6 +1,6 @@
 {
-  "task_id": "cleanup-test-docstrings-001",
-  "objective": "Add docstrings to the public test functions and fixtures flagged by the scanner in the core test modules: tests/test_agent_token_tracking.py, tests/test_registry.py, tests/test_agent_result.py, and tests/test_workspace_typing.py. Keep the docstrings short and descriptive, matching the intent of each assertion so the test suite satisfies the repository's module/docstring policy without changing test behavior.",
+  "task_id": "interactive-20260330-213939",
+  "objective": "In glitchlab/auditor/task_writer.py, in the create_task tool handler inside write_tasks(), add a generated_at field to task_data with the current UTC timestamp in ISO format. Import datetime at the top of the file if not already imported. The field should be added after the source field in task_data. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,15 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "tests/test_agent_token_tracking.py",
-    "tests/test_workspace_typing.py",
-    "tests/test_agent_result.py",
-    "tests/test_registry.py"
+    "glitchlab/auditor/task_writer.py"
   ],
   "files_created": [],
-  "tests_added": [],
-  "commit_message": "test: add docstrings to flagged core test functions",
-  "implementation_summary": "Added short descriptive docstrings to the public fixtures and test functions flagged in tests/test_agent_token_tracking.py, tests/test_registry.py, tests/test_agent_result.py, and tests/test_workspace_typing.py without changing behavior. Verified with pytest on the four touched modules (18 passed).",
+  "tests_added": [
+    "tests/auditor/test_task_writer_generated_at.py"
+  ],
+  "commit_message": "feat(auditor): add generated_at timestamp to created tasks",
+  "implementation_summary": "Updated glitchlab/auditor/task_writer.py only: imported datetime/timezone and added a generated_at field with the current UTC ISO timestamp to task_data in the create_task handler, immediately after source. Ruff check passed for the file. Full pytest run hit an existing unrelated failure in tests/agents/test_implementer_run_check_success_message.py caused by glitchlab/agents/implementer.py, which was out of scope and left untouched.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -31,16 +30,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-30T17:46:42.181460+00:00",
-      "task_id": "cleanup-test-docstrings-001",
+      "timestamp": "2026-03-30T21:39:39.715536+00:00",
+      "task_id": "interactive-20260330-213939",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/cleanup-test-docstrings-001"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260330-213939"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-30T17:46:42.192561+00:00",
-      "task_id": "cleanup-test-docstrings-001",
+      "timestamp": "2026-03-30T21:39:39.727064+00:00",
+      "task_id": "interactive-20260330-213939",
       "data": {
         "total_files": 72,
         "languages": {
@@ -50,19 +49,28 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-30T17:46:42.324150+00:00",
-      "task_id": "cleanup-test-docstrings-001",
+      "timestamp": "2026-03-30T21:39:39.826543+00:00",
+      "task_id": "interactive-20260330-213939",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-30T17:47:15.247194+00:00",
-      "task_id": "cleanup-test-docstrings-001",
+      "timestamp": "2026-03-30T21:40:12.928927+00:00",
+      "task_id": "interactive-20260330-213939",
       "data": {
-        "changes": 4,
+        "changes": 1,
         "tests": 0
+      }
+    },
+    {
+      "type": "testgen_created",
+      "timestamp": "2026-03-30T21:40:22.600962+00:00",
+      "task_id": "interactive-20260330-213939",
+      "data": {
+        "file": "tests/auditor/test_task_writer_generated_at.py",
+        "description": "Ensures TaskWriter writes a generated_at UTC ISO timestamp into created task YAML files when handling the create_task tool."
       }
     }
   ]
