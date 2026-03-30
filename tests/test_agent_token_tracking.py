@@ -18,6 +18,7 @@ class MockToolCall:
 
 @pytest.fixture
 def mock_router():
+    """Provide a router mock that returns two token-counted tool steps."""
     router = MagicMock()
     # First call: think, Second call: done
     router.complete.side_effect = [
@@ -40,11 +41,13 @@ def mock_router():
 
 @pytest.fixture
 def mock_event_bus():
+    """Provide a mock event bus for loop-step event assertions."""
     bus = MagicMock()
     return bus
 
 @patch("glitchlab.agents.debugger.bus")
 def test_debugger_token_tracking(mock_global_bus, mock_router):
+    """DebuggerAgent reports per-step and cumulative loop token usage."""
     agent = DebuggerAgent(router=mock_router)
     context = AgentContext(
         task_id="test_task",
@@ -72,6 +75,7 @@ def test_debugger_token_tracking(mock_global_bus, mock_router):
 
 @patch("glitchlab.agents.implementer.bus")
 def test_implementer_token_tracking(mock_global_bus, mock_router):
+    """ImplementerAgent reports per-step and cumulative loop token usage."""
     agent = ImplementerAgent(router=mock_router)
     context = AgentContext(
         task_id="test_task",

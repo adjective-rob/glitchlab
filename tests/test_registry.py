@@ -29,6 +29,7 @@ EXPECTED_ROLES: dict[str, type] = {
 
 @pytest.fixture()
 def mock_router() -> MagicMock:
+    """Provide a router double for registry agent construction tests."""
     return MagicMock()
 
 

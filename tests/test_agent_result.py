@@ -4,6 +4,7 @@ from glitchlab.agents import AgentResult
 
 
 def test_from_raw_successful_planner_dict():
+    """from_raw preserves planner metadata for a successful payload."""
     raw = {
         "plan": ["step1", "step2"],
         "reasoning": "looks good",
@@ -21,6 +22,7 @@ def test_from_raw_successful_planner_dict():
 
 
 def test_from_raw_parse_error_produces_error_status():
+    """from_raw marks parse failures as error results."""
     raw = {
         "parse_error": True,
         "raw_response": "malformed output",
@@ -32,6 +34,7 @@ def test_from_raw_parse_error_produces_error_status():
 
 
 def test_from_raw_delegating_status():
+    """from_raw preserves an explicit delegating status."""
     raw = {
         "_status": "delegating",
         "_agent": "planner",
@@ -42,6 +45,7 @@ def test_from_raw_delegating_status():
 
 
 def test_payload_excludes_underscore_prefixed_keys():
+    """from_raw excludes internal underscore-prefixed keys from payload."""
     raw = {
         "plan": ["step1"],
         "reasoning": "ok",
@@ -62,6 +66,7 @@ def test_payload_excludes_underscore_prefixed_keys():
 
 
 def test_default_construction():
+    """AgentResult defaults to an empty successful result."""
     result = AgentResult()
     assert result.status == "success"
     assert result.payload == {}
