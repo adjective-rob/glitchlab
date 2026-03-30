@@ -19,6 +19,7 @@ from rich.console import Console
 import yaml
 from loguru import logger
 
+from glitchlab.history import TaskHistory
 from glitchlab.router import Router
 from glitchlab.controller import Task  # Import the strict Pydantic schema
 from .scanner import Finding, ScanResult
@@ -120,6 +121,32 @@ class TaskWriter:
         if not self.dry_run:
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def _gather_failure_context(self, repo_path: Path, max_failures: int = 10) -> str:
+        """Read recent task failures from history for auditor context."""
+        try:
+            history = TaskHistory(repo_path)
+            failures = history.get_failures(max_failures)
+        except Exception:
+            return ""
+
+        if not failures:
+            return ""
+
+        lines = [
+            "## Previous Task Failures (learn from these — do not regenerate equivalent tasks)"
+        ]
+        for f in failures:
+            task_id = f.get("task_id", "unknown")
+            status = f.get("status", "unknown")
+            error = f.get("error", "N/A")
+            lines.append(f"- **{task_id}** ({status}): {error}")
+            events = f.get("events_summary", {})
+            if events.get("security_verdict"):
+                lines.append(f"  Security: {events['security_verdict']}")
+            if events.get("fix_attempts"):
+                lines.append(f"  Fix attempts: {events['fix_attempts']}")
+        return "\n".join(lines)
+
     def _read_roadmap(self, repo_path: Path) -> str:
         """Read .glitchlab/ROADMAP.md for task prioritization context."""
         roadmap = repo_path / ".glitchlab" / "ROADMAP.md"
@@ -159,11 +186,14 @@ A good task tells the implementer exactly what files to touch and what behavior 
 """
 
         roadmap_context = self._read_roadmap(result.repo_path)
+        failure_context = self._gather_failure_context(result.repo_path)
 
         user_content = f"""Scanner Findings:
 {findings_text if result.findings else "No static findings. Focus on ideating new features!"}
 
 {roadmap_context}
+
+{failure_context}
 
 Repo: {result.repo_path}
 Output Dir: {self.output_dir}
