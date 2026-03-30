@@ -120,6 +120,17 @@ class TaskWriter:
         if not self.dry_run:
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
+    def _read_roadmap(self, repo_path: Path) -> str:
+        """Read .glitchlab/ROADMAP.md for task prioritization context."""
+        roadmap = repo_path / ".glitchlab" / "ROADMAP.md"
+        if not roadmap.exists():
+            return ""
+        try:
+            content = roadmap.read_text(encoding="utf-8", errors="ignore")[:4000]
+            return f"## Project Roadmap\nPrioritize tasks that advance 'Now' items. Skip findings in 'Deferred' areas.\n\n{content}"
+        except Exception:
+            return ""
+
     def write_tasks(self, result: ScanResult) -> list[Path]:
         """Generate task YAML files for all findings using agent loop. Returns list of written paths."""
         written_paths: list[Path] = []
@@ -147,8 +158,12 @@ Make sure tasks are DEPENDABLE and HIGH QUALITY. Don't create vague tasks.
 A good task tells the implementer exactly what files to touch and what behavior to achieve.
 """
 
+        roadmap_context = self._read_roadmap(result.repo_path)
+
         user_content = f"""Scanner Findings:
 {findings_text if result.findings else "No static findings. Focus on ideating new features!"}
+
+{roadmap_context}
 
 Repo: {result.repo_path}
 Output Dir: {self.output_dir}
