@@ -416,6 +416,8 @@ def handle_archivist_result(
     if is_maintenance:
         allowed_paths = set(ps.plan.get("files_likely_affected") or [])
         if not allowed_paths:
+            if ctx.surgical:
+                return HandlerSignal.CONTINUE
             raise RuntimeError("Maintenance mode requires explicit files_likely_affected")
 
         for mpath in allowed_paths:
