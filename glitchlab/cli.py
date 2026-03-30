@@ -336,6 +336,25 @@ acceptance:
 risk: low
 """)
 
+    # Create ROADMAP template
+    roadmap_path = gl_dir / "ROADMAP.md"
+    if not roadmap_path.exists():
+        roadmap_path.write_text("""# Project Roadmap
+#
+# The GLITCHLAB auditor reads this file every scan to prioritize task generation.
+# Tasks that advance "Now" items are boosted. "Deferred" areas are skipped.
+# Edit this file as your priorities change — the auditor picks it up automatically.
+
+## Now
+- (what you're actively working on)
+
+## Next
+- (queued work, not urgent but directional)
+
+## Deferred
+- (areas where the auditor should NOT generate tasks right now)
+""")
+
     # Add to .gitignore
     gitignore = repo / ".gitignore"
     ignore_entries = [".glitchlab/worktrees/", ".glitchlab/tasks/",".glitchlab/logs/"]
@@ -354,6 +373,7 @@ risk: low
     console.print(f"  Config:  {config_path}")
     console.print(f"  Tasks:   {gl_dir / 'tasks'}")
     console.print(f"  Example: {task_path}")
+    console.print(f"  Roadmap: {roadmap_path}")
 
     # Bootstrap Prelude if available
     prelude = PreludeContext(repo)
