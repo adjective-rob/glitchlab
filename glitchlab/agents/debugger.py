@@ -242,6 +242,10 @@ Investigate and fix. Call `done` when the tests pass."""
         fast_mode = context.extra.get("fast_mode", False)
         max_steps = 20 if fast_mode else 30
 
+        # Thrash detection: track run_check failures per test file
+        test_failure_counts: dict[str, int] = {}
+        max_failures_per_test = 3
+
         for step in range(max_steps):
             logger.debug(f"[REROUTE] Loop Step {step+1}/{max_steps}...")
             
@@ -539,6 +543,7 @@ Investigate and fix. Call `done` when the tests pass."""
 
                 elif tc_name == "run_check":
                     cmd = tc_args.get("command")
+                    check_failed = False
                     if tool_executor:
                         try:
                             # Use the sandboxed executor, passing IDs for Zephyr attestation
@@ -549,12 +554,45 @@ Investigate and fix. Call `done` when the tests pass."""
                             )
                             res = f"Exit code: {tool_res.returncode}\nSTDOUT:\n{tool_res.stdout}\nSTDERR:\n{tool_res.stderr}"
                             if tool_res.returncode != 0:
+                                check_failed = True
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
                     else:
                         res = "Error: Tool executor not wired up."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+
+                    # Thrash detection: track repeated failures on the same command
+                    if check_failed:
+                        test_key = cmd.strip()[:120]
+                        test_failure_counts[test_key] = test_failure_counts.get(test_key, 0) + 1
+
+                        if test_failure_counts[test_key] >= max_failures_per_test:
+                            logger.warning(
+                                f"[REROUTE] Thrash detector: '{test_key}' has failed "
+                                f"{test_failure_counts[test_key]} times. Aborting debug loop."
+                            )
+                            bus.emit(
+                                event_type="agent.thrash_detected",
+                                payload={
+                                    "test_command": test_key,
+                                    "failure_count": test_failure_counts[test_key],
+                                    "step": step + 1,
+                                },
+                                agent_id=self.role,
+                            )
+                            return {
+                                "diagnosis": (
+                                    f"Unable to fix: '{test_key}' failed "
+                                    f"{test_failure_counts[test_key]} times after "
+                                    f"different fix attempts."
+                                ),
+                                "root_cause": "THRASH_DETECTED",
+                                "fix_summary": "Debugger could not converge on a fix. Returning to human.",
+                                "confidence": "low",
+                                "should_retry": False,
+                                "_breaker": "thrash_detector",
+                            }
 
                 elif tc_name == "done":
                     bus.emit(
