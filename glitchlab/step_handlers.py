@@ -103,6 +103,18 @@ def handle_planner_result(
         )
         for s in ps.plan.get("steps", [])
     ]
+
+    # Warn on large plans that survived the rejection gate
+    if len(ctx.state.plan_steps) > 4:
+        logger.warning(
+            f"[ZAP] Plan has {len(ctx.state.plan_steps)} steps after condensation attempt. "
+            f"Task may be too large for reliable single-pass implementation."
+        )
+        console.print(
+            f"[yellow]⚠ Large plan: {len(ctx.state.plan_steps)} steps. "
+            f"Consider splitting this task.[/]"
+        )
+
     ctx.state.files_in_scope = ps.plan.get("files_likely_affected", [])
     ctx.state.estimated_complexity = ps.plan.get("estimated_complexity", "medium")
     ctx.state.requires_core_change = ps.plan.get("requires_core_change", False)
