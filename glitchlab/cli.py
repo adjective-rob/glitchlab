@@ -49,15 +49,22 @@ console = Console()
 
 
 def version_callback(value: bool):
-    """Print the CLI version for the global --version flag and exit immediately."""
     if value:
         console.print(f"{__codename__} v{__version__}")
         raise typer.Exit()
 
 
-def main():
-    """Launch the Typer application as the CLI entry point."""
-    app()
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None,
+        "--version",
+        callback=version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    pass
 
 
 # ---------------------------------------------------------------------------
@@ -76,28 +83,30 @@ def _print_banner():
 
 @app.command()
 def run(
-    repo: Path = typer.Option(..., exists=True, file_okay=False, dir_okay=True, help="Repository path"),
-    issue: Optional[int] = typer.Option(None, help="GitHub issue number"),
-    local_task: bool = typer.Option(False, help="Use local task file (.glitchlab/tasks/next.yaml)"),
-    task_file: Optional[Path] = typer.Option(None, help="Specific task YAML file"),
-    branch: Optional[str] = typer.Option(None, help="Branch to work on"),
-    auto_push: bool = typer.Option(False, help="Auto-push branch after completion"),
-    create_pr: bool = typer.Option(False, help="Create pull request on success"),
-    mode: str = typer.Option("normal", help="Execution mode: normal|test|aggressive"),
-    max_iterations: int = typer.Option(30, help="Maximum agent iterations"),
-    no_watch: bool = typer.Option(False, help="Disable file watch mode"),
+    repo: Path = typer.Option(..., "--repo", "-r", help="Path to the target repository"),
+    issue: Optional[int] = typer.Option(None, "--issue", "-i", help="GitHub issue number"),
+    local_task: bool = typer.Option(False, "--local-task", "-l", help="Use local task YAML"),
+    task_file: Optional[Path] = typer.Option(None, "--task-file", "-f", help="Path to task YAML"),
+    allow_core: bool = typer.Option(False, "--allow-core", help="Allow modifications to protected core paths"),
+    auto_approve: bool = typer.Option(False, "--auto-approve", "-y", help="Skip human intervention gates"),
+    surgical: bool = typer.Option(False, "--surgical", help="Run surgical pipeline"),
+    auto_merge: bool = typer.Option(False, "--auto-merge", help="Automatically squash and merge the PR if successful"),
+    test_cmd: Optional[str] = typer.Option(None, "--test", "-t", help="Test command to run (e.g. 'cargo test')"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable debug logging"),
 ):
-    """Run the main CLI workflow that resolves a task and executes the agent pipeline."""
+    """Run GLITCHLAB on a task."""
     _print_banner()
+    _configure_logging(verbose)
 
-    # Validate inputs
-    if not issue and not local_task and not task_file:
-        console.print("[red]Error:[/] Must specify one of --issue, --local-task, or --task-file")
+    repo = repo.resolve()
+    if not repo.exists():
+        console.print(f"[red]Repository not found: {repo}[/]")
         raise typer.Exit(1)
 
-    if issue and (local_task or task_file):
-        console.print("[red]Error:[/] Cannot use --issue with --local-task or --task-file")
-        raise typer.Exit(1)
+    config = load_config(repo)
+
+    if auto_merge:
+        config.automation.auto_merge_pr = True
 
     # Resolve task
     if issue:
@@ -108,40 +117,42 @@ def run(
         tf = task_file or (repo / ".glitchlab" / "tasks" / "queue" / "next.yaml")
         if not tf.exists():
             tf = (repo / ".glitchlab" / "tasks" / "next.yaml")
-        console.print(f"[cyan]Loading task from {tf}...[/]")
+            
+        if not tf.exists():
+            console.print(f"[red]Task file not found: {tf}[/]")
+            raise typer.Exit(1)
         task = Task.from_yaml(tf)
+    else:
+        console.print("[red]Specify --issue or --local-task[/]")
+        raise typer.Exit(1)
 
-    # Create config
-    config = PipelineConfig(
-        mode=mode,
-        max_iterations=max_iterations,
-        auto_push=auto_push,
-        create_pr=create_pr,
-        watch_mode=not no_watch,
+    # Auto-detect test command if not provided
+    if not test_cmd:
+        test_cmd = _detect_test_command(repo)
+
+    # --- NEW: Initialize the Zephyr Audit Logger subscriber ---
+    audit_logger = AuditLogger(log_file=repo / ".glitchlab" / "logs" / "audit.jsonl")
+
+    controller = Controller(
+        repo_path=repo,
+        config=config,
+        allow_core=allow_core,
+        auto_approve=auto_approve,
+        surgical=surgical,
+        test_command=test_cmd,
     )
 
-    # Run pipeline
-    try:
-        result = run_pipeline(task, repo, branch=branch, config=config)
+    result = controller.run(task)
 
-        if result.status == "completed":
-            console.print("\n[bold green]✓ Pipeline completed successfully![/]")
-            if result.branch_name:
-                console.print(f"Branch: [cyan]{result.branch_name}[/]")
-            if result.pr_url:
-                console.print(f"PR: [cyan]{result.pr_url}[/]")
-        else:
-            console.print(f"\n[bold red]✗ Pipeline failed: {result.status}[/]")
-            if result.error_message:
-                console.print(f"Error: [red]{result.error_message}[/]")
-            raise typer.Exit(1)
+    # Final status
+    status = result.get("status", "unknown")
+    status_color = {
+        "pr_created": "green",
+        "committed": "yellow",
+        "interrupted": "yellow",
+    }.get(status, "red")
 
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Interrupted by user[/]")
-        raise typer.Exit(130)
-    except Exception as e:
-        console.print(f"\n[bold red]Error:[/] {e}")
-        raise typer.Exit(1)
+    console.print(f"\n[bold {status_color}]Status: {status}[/]")
 
 
 @app.command()
