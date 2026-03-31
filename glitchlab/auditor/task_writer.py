@@ -162,6 +162,58 @@ def _check_task_complexity(objective: str, constraints: list) -> str | None:
     return None
 
 
+_PROTECTED_FILES = [
+    "controller.py",
+    "config_loader.py",
+    "router.py",
+    "agents/__init__.py",
+    "workspace/__init__.py",
+    "workspace/tools.py",
+    "event_bus.py",
+    "governance/__init__.py",
+    "config.yaml",
+]
+
+_REFACTOR_VERBS = [
+    "refactor", "rewrite", "restructure", "replace", "migrate",
+    "overhaul", "redesign", "rearchitect", "extract", "move",
+]
+
+
+def _check_protected_file_refactor(objective: str, constraints: list) -> str | None:
+    """
+    Reject refactor tasks that target load-bearing files.
+
+    Returns rejection reason if the task targets a protected file with a
+    refactor action. Returns None if the task is acceptable.
+    """
+    objective_lower = objective.lower()
+    combined = objective_lower + " " + " ".join(c.lower() for c in (constraints or []))
+
+    # Check if any protected file is mentioned
+    targeted_protected = [f for f in _PROTECTED_FILES if f.lower() in combined]
+    if not targeted_protected:
+        return None
+
+    # Check if the action is a refactor (not just docstring/type hint addition)
+    is_refactor = any(verb in objective_lower for verb in _REFACTOR_VERBS)
+
+    # Allow additive-only tasks
+    is_additive = any(
+        phrase in objective_lower
+        for phrase in ["add docstring", "add type hint", "add comment", "add typing"]
+    )
+
+    if is_refactor and not is_additive:
+        return (
+            f"Task targets protected file(s) ({', '.join(targeted_protected)}) "
+            f"with a refactor action. These files have high coupling and should "
+            f"only be modified by human-authored tasks."
+        )
+
+    return None
+
+
 class TaskWriter:
     """
     Generates GLITCHLAB task YAML files from scanner findings and ideation.
@@ -246,6 +298,23 @@ Your responsibilities:
   Instead be specific: "Add type hint `str` to parameter `name`", "Replace the inline dict on line 45 with a pytest fixture".
 - Each task's objective must name the specific file(s) and the specific change.
 - Aim for 8-16 tasks per scan. More small tasks is better than fewer large ones.
+
+## Protected files (NEVER generate refactor tasks for these)
+
+These files have high coupling. Changes ripple across the entire engine. Only human-authored tasks should modify them:
+- glitchlab/controller.py
+- glitchlab/config_loader.py
+- glitchlab/router.py
+- glitchlab/agents/__init__.py
+- glitchlab/workspace/__init__.py
+- glitchlab/workspace/tools.py
+- glitchlab/event_bus.py
+- glitchlab/governance/__init__.py
+- config.yaml
+
+You MAY generate `add docstring` or `add type hint` tasks for these files (low-risk, additive-only).
+You MUST NOT generate `refactor`, `rewrite`, `restructure`, `replace`, or `migrate` tasks for these files.
+If a scanner finding suggests refactoring one of these files, skip it.
 
 Make sure tasks are DEPENDABLE and HIGH QUALITY. Don't create vague tasks.
 A good task tells the implementer exactly what files to touch and what behavior to achieve.
@@ -370,6 +439,21 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                         messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
                         continue
                     # --- End complexity gate ---
+
+                    # --- Protected file gate: reject refactors on load-bearing files ---
+                    protected_refactor_check = _check_protected_file_refactor(
+                        objective, tc_args.get("constraints", [])
+                    )
+                    if protected_refactor_check:
+                        res = (
+                            f"REJECTED: {protected_refactor_check} "
+                            f"You may create docstring or type hint tasks for this file, "
+                            f"but not refactor tasks. Skip this finding or create an additive-only task."
+                        )
+                        logger.info(f"[AUDITOR] Rejected protected file refactor '{safe_id}': {protected_refactor_check}")
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+                    # --- End protected file gate ---
 
                     try:
                         risk = tc_args.get("risk", "low")
