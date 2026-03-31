@@ -335,6 +335,28 @@ def _get_failing_tests(ctx: RunContext) -> set[str]:
         return set()
 
 
+def _parse_failing_test_files(test_output: str) -> set[str]:
+    """
+    Parse pytest output for failing test file paths.
+
+    Handles both formats:
+      FAILED tests/test_foo.py::test_bar - Error
+      tests/test_foo.py::test_bar FAILED
+    """
+    failing = set()
+    for line in test_output.splitlines():
+        line = line.strip()
+        if "FAILED" in line:
+            # Extract path before ::
+            for part in line.split():
+                if "::" in part and "/" in part:
+                    test_path = part.split("::")[0].strip()
+                    if test_path:
+                        failing.add(test_path)
+                    break
+    return failing
+
+
 def _build_debug_summary(ctx: RunContext, attempt: int) -> dict:
     """
     Build a focused summary for the debugger.
@@ -405,6 +427,30 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
         error_output = result.stderr or result.stdout
         console.print(f"[red]❌ Tests failed (attempt {attempt})[/]")
         emit_event(ctx, "tests_failed", {"attempt": attempt}, agent_id="debugger")
+
+        # Cascade detection: if failures spread beyond our scope, abort
+        failing_files = _parse_failing_test_files(error_output or "")
+        files_we_changed = set(ctx.state.files_modified or []) | set(
+            ctx.state.files_created or []
+        )
+        new_failures = failing_files - baseline_failures
+
+        if len(new_failures) > max(len(files_we_changed), 2):
+            logger.warning(
+                f"[REROUTE] Cascade detected: {len(new_failures)} test files failing "
+                f"but only {len(files_we_changed)} files were changed. "
+                f"Implementation approach is likely wrong."
+            )
+            console.print(
+                f"[red bold]🚨 Cascade: {len(new_failures)} test files failing from "
+                f"{len(files_we_changed)} changed files. Aborting debug loop.[/]"
+            )
+            emit_event(ctx, "cascade_abort", {
+                "failing_tests": list(new_failures)[:10],
+                "files_changed": list(files_we_changed),
+                "attempt": attempt,
+            }, agent_id="debugger")
+            break
 
         if attempt >= max_attempts:
             break
