@@ -151,6 +151,12 @@ class Controller:
 
         print_banner(task)
 
+        # Quality gate: check for ambiguous objectives, inject constraints
+        from glitchlab.task_quality import get_quality_constraints
+        quality_constraints = get_quality_constraints(task.objective)
+        if quality_constraints:
+            task.constraints = list(task.constraints or []) + quality_constraints
+
         # Build RunContext — the shared state bundle for all pipeline components
         ctx = RunContext(
             run_id=run_id,
