@@ -1,21 +1,115 @@
 {
-  "task_id": "interactive-20260330-213939",
-  "objective": "In glitchlab/auditor/task_writer.py, in the create_task tool handler inside write_tasks(), add a generated_at field to task_data with the current UTC timestamp in ISO format. Import datetime at the top of the file if not already imported. The field should be added after the source field in task_data. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
+  "task_id": "cleanup-test-suite-docstrings-003",
+  "objective": "Add docstrings to the remaining scanner-flagged public test functions in the integration-style test files, including tests/test_history.py, tests/test_cli_doctor.py, tests/test_cli_compare.py, tests/test_event_bus.py, tests/test_dependencies.py, tests/test_identity.py, tests/test_smoke.py, tests/test_basic.py, tests/test_module_docstrings.py, and tests/test_surgical_mode_cli_and_controller.py. The goal is to satisfy the docstring policy without changing any test behavior.",
   "mode": "maintenance",
   "risk_level": "low",
-  "plan_steps": [],
-  "files_in_scope": [],
-  "estimated_complexity": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Add concise test-focused docstrings to the public test functions in tests/test_basic.py and tests/test_smoke.py so the placeholder smoke tests satisfy the scanner without altering behavior.",
+      "files": [
+        "tests/test_basic.py",
+        "tests/test_smoke.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "tests/test_history.py",
+        "tests/test_cli_doctor.py",
+        "tests/test_basic.py::test_placeholder assertions",
+        "tests/test_smoke.py::test_pytest_collects_tests assertions"
+      ],
+      "code_hint": "tests/test_basic.py:1 test_placeholder() -> insert a one-line docstring under the def.\ntests/test_smoke.py:1 test_pytest_collects_tests() -> insert a one-line docstring before existing body/assertion."
+    },
+    {
+      "step_number": 2,
+      "description": "Add concise docstrings to the remaining public integration-style tests in tests/test_event_bus.py and tests/test_dependencies.py, including the nested helper subscriber in the event bus test if it is scanner-flagged.",
+      "files": [
+        "tests/test_event_bus.py",
+        "tests/test_dependencies.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "tests/test_identity.py",
+        "glitchlab/event_bus.py",
+        "tests/test_event_bus.py::test_event_bus_pub_sub event flow",
+        "tests/test_dependencies.py::test_dependencies_updated assertions"
+      ],
+      "code_hint": "tests/test_event_bus.py:4 test_event_bus_pub_sub() -> add a short docstring describing publish/subscribe behavior.\ntests/test_event_bus.py:8 dummy_subscriber(event: GlitchEvent) -> add a helper docstring if missing.\ntests/test_dependencies.py:3 test_dependencies_updated() -> add a short docstring describing dependency metadata validation."
+    },
+    {
+      "step_number": 3,
+      "description": "Add descriptive docstrings to all scanner-flagged public test functions in tests/test_history.py, tests/test_cli_doctor.py, tests/test_cli_compare.py, and tests/test_identity.py, keeping all assertions, fixtures, and setup unchanged.",
+      "files": [
+        "tests/test_history.py",
+        "tests/test_cli_doctor.py",
+        "tests/test_cli_compare.py",
+        "tests/test_identity.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "tests/test_module_docstrings.py",
+        "tests/test_surgical_mode_cli_and_controller.py",
+        "glitchlab/history.py",
+        "glitchlab/cli.py",
+        "glitchlab/identity.py"
+      ],
+      "code_hint": "For each public def matching the scanner report in these files, insert a concise docstring immediately after the function signature, e.g.\ndef test_...(...):\n    \"\"\"Describe the CLI/history/identity behavior under test.\"\"\"\n    ..."
+    },
+    {
+      "step_number": 4,
+      "description": "Add docstrings to the remaining scanner-flagged public functions in tests/test_module_docstrings.py and tests/test_surgical_mode_cli_and_controller.py, including helper functions such as nested run() implementations where applicable.",
+      "files": [
+        "tests/test_module_docstrings.py",
+        "tests/test_surgical_mode_cli_and_controller.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "tests/test_basic.py",
+        "tests/test_smoke.py",
+        "glitchlab/controller.py",
+        "glitchlab/cli.py",
+        "tests/test_surgical_mode_cli_and_controller.py runtime setup and assertions"
+      ],
+      "code_hint": "tests/test_module_docstrings.py:6 test_module_docstrings_exist_and_contain_required_info() -> add a short docstring describing the policy check.\ntests/test_surgical_mode_cli_and_controller.py: for each public test/helper def flagged by the scanner, add a concise docstring; include nested run(self, task) helper with a one-line docstring if missing."
+    }
+  ],
+  "files_in_scope": [
+    "tests/test_basic.py",
+    "tests/test_smoke.py",
+    "tests/test_event_bus.py",
+    "tests/test_dependencies.py",
+    "tests/test_history.py",
+    "tests/test_cli_doctor.py",
+    "tests/test_cli_compare.py",
+    "tests/test_identity.py",
+    "tests/test_module_docstrings.py",
+    "tests/test_surgical_mode_cli_and_controller.py",
+    "tests/test_basic.py",
+    "tests/test_smoke.py",
+    "tests/test_event_bus.py",
+    "tests/test_dependencies.py",
+    "tests/test_history.py",
+    "tests/test_cli_doctor.py",
+    "tests/test_cli_compare.py",
+    "tests/test_identity.py",
+    "tests/test_module_docstrings.py",
+    "tests/test_surgical_mode_cli_and_controller.py"
+  ],
+  "estimated_complexity": "small",
   "requires_core_change": false,
-  "files_modified": [
-    "glitchlab/auditor/task_writer.py"
-  ],
+  "files_modified": [],
   "files_created": [],
-  "tests_added": [
-    "tests/auditor/test_task_writer_generated_at.py"
-  ],
-  "commit_message": "feat(auditor): add generated_at timestamp to created tasks",
-  "implementation_summary": "Updated glitchlab/auditor/task_writer.py only: imported datetime/timezone and added a generated_at field with the current UTC ISO timestamp to task_data in the create_task handler, immediately after source. Ruff check passed for the file. Full pytest run hit an existing unrelated failure in tests/agents/test_implementer_run_check_success_message.py caused by glitchlab/agents/implementer.py, which was out of scope and left untouched.",
+  "tests_added": [],
+  "commit_message": "",
+  "implementation_summary": "",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -24,53 +118,53 @@
   "version_bump": "",
   "changelog_entry": "",
   "completed_phases": [
-    "implement",
+    "plan",
     "commit"
   ],
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-30T21:39:39.715536+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:54.824140+00:00",
+      "task_id": "cleanup-test-suite-docstrings-003",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260330-213939"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/cleanup-test-suite-docstrings-003"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-30T21:39:39.727064+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:54.835008+00:00",
+      "task_id": "cleanup-test-suite-docstrings-003",
       "data": {
-        "total_files": 72,
+        "total_files": 75,
         "languages": {
-          ".py": 70
+          ".py": 73
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-30T21:39:39.826543+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:54.933154+00:00",
+      "task_id": "cleanup-test-suite-docstrings-003",
       "data": {
         "count": 3
       }
     },
     {
-      "type": "implementation_created",
-      "timestamp": "2026-03-30T21:40:12.928927+00:00",
-      "task_id": "interactive-20260330-213939",
+      "type": "plan_created",
+      "timestamp": "2026-03-31T03:22:36.410221+00:00",
+      "task_id": "cleanup-test-suite-docstrings-003",
       "data": {
-        "changes": 1,
-        "tests": 0
+        "steps": 4,
+        "risk": "medium"
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-30T21:40:22.600962+00:00",
-      "task_id": "interactive-20260330-213939",
+      "type": "implementation_created",
+      "timestamp": "2026-03-31T03:22:47.712142+00:00",
+      "task_id": "cleanup-test-suite-docstrings-003",
       "data": {
-        "file": "tests/auditor/test_task_writer_generated_at.py",
-        "description": "Ensures TaskWriter writes a generated_at UTC ISO timestamp into created task YAML files when handling the create_task tool."
+        "changes": 0,
+        "tests": 0
       }
     }
   ]
