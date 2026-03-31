@@ -245,4 +245,4 @@ Thumbs.db
 # Claude Stuff
 .claude/settings.local.json
 run-tasks.sh
-tasks_for_claude_code/
+tasks_for_claude_code/.glitchlab/task_state.json
