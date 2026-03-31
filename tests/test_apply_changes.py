@@ -169,8 +169,7 @@ def test_already_applied_flag_skips_file(tmp_path):
 
     result = apply_changes(tmp_path, changes)
 
-    assert len(result) == 1
-    assert "AGENT_APPLIED" in result[0]
+    assert result == []
     assert target.read_text() == original
 
 
@@ -232,5 +231,8 @@ def test_normalize_change_promotes_patch_to_content():
 
     normalized = _normalize_change(change)
 
-    assert normalized["content"] == "def hello():\n    return 'world'\n"
-    assert normalized["patch"] is None
+    assert normalized == {
+        "file": "example.py",
+        "patch": None,
+        "content": "def hello():\n    return 'world'\n",
+    }

@@ -1,21 +1,19 @@
 {
-  "task_id": "interactive-20260330-213939",
-  "objective": "In glitchlab/auditor/task_writer.py, in the create_task tool handler inside write_tasks(), add a generated_at field to task_data with the current UTC timestamp in ISO format. Import datetime at the top of the file if not already imported. The field should be added after the source field in task_data. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
-  "mode": "maintenance",
+  "task_id": "cleanup-test-apply-changes-001",
+  "objective": "Remove the inline test artifact or HACK marker from `tests/test_apply_changes.py` and replace it with a clear, intentional test assertion or comment only if the test truly needs one.",
+  "mode": "evolution",
   "risk_level": "low",
   "plan_steps": [],
   "files_in_scope": [],
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/auditor/task_writer.py"
+    "tests/test_apply_changes.py"
   ],
   "files_created": [],
-  "tests_added": [
-    "tests/auditor/test_task_writer_generated_at.py"
-  ],
-  "commit_message": "feat(auditor): add generated_at timestamp to created tasks",
-  "implementation_summary": "Updated glitchlab/auditor/task_writer.py only: imported datetime/timezone and added a generated_at field with the current UTC ISO timestamp to task_data in the create_task handler, immediately after source. Ruff check passed for the file. Full pytest run hit an existing unrelated failure in tests/agents/test_implementer_run_check_success_message.py caused by glitchlab/agents/implementer.py, which was out of scope and left untouched.",
+  "tests_added": [],
+  "commit_message": "test: remove leftover apply_changes test artifact",
+  "implementation_summary": "Cleaned up tests/test_apply_changes.py by replacing the leftover inline artifact-style assertion in the already-applied test with the actual expected behavior (`result == []`) and tightened the normalize-change test to assert the full normalized payload. Verified with `python -m pytest tests/test_apply_changes.py`.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,47 +28,38 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-30T21:39:39.715536+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:08.809737+00:00",
+      "task_id": "cleanup-test-apply-changes-001",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260330-213939"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/cleanup-test-apply-changes-001"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-30T21:39:39.727064+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:08.819612+00:00",
+      "task_id": "cleanup-test-apply-changes-001",
       "data": {
-        "total_files": 72,
+        "total_files": 75,
         "languages": {
-          ".py": 70
+          ".py": 73
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-30T21:39:39.826543+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:08.916571+00:00",
+      "task_id": "cleanup-test-apply-changes-001",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-30T21:40:12.928927+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:21:48.711640+00:00",
+      "task_id": "cleanup-test-apply-changes-001",
       "data": {
         "changes": 1,
         "tests": 0
-      }
-    },
-    {
-      "type": "testgen_created",
-      "timestamp": "2026-03-30T21:40:22.600962+00:00",
-      "task_id": "interactive-20260330-213939",
-      "data": {
-        "file": "tests/auditor/test_task_writer_generated_at.py",
-        "description": "Ensures TaskWriter writes a generated_at UTC ISO timestamp into created task YAML files when handling the create_task tool."
       }
     }
   ]
