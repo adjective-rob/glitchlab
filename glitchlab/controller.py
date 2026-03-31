@@ -182,11 +182,17 @@ class Controller:
         try:
             failure_context = startup(ctx, task)
 
-            if self.surgical:
+            # Surgical mode: from CLI flag OR from task auto-detection
+            if self.surgical or getattr(task, 'surgical', False):
                 ctx.surgical = True
                 surgical_config = load_config(self.repo_path, profile="surgical")
                 ctx.config.pipeline = surgical_config.pipeline
                 ctx.config.limits.max_fix_attempts = 1
+                if getattr(task, 'surgical', False) and not self.surgical:
+                    logger.info(
+                        f"[CONTROLLER] Auto-surgical: task '{task.task_id}' detected as trivial. "
+                        f"Skipping planner/security/release."
+                    )
 
             ps = self._execute_pipeline(ctx, task, failure_context, result)
 
