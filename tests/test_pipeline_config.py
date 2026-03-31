@@ -21,15 +21,18 @@ class TestDefaultPipelineConfig:
     """Default config loads with the correct pipeline steps."""
 
     def test_load_config_returns_pipeline_steps(self):
+        """Verify the default config provides the full pipeline step list."""
         config = load_config()
         assert len(config.pipeline) == 7
 
     def test_pipeline_step_names_match_expected_order(self):
+        """Ensure default pipeline step names appear in the expected order."""
         config = load_config()
         names = [step.name for step in config.pipeline]
         assert names == EXPECTED_STEP_NAMES
 
     def test_pipeline_step_agent_roles(self):
+        """Check that each default pipeline step maps to the correct agent role."""
         config = load_config()
         roles = {step.name: step.agent_role for step in config.pipeline}
         assert roles["planner"] == "planner"
@@ -41,11 +44,13 @@ class TestDefaultPipelineConfig:
         assert roles["archivist"] == "archivist"
 
     def test_archivist_is_not_required(self):
+        """Confirm the optional archivist step is not marked as required."""
         config = load_config()
         archivist = [s for s in config.pipeline if s.name == "archivist"][0]
         assert archivist.required is False
 
     def test_required_steps_are_required(self):
+        """Confirm every default step except archivist remains required."""
         config = load_config()
         for step in config.pipeline:
             if step.name != "archivist":
@@ -56,6 +61,7 @@ class TestPipelineStepValidation:
     """PipelineStep validates required fields."""
 
     def test_minimal_valid_step(self):
+        """Verify a minimal PipelineStep instance receives default values."""
         step = PipelineStep(name="test_step", agent_role="tester")
         assert step.name == "test_step"
         assert step.agent_role == "tester"
@@ -65,14 +71,17 @@ class TestPipelineStepValidation:
         assert step.writes == []
 
     def test_missing_name_raises_validation_error(self):
+        """Ensure validation fails when a PipelineStep name is omitted."""
         with pytest.raises(ValidationError):
             PipelineStep(agent_role="tester")  # type: ignore[call-arg]
 
     def test_missing_agent_role_raises_validation_error(self):
+        """Ensure validation fails when a PipelineStep agent role is omitted."""
         with pytest.raises(ValidationError):
             PipelineStep(name="test_step")  # type: ignore[call-arg]
 
     def test_missing_both_required_fields_raises_validation_error(self):
+        """Ensure validation fails when both required PipelineStep fields are missing."""
         with pytest.raises(ValidationError):
             PipelineStep()  # type: ignore[call-arg]
 
@@ -81,18 +90,22 @@ class TestSkipIfConditions:
     """skip_if accepts known condition strings."""
 
     def test_skip_if_doc_only(self):
+        """Verify skip_if accepts the doc_only condition."""
         step = PipelineStep(name="s", agent_role="a", skip_if=["doc_only"])
         assert step.skip_if == ["doc_only"]
 
     def test_skip_if_fast_mode(self):
+        """Verify skip_if accepts the fast_mode condition."""
         step = PipelineStep(name="s", agent_role="a", skip_if=["fast_mode"])
         assert step.skip_if == ["fast_mode"]
 
     def test_skip_if_no_test_command(self):
+        """Verify skip_if accepts the no_test_command condition."""
         step = PipelineStep(name="s", agent_role="a", skip_if=["no_test_command"])
         assert step.skip_if == ["no_test_command"]
 
     def test_skip_if_multiple_conditions(self):
+        """Ensure skip_if preserves multiple configured conditions in order."""
         step = PipelineStep(
             name="s",
             agent_role="a",
@@ -101,6 +114,7 @@ class TestSkipIfConditions:
         assert step.skip_if == ["doc_only", "fast_mode", "no_test_command"]
 
     def test_default_pipeline_skip_if_values(self):
+        """Check the default pipeline assigns the expected skip_if conditions."""
         config = load_config()
         steps = {s.name: s for s in config.pipeline}
         assert steps["testgen"].skip_if == ["doc_only"]
@@ -120,6 +134,7 @@ class TestPipelineInGlitchLabConfig:
         assert config.pipeline == []
 
     def test_config_with_pipeline_steps(self):
+        """Verify a config can preserve explicitly defined pipeline step settings."""
         config = GlitchLabConfig(
             pipeline=[
                 PipelineStep(name="step1", agent_role="role1"),
