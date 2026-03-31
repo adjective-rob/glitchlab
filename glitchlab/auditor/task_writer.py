@@ -109,6 +109,59 @@ def group_findings_into_tasks(result: ScanResult) -> list[list[Finding]]:
     """Legacy finding chunking"""
     return [result.findings]
 
+
+def _check_task_complexity(objective: str, constraints: list) -> str | None:
+    """
+    Check if a task objective is too complex for a single implementation pass.
+
+    Returns a rejection reason string if too complex, None if acceptable.
+    """
+    if isinstance(constraints, str):
+        constraints = [constraints]
+    combined = objective + " " + " ".join(constraints or [])
+
+    issues = []
+
+    # Check file count: more than 2 file paths mentioned
+    file_refs = re.findall(r'[\w/]+\.\w{1,4}', combined)
+    # Deduplicate
+    unique_files = set(f for f in file_refs if not f.startswith("e.g"))
+    if len(unique_files) > 2:
+        issues.append(f"references {len(unique_files)} files ({', '.join(list(unique_files)[:4])})")
+
+    # Check action count: more than 2 distinct action verbs
+    action_verbs = ["add", "remove", "refactor", "update", "create", "delete",
+                    "replace", "migrate", "rename", "rewrite", "extract", "move"]
+    found_verbs = [v for v in action_verbs if re.search(rf'\b{v}\b', objective, re.IGNORECASE)]
+    if len(found_verbs) > 2:
+        issues.append(f"has {len(found_verbs)} action verbs ({', '.join(found_verbs)})")
+
+    # Check for vague compound objectives
+    if re.search(r'\band\b.*\band\b', objective, re.IGNORECASE):
+        # Count the "and" clauses
+        and_count = len(re.findall(r'\band\b', objective, re.IGNORECASE))
+        if and_count >= 2:
+            issues.append(f"has {and_count} 'and' conjunctions — likely multiple tasks combined")
+
+    # Check for vague language
+    vague_terms = []
+    for term in ["clean up", "improve", "make better", "handle properly",
+                 "update as needed", "as appropriate", "optimize", "overhaul"]:
+        if term.lower() in objective.lower():
+            vague_terms.append(term)
+    if vague_terms:
+        issues.append(f"uses vague language: {', '.join(vague_terms)}")
+
+    if len(issues) >= 2:
+        return "Task is too complex: " + "; ".join(issues) + "."
+
+    # Single issue is a warning but not a rejection, unless it's vague language
+    if vague_terms:
+        return "Task uses vague language: " + ", ".join(vague_terms) + ". Be specific about the exact change."
+
+    return None
+
+
 class TaskWriter:
     """
     Generates GLITCHLAB task YAML files from scanner findings and ideation.
@@ -175,15 +228,28 @@ class TaskWriter:
 You operate in a tool-calling loop to generate high-quality development tasks.
 
 Your responsibilities:
-1. Evaluate static scanner findings. Prune irrelevant ones, and group the real issues into cohesive tasks (aim to generate 8-12 tasks per scan).
+1. Evaluate static scanner findings. Prune irrelevant ones, and group the real issues into cohesive tasks.
 2. Creatively consider NEW features, refactors, or architectural improvements that would benefit the codebase.
-3. Break these ideas down into small, actionable tasks. For large_file findings, create one refactor task per file. For todo findings, create one cleanup task. Group missing_doc findings into at most 2 tasks. Prioritize tasks that touch single files.
+3. Break these ideas down into SMALL, actionable tasks. See sizing rules below.
 4. Use `read_file` and `search_grep` to validate your ideas and understand the codebase before writing a task.
-5. Use `create_task` to write each task. Give them meaningful IDs (e.g., 'feature-xyz-001', 'refactor-auth-002').
+5. Use `create_task` to write each task.
 6. Call `done` when finished.
 
-Make sure tasks are DEPENDABLE and HIGH QUALITY. Don't create vague tasks. 
+## Task sizing rules (CRITICAL — tasks that violate these will be REJECTED)
+
+- Each task MUST touch at most 2 files. If a change requires 3+ files, split into sequential subtasks.
+- Each task MUST have ONE primary action: add, remove, refactor, create, rename, or fix. Not multiple.
+- If a finding needs work across multiple files, create numbered sequential tasks:
+  e.g., 'refactor-auth-001' (create the new module), 'refactor-auth-002' (update imports), 'refactor-auth-003' (add tests).
+- Later tasks can note dependencies in constraints: "Depends on refactor-auth-001 being complete."
+- NEVER use vague action words: "clean up", "improve", "make better", "handle properly", "update as needed".
+  Instead be specific: "Add type hint `str` to parameter `name`", "Replace the inline dict on line 45 with a pytest fixture".
+- Each task's objective must name the specific file(s) and the specific change.
+- Aim for 8-16 tasks per scan. More small tasks is better than fewer large ones.
+
+Make sure tasks are DEPENDABLE and HIGH QUALITY. Don't create vague tasks.
 A good task tells the implementer exactly what files to touch and what behavior to achieve.
+A bad task says "refactor X to be cleaner." A good task says "Extract the validation logic in X.validate() into a standalone function validate_input() in the same file."
 """
 
         roadmap_context = self._read_roadmap(result.repo_path)
@@ -289,7 +355,22 @@ Plan your work, read necessary files, write the tasks, and call `done`.
                     task_id = tc_args.get("id", "audit-001")
                     safe_id = re.sub(r"[^\w\-]", "-", task_id)
                     path = self.output_dir / f"{safe_id}.yaml"
-                    
+
+                    # --- Complexity gate: reject oversized tasks ---
+                    objective = tc_args.get("objective", "")
+                    rejection = _check_task_complexity(objective, tc_args.get("constraints", []))
+                    if rejection:
+                        res = (
+                            f"REJECTED: {rejection} "
+                            f"Split this into smaller tasks, each touching at most 2 files "
+                            f"with one action. Use sequential IDs (e.g., '{safe_id}-01', '{safe_id}-02'). "
+                            f"Then call create_task for each subtask."
+                        )
+                        logger.info(f"[AUDITOR] Rejected oversized task '{safe_id}': {rejection}")
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+                    # --- End complexity gate ---
+
                     try:
                         risk = tc_args.get("risk", "low")
                         if risk not in ("low", "medium", "high"):
