@@ -202,6 +202,10 @@ You now operate in an agentic loop. You have tools to think, investigate, fix, a
 5. ALWAYS prefer `replace_in_file` to apply surgical fixes. Only use `write_file` if you are completely rewriting a file.
 6. If you make a mistake and break a file further, use the `rollback_file` tool to undo your changes.
 7. When the test passes, call `done`.
+8. If you are given a list of 'baseline_failures' in the context, these tests were ALREADY FAILING \
+before this task started. Do NOT attempt to fix them. Focus only on tests that are newly broken by \
+the current changes. If the only failing tests are baseline failures, call `done` immediately — \
+there is nothing for you to fix.
 
 The test command you are debugging is: {test_command}
 """
@@ -213,6 +217,14 @@ The test command you are debugging is: {test_command}
 
         sys_prompt = self.system_prompt.format(test_command=test_cmd)
 
+        baseline = context.extra.get("baseline_failures", [])
+        baseline_note = ""
+        if baseline:
+            baseline_note = (
+                f"\n\nBASELINE FAILURES (already broken before this task — DO NOT FIX):\n"
+                f"{chr(10).join(f'- {t}' for t in baseline)}\n"
+            )
+
         user_content = f"""FAILURE DETECTED
 Objective: {context.objective}
 Failing Command: {test_cmd}
@@ -221,7 +233,7 @@ Initial Error Output:
 {error_log}
 
 Modified Files: {state.get('files_modified', [])}
-
+{baseline_note}
 Investigate and fix. Call `done` when the tests pass."""
 
         return [{"role": "system", "content": sys_prompt}, {"role": "user", "content": user_content}]

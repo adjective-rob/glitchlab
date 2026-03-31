@@ -304,12 +304,52 @@ def run_testgen(ctx: RunContext, task: Task, is_doc_only: bool) -> None:
 # Fix Loop (Debugger)
 # ---------------------------------------------------------------------------
 
+
+def _get_failing_tests(ctx: RunContext) -> set[str]:
+    """
+    Run the test suite and return the set of test file paths that are currently failing.
+    Returns empty set if all tests pass or if we can't determine failures.
+    """
+    if not ctx.test_command:
+        return set()
+
+    try:
+        result = ctx.tools.execute(ctx.test_command)
+        if result.success:
+            return set()
+
+        # Parse pytest output for FAILED lines
+        # Format: "FAILED tests/test_foo.py::test_bar - AssertionError..."
+        output = (result.stderr or "") + (result.stdout or "")
+        failing = set()
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith("FAILED "):
+                # Extract test file path (before ::)
+                test_path = line.split("FAILED ", 1)[1].split("::")[0].strip()
+                if test_path:
+                    failing.add(test_path)
+        return failing
+    except Exception as e:
+        logger.debug(f"[REROUTE] Could not capture baseline: {e}")
+        return set()
+
+
 def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
     """
     Run test → debug → fix loop (v3.0).
     Debugger is now agentic and manages its own tool-loop to investigate and fix.
     """
     max_attempts = ctx.config.limits.max_fix_attempts
+
+    # Capture baseline: which tests were already failing before our changes?
+    # Run the test suite once and parse which test files failed.
+    baseline_failures = _get_failing_tests(ctx)
+    if baseline_failures:
+        logger.info(
+            f"[REROUTE] Baseline: {len(baseline_failures)} tests already failing before this task: "
+            f"{', '.join(list(baseline_failures)[:5])}"
+        )
 
     for attempt in range(1, max_attempts + 1):
         console.print(f"\n[bold]🧪 Test run {attempt}/{max_attempts}...[/]")
@@ -345,6 +385,7 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
             extra={
                 "error_output": (error_output or "")[-3000:],
                 "test_command": ctx.test_command,
+                "baseline_failures": list(baseline_failures),
                 "tool_executor": ctx.tools,
                 "prelude": ctx.prelude,
                 "repo_index": ctx.repo_index,
