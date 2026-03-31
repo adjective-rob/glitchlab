@@ -383,6 +383,7 @@ Plan: {steps_text}
         created_files = set()
         think_count = 0
         write_count = 0
+        read_count = 0
         search_count = 0
         total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
@@ -395,19 +396,21 @@ Plan: {steps_text}
             compress_stale_messages(messages)
             hard_compact_messages(messages)
 
-            # Stall detection: soft nudge at 15, hard kill at 20
-            if step >= 15 and write_count == 0 and think_count > 0:
-                if step >= 20:
+            # Stall detection: soft nudge at 6, hard kill at 10
+            # Also hard kill if 8+ reads without a single write
+            if write_count == 0 and think_count > 0 and (step >= 6 or read_count >= 8):
+                if step >= 10 or read_count >= 8:
                     # Hard circuit breaker — agent is stuck in a read loop
                     logger.warning(
                         f"[PATCH] Write-deadline breaker tripped at step {step + 1}. "
-                        f"0 writes after {think_count} thinks and {search_count} searches."
+                        f"0 writes after {think_count} thinks, {read_count} reads, {search_count} searches."
                     )
                     bus.emit(
                         event_type="agent.write_deadline_breaker",
                         payload={
                             "step": step + 1,
                             "think_count": think_count,
+                            "read_count": read_count,
                             "search_count": search_count,
                             "write_count": 0,
                         },
@@ -417,7 +420,7 @@ Plan: {steps_text}
                         "changes": [],
                         "tests_added": [],
                         "commit_message": "chore: no changes (write deadline exceeded)",
-                        "summary": f"Implementer read for {step + 1} steps without writing. Circuit breaker tripped.",
+                        "summary": f"Implementer read for {step + 1} steps ({read_count} reads) without writing. Circuit breaker tripped.",
                         "parse_error": True,
                         "_breaker": "write_deadline",
                     }
@@ -425,9 +428,9 @@ Plan: {steps_text}
                     messages.append({
                         "role": "user",
                         "content": (
-                            "WARNING: You have spent 15+ steps reading and searching without writing any code. "
-                            "You MUST take action now. Use `replace_in_file` to make your changes, or call `done` "
-                            "if the task cannot be completed. Do NOT read more files."
+                            "WARNING: You have spent multiple steps reading without writing any code. "
+                            "You MUST use replace_in_file or patch_function NOW. "
+                            "Do NOT read more files. Use what you have and start editing."
                         )
                     })
 
@@ -534,6 +537,7 @@ Plan: {steps_text}
                     except Exception as e:
                         res = f"Error reading file: {e}"
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    read_count += 1
 
                 elif tc_name == "search_grep":
                     if search_count >= 3:
@@ -607,6 +611,7 @@ Plan: {steps_text}
                     else:
                         res = "AST parser unavailable. Please fall back to read_file."
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                    read_count += 1
 
                 elif tc_name == "get_class":
                     class_name = tc_args.get("class_name")
