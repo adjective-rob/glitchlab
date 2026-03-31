@@ -57,9 +57,10 @@ def run_git(
 
 
 def pre_task_git_fetch(repo_path: Path) -> None:
-    """Best-effort fetch to ensure planning is against recent `origin/main`.
+    """Best-effort fetch before planning so the task uses a recent `origin/main`.
 
-    Soft-fails (warn + continue) to avoid breaking offline/CI runs.
+    This fetch is intentionally soft-fail: git/network errors only emit warnings
+    and planning continues so offline, sandboxed, or CI runs are not blocked.
     """
     if not is_git_repo(repo_path):
         logger.debug(f"[GIT] Skipping fetch: not a git repo: {repo_path}")
