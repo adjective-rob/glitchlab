@@ -228,6 +228,28 @@ def finalize(
                 )
                 console.print("[bold green]✅ Rebase conflict auto-resolved by agent![/]")
 
+    # Skip PR if implementer produced no real changes
+    impl_changes = impl.get("changes", []) if impl else []
+    breaker_tripped = impl.get("_breaker") if impl else None
+
+    if not impl_changes or breaker_tripped:
+        diff = ctx.workspace.diff_stat()
+        # Check if only task_state.json changed (no real code changes)
+        real_changes = [
+            line for line in (diff or "").splitlines()
+            if line.strip() and "task_state.json" not in line and "|" in line
+        ]
+        if not real_changes:
+            logger.warning(
+                f"[LIFECYCLE] No real file changes produced. Skipping PR creation. "
+                f"Breaker: {breaker_tripped or 'none'}"
+            )
+            console.print(
+                "[yellow]⚠ No code changes produced. Skipping PR creation.[/]"
+            )
+            result["status"] = "no_changes"
+            return result
+
     if getattr(ctx.config.intervention, "pause_before_pr", True):
         diff = ctx.workspace.diff_stat()
         console.print(Panel(diff, title="Diff Summary", border_style="cyan"))
