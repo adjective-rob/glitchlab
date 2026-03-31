@@ -1,6 +1,6 @@
 {
-  "task_id": "interactive-20260330-213939",
-  "objective": "In glitchlab/auditor/task_writer.py, in the create_task tool handler inside write_tasks(), add a generated_at field to task_data with the current UTC timestamp in ISO format. Import datetime at the top of the file if not already imported. The field should be added after the source field in task_data. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
+  "task_id": "refactor-controller-utils-docs-101",
+  "objective": "Add docstrings to the public helper functions `run_git`, `calculate_quality_score`, and `attest_controller_action` in `glitchlab/controller_utils.py` to document their inputs, outputs, and side effects.",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/auditor/task_writer.py"
+    "glitchlab/controller_utils.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/auditor/test_task_writer_generated_at.py"
+    "tests/test_controller_utils_public_helpers.py"
   ],
-  "commit_message": "feat(auditor): add generated_at timestamp to created tasks",
-  "implementation_summary": "Updated glitchlab/auditor/task_writer.py only: imported datetime/timezone and added a generated_at field with the current UTC ISO timestamp to task_data in the create_task handler, immediately after source. Ruff check passed for the file. Full pytest run hit an existing unrelated failure in tests/agents/test_implementer_run_check_success_message.py caused by glitchlab/agents/implementer.py, which was out of scope and left untouched.",
+  "commit_message": "docs: add helper docstrings in controller utils",
+  "implementation_summary": "Added input/output/side-effect docstrings to the public helper functions run_git, calculate_quality_score, and attest_controller_action in glitchlab/controller_utils.py, and verified the file compiles.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,35 +30,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-30T21:39:39.715536+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:52:13.732948+00:00",
+      "task_id": "refactor-controller-utils-docs-101",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260330-213939"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-controller-utils-docs-101"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-30T21:39:39.727064+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:52:13.744463+00:00",
+      "task_id": "refactor-controller-utils-docs-101",
       "data": {
-        "total_files": 72,
+        "total_files": 75,
         "languages": {
-          ".py": 70
+          ".py": 73
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-30T21:39:39.826543+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:52:13.841040+00:00",
+      "task_id": "refactor-controller-utils-docs-101",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-30T21:40:12.928927+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:53:01.591781+00:00",
+      "task_id": "refactor-controller-utils-docs-101",
       "data": {
         "changes": 1,
         "tests": 0
@@ -66,11 +66,11 @@
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-30T21:40:22.600962+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:53:09.178295+00:00",
+      "task_id": "refactor-controller-utils-docs-101",
       "data": {
-        "file": "tests/auditor/test_task_writer_generated_at.py",
-        "description": "Ensures TaskWriter writes a generated_at UTC ISO timestamp into created task YAML files when handling the create_task tool."
+        "file": "tests/test_controller_utils_public_helpers.py",
+        "description": "Covers the public helper behavior in controller_utils by asserting run_git delegates to subprocess with captured text output, calculate_quality_score returns the expected scoring summary, and attest_controller_action suppresses failure/error summaries while emitting the expected success event payload."
       }
     }
   ]

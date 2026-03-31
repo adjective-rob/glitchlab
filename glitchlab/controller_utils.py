@@ -33,7 +33,20 @@ def is_git_repo(path: Path) -> bool:
 def run_git(
     args: list[str], cwd: Path, timeout: int = 20
 ) -> subprocess.CompletedProcess:
-    """Run a git command and capture output for logging."""
+    """Run a git subprocess and return its completed result.
+
+    Args:
+        args: Git subcommand and arguments to append after the ``git`` executable.
+        cwd: Working directory where the git command should be executed.
+        timeout: Maximum number of seconds to wait for the subprocess to finish.
+
+    Returns:
+        A ``subprocess.CompletedProcess`` containing the exit code plus captured
+        stdout and stderr as text.
+
+    Side Effects:
+        Spawns an external ``git`` process in ``cwd`` and waits for it to exit.
+    """
     return subprocess.run(
         ["git", *args],
         cwd=cwd,
@@ -74,7 +87,21 @@ def pre_task_git_fetch(repo_path: Path) -> None:
 def calculate_quality_score(
     budget_summary: dict, state: TaskState | None
 ) -> dict[str, Any]:
-    """Calculate a run quality score out of 100 based on efficiency and convergence."""
+    """Calculate a quality summary score for a controller run.
+
+    Args:
+        budget_summary: Usage summary dictionary, including an optional
+            ``total_tokens`` value used to penalize excessive model usage.
+        state: Current task state, or ``None`` if unavailable; when present, its
+            ``debug_attempts`` count is used to penalize retry loops.
+
+    Returns:
+        A dictionary with the final ``score`` and the derived ``tokens_used`` and
+        ``debug_attempts`` values.
+
+    Side Effects:
+        None; this helper only reads its inputs and computes a derived summary.
+    """
     score = 100
 
     # 1. Time & Efficiency (Penalize excessive token usage)
@@ -99,7 +126,21 @@ def calculate_quality_score(
 def attest_controller_action(
     action_summary: str, run_id: str
 ) -> None:
-    """Emit an SBOF attestation for direct controller file writes."""
+    """Emit an attestation event for successful direct controller actions.
+
+    Args:
+        action_summary: Human-readable summary of the controller action to record.
+            Summaries indicating failure or error are ignored.
+        run_id: Identifier for the active controller run, included with the emitted
+            event payload.
+
+    Returns:
+        ``None``.
+
+    Side Effects:
+        May publish an ``action.completed`` event to the global event bus with a new
+        generated action ID. Does nothing when ``action_summary`` indicates failure.
+    """
     if action_summary.startswith("FAIL") or "ERROR" in action_summary:
         return
 
