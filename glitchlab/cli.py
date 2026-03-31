@@ -49,6 +49,14 @@ console = Console()
 
 
 def version_callback(value: bool):
+    """Handle Typer's eager ``--version`` option callback.
+
+    Typer invokes this callback eagerly for the ``--version`` option before
+    normal command execution. The ``value`` argument indicates whether the flag
+    was provided. When ``value`` is truthy, this prints the current version and
+    exits immediately by raising ``typer.Exit()`` as a side effect, without
+    changing any CLI wiring or command logic.
+    """
     if value:
         console.print(f"{__codename__} v{__version__}")
         raise typer.Exit()
