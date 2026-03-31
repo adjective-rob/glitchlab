@@ -384,6 +384,10 @@ Plan: {steps_text}
         think_count = 0
         write_count = 0
         read_count = 0
+        # Scale read cap with plan scope — multi-file tasks need more reads
+        plan_files = context.extra.get("files_in_scope", [])
+        plan_step_count = len(context.previous_output.get("plan_steps", []))
+        read_cap = max(8, len(plan_files) * 2, plan_step_count * 3)
         search_count = 0
         check_after_write = False  # True once a write happens, reset when run_check passes
         total_tokens = 0
@@ -399,12 +403,12 @@ Plan: {steps_text}
 
             # Stall detection: soft nudge at 6, hard kill at 10
             # Also hard kill if 8+ reads without a single write
-            if write_count == 0 and think_count > 0 and (step >= 6 or read_count >= 8):
-                if step >= 10 or read_count >= 8:
+            if write_count == 0 and think_count > 0 and (step >= 6 or read_count >= read_cap):
+                if step >= 10 or read_count >= read_cap:
                     # Hard circuit breaker — agent is stuck in a read loop
                     logger.warning(
                         f"[PATCH] Write-deadline breaker tripped at step {step + 1}. "
-                        f"0 writes after {think_count} thinks, {read_count} reads, {search_count} searches."
+                        f"0 writes after {think_count} thinks, {read_count} reads (cap={read_cap}), {search_count} searches."
                     )
                     bus.emit(
                         event_type="agent.write_deadline_breaker",
