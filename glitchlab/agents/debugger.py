@@ -252,7 +252,17 @@ Investigate and fix. Call `done` when the tests pass."""
         search_count = 0
         total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
-        max_steps = 20 if fast_mode else 30
+        if fast_mode:
+            max_steps = 10
+        else:
+            # Scale steps based on the number of files in scope
+            files_in_scope = len(context.extra.get("files_in_scope", []))
+            if files_in_scope <= 1:
+                max_steps = 12
+            elif files_in_scope <= 3:
+                max_steps = 18
+            else:
+                max_steps = 25
 
         # Thrash detection: track run_check failures per test file
         test_failure_counts: dict[str, int] = {}
