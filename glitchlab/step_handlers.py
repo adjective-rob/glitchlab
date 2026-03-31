@@ -16,6 +16,7 @@ No controller edits required.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any
@@ -105,6 +106,27 @@ def handle_planner_result(
     ctx.state.files_in_scope = ps.plan.get("files_likely_affected", [])
     ctx.state.estimated_complexity = ps.plan.get("estimated_complexity", "medium")
     ctx.state.requires_core_change = ps.plan.get("requires_core_change", False)
+
+    # Validate code_hint quality — vague hints cause implementer exploration spirals
+    for step_data in ctx.state.plan_steps:
+        hint = step_data.code_hint or ""
+        if not hint:
+            continue
+
+        has_function_ref = bool(re.search(r'\b\w+\(', hint))
+        has_line_ref = bool(re.search(r'line\s*\d+', hint, re.IGNORECASE))
+        has_code = bool(re.search(r'\bdef \b|\bclass \b|\bimport \b|[=:]{1}', hint))
+
+        if not (has_function_ref or has_line_ref or has_code):
+            logger.warning(
+                f"[ZAP] Step {step_data.step_number}: code_hint is descriptive, "
+                f"not specific. Hint: '{hint[:80]}...'"
+            )
+            step_data.code_hint = (
+                f"VAGUE HINT — read the target function with get_function "
+                f"before editing. Original hint: {hint}"
+            )
+
     ctx.state.mark_phase("plan")
     ctx.state.persist(ctx.ws_path)
 
