@@ -180,6 +180,7 @@ Rules:
 6. Never suggest changes outside the task scope.
 7. Consider test strategy for every plan.
 8. DO NOT add steps to run tests, formatters, or CLI commands. You only plan file creations, modifications, and deletions.
+8a. Plans MUST have at most 4 steps. If you find yourself writing 5+ steps, you are over-decomposing. Combine steps that touch the same file into one step. If the task genuinely cannot be done in 4 steps, produce 4 steps covering the most critical changes and note in risk_notes: "Task may need to be split — more than 4 steps required."
 9. DO NOT add steps whose only purpose is reading or exploring files. The implementer has read_file, get_function, and search_grep tools for exploration. Every step MUST describe a concrete write action.
 10. Every step MUST have at least one valid file path in the 'files' array.
 11. Every modify or create step MUST include a code_hint showing the shape of the change (1-5 lines of pseudocode, a signature sketch, or a short code fragment). The implementer uses this as a starting point. If you skip code_hint, the implementer has to guess what you meant.
@@ -196,6 +197,7 @@ Rules:
         from pathlib import Path
 
         messages = self.build_messages(context)
+        self._plan_rejection_sent = False
         workspace_dir = Path(context.working_dir)
         symbol_index = context.extra.get("symbol_index")
 
@@ -312,6 +314,27 @@ Rules:
 
                 elif tc_name == "submit_plan":
                     plan_json = tc_args.get("plan_json", "")
+
+                    # Reject oversized plans — one chance to condense
+                    try:
+                        import json as _json
+                        plan_data = _json.loads(plan_json)
+                        plan_steps = plan_data.get("steps", [])
+                        if len(plan_steps) > 4 and not self._plan_rejection_sent:
+                            self._plan_rejection_sent = True
+                            res = (
+                                f"REJECTED: Plan has {len(plan_steps)} steps (max 4). "
+                                f"Combine steps that touch the same file into a single step. "
+                                f"If the task genuinely needs 5+ steps, keep only the 4 most "
+                                f"critical steps and note in risk_notes that the task may need splitting. "
+                                f"Re-submit with submit_plan."
+                            )
+                            logger.info(f"[ZAP] Rejected {len(plan_steps)}-step plan. Asking planner to condense.")
+                            messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                            continue
+                    except (ValueError, TypeError):
+                        pass  # Let parse_response handle malformed JSON
+
                     fake_response = RouterResponse(
                         content=plan_json,
                         model=response.model,
