@@ -1,21 +1,128 @@
 {
-  "task_id": "interactive-20260330-213939",
-  "objective": "In glitchlab/auditor/task_writer.py, in the create_task tool handler inside write_tasks(), add a generated_at field to task_data with the current UTC timestamp in ISO format. Import datetime at the top of the file if not already imported. The field should be added after the source field in task_data. Only touch glitchlab/auditor/task_writer.py. Verify: python -m ruff check glitchlab/auditor/task_writer.py && python -m pytest tests/ -x -q",
+  "task_id": "docs-tests-core-001",
+  "objective": "Add concise one-line docstrings to public test functions and fixtures in the core test modules flagged by the scanner, covering tests/test_agent_token_tracking.py, tests/test_registry.py, tests/test_pipeline_config.py, tests/test_workspace_typing.py, tests/test_smoke.py, tests/test_basic.py, tests/test_agent_result.py, tests/test_history.py, tests/test_cli_doctor.py, tests/test_module_docstrings.py, tests/test_identity.py, tests/test_cli_compare.py, tests/test_dependencies.py, tests/test_event_bus.py, and tests/test_surgical_mode_cli_and_controller.py.",
   "mode": "maintenance",
   "risk_level": "low",
-  "plan_steps": [],
-  "files_in_scope": [],
-  "estimated_complexity": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Add concise one-line docstrings to every public pytest test, fixture, and any public test helper methods flagged in the first batch of core test modules, inserting the docstring immediately below each existing function signature without changing assertions, names, decorators, or test flow.",
+      "files": [
+        "tests/test_agent_token_tracking.py",
+        "tests/test_registry.py",
+        "tests/test_pipeline_config.py",
+        "tests/test_workspace_typing.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/registry.py",
+        "glitchlab/config_loader.py",
+        "glitchlab/workspace/tools.py",
+        "tests/test_apply_changes.py"
+      ],
+      "code_hint": "def test_debugger_token_tracking(...):\n    \"\"\"Tracks debugger token usage for a routed task.\"\"\"\n\nclass TestLoadPipelineConfig:\n    def test_load_config_returns_pipeline_steps(self):\n        \"\"\"Loads pipeline config into ordered step models.\"\"\""
+    },
+    {
+      "step_number": 2,
+      "description": "Add short descriptive docstrings to the public tests in the smoke/basic and result/history-oriented core test modules, preserving existing behavior and collection exactly.",
+      "files": [
+        "tests/test_smoke.py",
+        "tests/test_basic.py",
+        "tests/test_agent_result.py",
+        "tests/test_history.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/history.py",
+        "glitchlab/task.py",
+        "tests/test_failure_recording.py",
+        "tests/test_agent_parsing.py"
+      ],
+      "code_hint": "def test_pytest_collects_tests():\n    \"\"\"Confirms pytest discovers the baseline smoke test.\"\"\"\n\ndef test_placeholder():\n    \"\"\"Keeps the basic test module collectible.\"\"\""
+    },
+    {
+      "step_number": 3,
+      "description": "Add one-line docstrings to public tests, fixtures, and any public setup helpers in the CLI and module-docstring-focused test modules; if a fixture helper exposes test-only methods like run() or model_dump(), document those stub methods in place without altering their return values or behavior.",
+      "files": [
+        "tests/test_cli_doctor.py",
+        "tests/test_module_docstrings.py",
+        "tests/test_identity.py",
+        "tests/test_cli_compare.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/cli.py",
+        "glitchlab/identity.py",
+        "glitchlab/doc_inserter.py",
+        "tests/test_cli_compare.py::assertions"
+      ],
+      "code_hint": "@pytest.fixture\ndef some_fixture(...):\n    \"\"\"Provides a stubbed CLI context for doctor tests.\"\"\"\n\nclass StubResult:\n    def run(self):\n        \"\"\"Simulates the test-only command execution path.\"\"\""
+    },
+    {
+      "step_number": 4,
+      "description": "Add concise docstrings to all scanner-flagged public tests, fixtures, and public helper methods in the dependency, event bus, and surgical-mode controller test modules, keeping imports, assertions, and monkeypatch setup unchanged.",
+      "files": [
+        "tests/test_dependencies.py",
+        "tests/test_event_bus.py",
+        "tests/test_surgical_mode_cli_and_controller.py"
+      ],
+      "action": "modify",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/event_bus.py",
+        "glitchlab/controller.py",
+        "glitchlab/controller_utils.py",
+        "tests/test_surgical_mode_cli_and_controller.py::monkeypatch setup"
+      ],
+      "code_hint": "def test_event_bus_...(...):\n    \"\"\"Verifies the event bus publishes the expected callback flow.\"\"\"\n\ndef test_surgical_mode_...(...):\n    \"\"\"Checks surgical mode wiring between CLI and controller.\"\"\""
+    }
+  ],
+  "files_in_scope": [
+    "tests/test_agent_token_tracking.py",
+    "tests/test_registry.py",
+    "tests/test_pipeline_config.py",
+    "tests/test_workspace_typing.py",
+    "tests/test_smoke.py",
+    "tests/test_basic.py",
+    "tests/test_agent_result.py",
+    "tests/test_history.py",
+    "tests/test_cli_doctor.py",
+    "tests/test_module_docstrings.py",
+    "tests/test_identity.py",
+    "tests/test_cli_compare.py",
+    "tests/test_dependencies.py",
+    "tests/test_event_bus.py",
+    "tests/test_surgical_mode_cli_and_controller.py",
+    "tests/test_agent_token_tracking.py",
+    "tests/test_registry.py",
+    "tests/test_pipeline_config.py",
+    "tests/test_workspace_typing.py",
+    "tests/test_smoke.py",
+    "tests/test_basic.py",
+    "tests/test_agent_result.py",
+    "tests/test_history.py",
+    "tests/test_cli_doctor.py",
+    "tests/test_module_docstrings.py",
+    "tests/test_identity.py",
+    "tests/test_cli_compare.py",
+    "tests/test_dependencies.py",
+    "tests/test_event_bus.py",
+    "tests/test_surgical_mode_cli_and_controller.py"
+  ],
+  "estimated_complexity": "small",
   "requires_core_change": false,
-  "files_modified": [
-    "glitchlab/auditor/task_writer.py"
-  ],
+  "files_modified": [],
   "files_created": [],
-  "tests_added": [
-    "tests/auditor/test_task_writer_generated_at.py"
-  ],
-  "commit_message": "feat(auditor): add generated_at timestamp to created tasks",
-  "implementation_summary": "Updated glitchlab/auditor/task_writer.py only: imported datetime/timezone and added a generated_at field with the current UTC ISO timestamp to task_data in the create_task handler, immediately after source. Ruff check passed for the file. Full pytest run hit an existing unrelated failure in tests/agents/test_implementer_run_check_success_message.py caused by glitchlab/agents/implementer.py, which was out of scope and left untouched.",
+  "tests_added": [],
+  "commit_message": "",
+  "implementation_summary": "",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -24,53 +131,53 @@
   "version_bump": "",
   "changelog_entry": "",
   "completed_phases": [
-    "implement",
+    "plan",
     "commit"
   ],
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-30T21:39:39.715536+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:23:07.666978+00:00",
+      "task_id": "docs-tests-core-001",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/interactive-20260330-213939"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/docs-tests-core-001"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-30T21:39:39.727064+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:23:07.677101+00:00",
+      "task_id": "docs-tests-core-001",
       "data": {
-        "total_files": 72,
+        "total_files": 75,
         "languages": {
-          ".py": 70
+          ".py": 73
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-30T21:39:39.826543+00:00",
-      "task_id": "interactive-20260330-213939",
+      "timestamp": "2026-03-31T03:23:07.780943+00:00",
+      "task_id": "docs-tests-core-001",
       "data": {
         "count": 3
       }
     },
     {
-      "type": "implementation_created",
-      "timestamp": "2026-03-30T21:40:12.928927+00:00",
-      "task_id": "interactive-20260330-213939",
+      "type": "plan_created",
+      "timestamp": "2026-03-31T03:23:53.001495+00:00",
+      "task_id": "docs-tests-core-001",
       "data": {
-        "changes": 1,
-        "tests": 0
+        "steps": 4,
+        "risk": "low"
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-30T21:40:22.600962+00:00",
-      "task_id": "interactive-20260330-213939",
+      "type": "implementation_created",
+      "timestamp": "2026-03-31T03:24:01.015635+00:00",
+      "task_id": "docs-tests-core-001",
       "data": {
-        "file": "tests/auditor/test_task_writer_generated_at.py",
-        "description": "Ensures TaskWriter writes a generated_at UTC ISO timestamp into created task YAML files when handling the create_task tool."
+        "changes": 0,
+        "tests": 0
       }
     }
   ]
