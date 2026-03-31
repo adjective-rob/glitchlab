@@ -1,6 +1,6 @@
 {
-  "task_id": "refactor-controller-utils-docs-101",
-  "objective": "Add docstrings to the public helper functions `run_git`, `calculate_quality_score`, and `attest_controller_action` in `glitchlab/controller_utils.py` to document their inputs, outputs, and side effects.",
+  "task_id": "refactor-cli-docs-101",
+  "objective": "Add docstrings to the public functions `version_callback`, `main`, and `run` in `glitchlab/cli.py` to document their CLI responsibilities.",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/controller_utils.py"
+    "glitchlab/cli.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/test_controller_utils_public_helpers.py"
+    "tests/test_cli_public_docstrings.py"
   ],
-  "commit_message": "docs: add helper docstrings in controller utils",
-  "implementation_summary": "Added input/output/side-effect docstrings to the public helper functions run_git, calculate_quality_score, and attest_controller_action in glitchlab/controller_utils.py, and verified the file compiles.",
+  "commit_message": "docs(cli): add docstrings to public CLI entrypoints",
+  "implementation_summary": "Added concise docstrings to glitchlab/cli.py public functions version_callback, run, and main to document their CLI responsibilities, then verified the file compiles with py_compile.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,16 +30,16 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-31T03:52:13.732948+00:00",
-      "task_id": "refactor-controller-utils-docs-101",
+      "timestamp": "2026-03-31T03:51:32.632465+00:00",
+      "task_id": "refactor-cli-docs-101",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-controller-utils-docs-101"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-cli-docs-101"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-31T03:52:13.744463+00:00",
-      "task_id": "refactor-controller-utils-docs-101",
+      "timestamp": "2026-03-31T03:51:32.647457+00:00",
+      "task_id": "refactor-cli-docs-101",
       "data": {
         "total_files": 75,
         "languages": {
@@ -49,16 +49,16 @@
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-31T03:52:13.841040+00:00",
-      "task_id": "refactor-controller-utils-docs-101",
+      "timestamp": "2026-03-31T03:51:32.786355+00:00",
+      "task_id": "refactor-cli-docs-101",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-31T03:53:01.591781+00:00",
-      "task_id": "refactor-controller-utils-docs-101",
+      "timestamp": "2026-03-31T03:52:06.443608+00:00",
+      "task_id": "refactor-cli-docs-101",
       "data": {
         "changes": 1,
         "tests": 0
@@ -66,11 +66,11 @@
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-31T03:53:09.178295+00:00",
-      "task_id": "refactor-controller-utils-docs-101",
+      "timestamp": "2026-03-31T03:52:09.034816+00:00",
+      "task_id": "refactor-cli-docs-101",
       "data": {
-        "file": "tests/test_controller_utils_public_helpers.py",
-        "description": "Covers the public helper behavior in controller_utils by asserting run_git delegates to subprocess with captured text output, calculate_quality_score returns the expected scoring summary, and attest_controller_action suppresses failure/error summaries while emitting the expected success event payload."
+        "file": "tests/test_cli_public_docstrings.py",
+        "description": "Verifies the public CLI functions version_callback, main, and run expose the expected docstrings so their documented responsibilities do not regress."
       }
     }
   ]
