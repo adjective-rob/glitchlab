@@ -4,6 +4,15 @@ from types import SimpleNamespace
 from glitchlab.agents.implementer import ImplementerAgent
 
 
+class _ToolCall(dict):
+    """Dict-like tool call mock that also supports attribute access (like litellm objects)."""
+
+    def __init__(self, id, name, arguments):
+        super().__init__(id=id, function={"name": name, "arguments": arguments})
+        self.id = id
+        self.function = SimpleNamespace(name=name, arguments=arguments)
+
+
 class DummyRouter:
     def __init__(self):
         self.calls = 0
@@ -11,12 +20,9 @@ class DummyRouter:
     def complete(self, role, messages, tools, **kwargs):
         self.calls += 1
         if self.calls == 1:
-            tool_call = SimpleNamespace(
-                id="tc-think",
-                function=SimpleNamespace(
-                    name="think",
-                    arguments='{"search_strategy":"inspect target","execution_plan":"run verification"}',
-                ),
+            tool_call = _ToolCall(
+                "tc-think", "think",
+                '{"search_strategy":"inspect target","execution_plan":"run verification"}',
             )
             return SimpleNamespace(
                 content=None,
@@ -26,12 +32,22 @@ class DummyRouter:
                 cost=0,
             )
 
-        tool_call = SimpleNamespace(
-            id="tc-check",
-            function=SimpleNamespace(
-                name="run_check",
-                arguments='{"command":"python -V"}',
-            ),
+        if self.calls == 2:
+            tool_call = _ToolCall(
+                "tc-check", "run_check",
+                '{"command":"python -V"}',
+            )
+            return SimpleNamespace(
+                content=None,
+                tool_calls=[tool_call],
+                tokens_used=1,
+                model="test-model",
+                cost=0,
+            )
+
+        tool_call = _ToolCall(
+            "tc-done", "done",
+            '{"summary":"done after check"}',
         )
         return SimpleNamespace(
             content=None,
@@ -66,7 +82,6 @@ def test_run_check_success_appends_done_prompt(tmp_path: Path):
 
     result = agent.run(context)
 
-    assert result["parse_error"] is True
     run_check_messages = [
         m for m in result["_messages"] if m.get("role") == "tool" and m.get("name") == "run_check"
     ]
