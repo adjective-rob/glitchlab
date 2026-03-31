@@ -8,6 +8,7 @@ and functions for applying implementation changes to the workspace.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -38,6 +39,7 @@ class Task(BaseModel):
     source: str = Field(default="local")
     mode: Literal["maintenance", "evolution"] | None = Field(default=None)
     file_path: Path | None = Field(default=None, exclude=True)
+    surgical: bool = Field(default=False, exclude=True)
 
     @model_validator(mode='after')
     def determine_mode(self) -> "Task":
@@ -49,6 +51,39 @@ class Task(BaseModel):
                 self.mode = "maintenance"
             else:
                 self.mode = "evolution"
+        return self
+
+    @model_validator(mode='after')
+    def determine_surgical(self) -> "Task":
+        """Auto-detect if this task is simple enough for surgical mode."""
+        if self.surgical:
+            return self  # explicitly set, don't override
+
+        # Surgical candidates: low risk + simple single-action objectives
+        if self.risk_level != "low":
+            return self
+
+        objective_lower = self.objective.lower()
+
+        # Single-file indicators
+        file_refs = re.findall(r'[\w/]+\.\w{1,4}', self.objective)
+        unique_files = set(file_refs)
+
+        # Surgical if: low risk AND (maintenance mode OR trivial keyword match) AND <= 1 file referenced
+        trivial_keywords = [
+            "docstring", "add docstring", "type hint", "add type hint",
+            "lint", "format", "typo", "spelling", "comment",
+            "rename", "import", "remove unused", "delete unused",
+            "fix lint", "fix format", "fix typo",
+        ]
+
+        is_trivial = any(kw in objective_lower for kw in trivial_keywords)
+        is_single_file = len(unique_files) <= 1
+        is_maintenance = self.mode == "maintenance"
+
+        if (is_trivial or is_maintenance) and is_single_file:
+            self.surgical = True
+
         return self
 
     @classmethod
