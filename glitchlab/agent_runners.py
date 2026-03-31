@@ -340,7 +340,22 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
     Run test → debug → fix loop (v3.0).
     Debugger is now agentic and manages its own tool-loop to investigate and fix.
     """
-    max_attempts = ctx.config.limits.max_fix_attempts
+    # Scale debug attempts to task complexity
+    base_attempts = ctx.config.limits.max_fix_attempts
+    files_in_scope = len(ctx.state.files_in_scope) if ctx.state.files_in_scope else 1
+    complexity = ctx.state.estimated_complexity or "small"
+
+    if complexity in ("trivial", "small") and files_in_scope <= 2:
+        max_attempts = min(base_attempts, 2)
+    elif complexity == "medium" or files_in_scope <= 5:
+        max_attempts = min(base_attempts, 3)
+    else:
+        max_attempts = base_attempts
+
+    logger.debug(
+        f"[REROUTE] Debug budget: {max_attempts} attempts "
+        f"(complexity={complexity}, files={files_in_scope})"
+    )
 
     # Capture baseline: which tests were already failing before our changes?
     # Run the test suite once and parse which test files failed.
@@ -386,6 +401,7 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
                 "error_output": (error_output or "")[-3000:],
                 "test_command": ctx.test_command,
                 "baseline_failures": list(baseline_failures),
+                "files_in_scope": ctx.state.files_in_scope or [],
                 "tool_executor": ctx.tools,
                 "prelude": ctx.prelude,
                 "repo_index": ctx.repo_index,
