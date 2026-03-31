@@ -323,6 +323,7 @@ You now operate in an agentic loop. You have tools to think, read, write, check,
 17. When the plan includes a code_hint referencing a specific function, your FIRST tool call after think should be get_function for that exact function. Do NOT read_file the entire file.
 18. After a successful run_check that shows tests passing, call done immediately. Do not read more files. The task is complete.
 19. For modifying existing functions, prefer `patch_function` over `replace_in_file`. It uses AST boundaries so you don't need exact string matching — just provide the function name and complete new source. Use `replace_in_file` only for changes outside function bodies (imports, constants, class-level attributes).
+20. EXCEPTION to rule 19: For docstring-only or comment-only changes, NEVER use `patch_function`. Use `replace_in_file` to insert the docstring immediately after the function signature line. `patch_function` requires rewriting the entire function body, which risks hallucinating a replacement. A docstring insertion is a 1-line `replace_in_file` operation. Example: replace `def run(self, task):` with `def run(self, task):\\n    \\"\\"\\"Execute the full pipeline for a task.\\"\\"\\"'`
 """
 
     def build_messages(self, context: AgentContext) -> list[dict[str, str]]:
@@ -709,6 +710,28 @@ Plan: {steps_text}
                 elif tc_name == "patch_function":
                     if think_count == 0:
                         res = "Access Denied: You must use the `think` tool to explain your modifications before calling `patch_function`."
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
+                    # Guard: reject patch_function for docstring-only tasks
+                    objective_lower = context.objective.lower()
+                    is_docstring_task = any(
+                        phrase in objective_lower
+                        for phrase in [
+                            "add docstring", "add a docstring", "docstrings",
+                            "add comment", "add type hint", "add typing",
+                            "missing_doc", "missing doc",
+                        ]
+                    )
+                    if is_docstring_task:
+                        res = (
+                            "REJECTED: Do not use patch_function for docstring-only tasks. "
+                            "It requires rewriting the entire function body, which risks "
+                            "hallucinating a replacement. Instead, use replace_in_file to "
+                            "insert the docstring after the function signature. "
+                            "Example: find 'def my_func(args):' and replace with "
+                            "'def my_func(args):\\n    \"\"\"Description of what this function does.\"\"\"'"
+                        )
                         messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
                         continue
 
