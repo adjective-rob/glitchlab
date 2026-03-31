@@ -385,6 +385,7 @@ Plan: {steps_text}
         write_count = 0
         read_count = 0
         search_count = 0
+        check_after_write = False  # True once a write happens, reset when run_check passes
         total_tokens = 0
         fast_mode = context.extra.get("fast_mode", False)
         max_steps = 30 if fast_mode else 60
@@ -755,6 +756,7 @@ Plan: {steps_text}
                                 fpath.write_text(patched_content, encoding='utf-8')
                                 modified_files.add(file_path)
                                 write_count += 1
+                                check_after_write = True
 
                                 if symbol_index:
                                     symbol_index.invalidate(file_path)
@@ -809,10 +811,11 @@ Plan: {steps_text}
                         else:
                             modified_files.add(path)
                         write_count += 1
+                        check_after_write = True
 
                         if symbol_index:
                             symbol_index.invalidate(path)
-                            
+
                         res = f"Successfully wrote {len(content)} characters to {path}."
                     except Exception as e:
                         res = f"Error writing file: {e}"
@@ -842,10 +845,11 @@ Plan: {steps_text}
                                 fpath.write_text(new_content, encoding='utf-8')
                                 modified_files.add(path)
                                 write_count += 1
+                                check_after_write = True
 
                                 if symbol_index:
                                     symbol_index.invalidate(path)
-                                    
+
                                 res = f"Success: Replaced {count} occurrence(s) in {path}."
                     except Exception as e:
                         res = f"Error replacing in file: {e}"
@@ -891,6 +895,7 @@ Plan: {steps_text}
                             if tool_res.returncode != 0:
                                 res += "\n\nTip: use `rollback_file` if you need to undo a broken change."
                             else:
+                                check_after_write = False
                                 res += " Verification passed. If your changes are complete, call done now."
                         except Exception as e:
                             res = f"Execution blocked or failed: {e}"
@@ -899,6 +904,16 @@ Plan: {steps_text}
                     messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
 
                 elif tc_name == "done":
+                    if check_after_write:
+                        res = (
+                            "You have made changes but have not run any verification. "
+                            "Use run_check to verify your changes before calling done. "
+                            "Example: run_check with command 'python -m pytest tests/ -x -q' "
+                            "or 'python -m ruff check <file>'."
+                        )
+                        messages.append({"role": "tool", "tool_call_id": tc_id, "name": tc_name, "content": res})
+                        continue
+
                     # Exit the loop!
                     bus.emit(
                         event_type="agent.done",
