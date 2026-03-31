@@ -64,6 +64,7 @@ def main(
         help="Show the version and exit.",
     ),
 ):
+    """Typer app callback for global CLI options such as ``--version``."""
     pass
 
 
