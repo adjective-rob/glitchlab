@@ -18,7 +18,12 @@ from glitchlab.task_state import TaskState
 
 
 def is_git_repo(path: Path) -> bool:
-    """Return True if `path` looks like a git working tree."""
+    """Return True if `path` looks like a git working tree.
+
+    This treats both a standard repository, where ``.git`` is a directory,
+    and a linked worktree checkout, where ``.git`` is a file pointing at the
+    real gitdir, as valid git working trees.
+    """
     try:
         if (path / ".git").exists():
             return True

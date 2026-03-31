@@ -1,6 +1,6 @@
 {
-  "task_id": "refactor-cli-docs-101",
-  "objective": "Add docstrings to the public functions `version_callback`, `main`, and `run` in `glitchlab/cli.py` to document their CLI responsibilities.",
+  "task_id": "doc-controller-utils-001",
+  "objective": "Add a docstring to `glitchlab/controller_utils.py::is_git_repo` documenting the git working tree and worktree detection logic.",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/cli.py"
+    "glitchlab/controller_utils.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/test_cli_public_docstrings.py"
+    "tests/test_controller_utils_is_git_repo.py"
   ],
-  "commit_message": "docs(cli): add docstrings to public CLI entrypoints",
-  "implementation_summary": "Added concise docstrings to glitchlab/cli.py public functions version_callback, run, and main to document their CLI responsibilities, then verified the file compiles with py_compile.",
+  "commit_message": "docs: expand is_git_repo docstring",
+  "implementation_summary": "Added a clearer docstring to glitchlab/controller_utils.py::is_git_repo describing detection of both standard git working trees and linked worktrees, and verified the file still compiles.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,35 +30,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-31T03:51:32.632465+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:23:40.288633+00:00",
+      "task_id": "doc-controller-utils-001",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-cli-docs-101"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/doc-controller-utils-001"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-31T03:51:32.647457+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:23:40.299014+00:00",
+      "task_id": "doc-controller-utils-001",
       "data": {
-        "total_files": 75,
+        "total_files": 77,
         "languages": {
-          ".py": 73
+          ".py": 75
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-31T03:51:32.786355+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:23:40.398332+00:00",
+      "task_id": "doc-controller-utils-001",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-31T03:52:06.443608+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:23:50.570247+00:00",
+      "task_id": "doc-controller-utils-001",
       "data": {
         "changes": 1,
         "tests": 0
@@ -66,11 +66,11 @@
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-31T03:52:09.034816+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:23:54.217206+00:00",
+      "task_id": "doc-controller-utils-001",
       "data": {
-        "file": "tests/test_cli_public_docstrings.py",
-        "description": "Verifies the public CLI functions version_callback, main, and run expose the expected docstrings so their documented responsibilities do not regress."
+        "file": "tests/test_controller_utils_is_git_repo.py",
+        "description": "Verifies the public behavior of is_git_repo for both supported git working tree layouts: a standard repository with a .git directory and a linked worktree checkout with a .git file, while still returning False for a non-repository directory."
       }
     }
   ]
