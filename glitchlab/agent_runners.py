@@ -335,6 +335,28 @@ def _get_failing_tests(ctx: RunContext) -> set[str]:
         return set()
 
 
+def _build_debug_summary(ctx: RunContext, attempt: int) -> dict:
+    """
+    Build a focused summary for the debugger.
+
+    Only includes the most recent failed fix attempt, not the full history.
+    This prevents context pollution from accumulating dead-end approaches.
+    """
+    summary = ctx.state.to_agent_summary("debugger")
+
+    # Cap previous_fixes to only the last attempt
+    previous_fixes = summary.get("previous_fixes", [])
+    if len(previous_fixes) > 1:
+        summary["previous_fixes"] = previous_fixes[-1:]
+        summary["note"] = (
+            f"This is debug attempt {attempt}. "
+            f"{len(previous_fixes) - 1} earlier fix attempt(s) have been summarized away. "
+            f"Only the most recent failed approach is shown. Try a DIFFERENT strategy."
+        )
+
+    return summary
+
+
 def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
     """
     Run test → debug → fix loop (v3.0).
@@ -396,7 +418,7 @@ def run_fix_loop(ctx: RunContext, task: Task, impl: dict) -> bool:
             objective=task.objective,
             repo_path=str(ctx.repo_path),
             working_dir=str(ctx.ws_path),
-            previous_output=ctx.state.to_agent_summary("debugger"),
+            previous_output=_build_debug_summary(ctx, attempt),
             extra={
                 "error_output": (error_output or "")[-3000:],
                 "test_command": ctx.test_command,
