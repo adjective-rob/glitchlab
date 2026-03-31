@@ -10,11 +10,11 @@ def test_event_bus_pub_sub():
 
     # Subscribe to the bus
     test_bus.subscribe(dummy_subscriber)
-    
+
     # Emit an event
     test_bus.emit(
-        event_type="TEST_EVENT", 
-        agent_id="test_agent", 
+        event_type="TEST_EVENT",
+        agent_id="test_agent",
         payload={"key": "value"},
         run_id="run-001",
         action_id="action-001",
@@ -23,7 +23,7 @@ def test_event_bus_pub_sub():
 
     # Verify the event was received and formatted correctly
     assert len(received_events) == 1
-    
+
     event = received_events[0]
     assert event.event_type == "TEST_EVENT"
     assert event.agent_id == "test_agent"
@@ -31,8 +31,23 @@ def test_event_bus_pub_sub():
     assert event.run_id == "run-001"
     assert event.action_id == "action-001"
     assert event.metadata == {"source": "test"}
-    
+
     # Verify auto-generated fields
     assert event.event_id is not None
     assert isinstance(event.event_id, str)
     assert event.timestamp is not None
+
+
+def test_event_bus_delivers_event_to_subscribed_callback():
+    bus = EventBus()
+    received: list[GlitchEvent] = []
+
+    def subscriber(event: GlitchEvent):
+        received.append(event)
+
+    bus.subscribe(subscriber)
+    bus.emit(event_type="test.topic", payload={"value": 1})
+
+    assert len(received) == 1
+    assert received[0].event_type == "test.topic"
+    assert received[0].payload == {"value": 1}
