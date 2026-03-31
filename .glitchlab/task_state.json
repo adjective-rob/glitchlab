@@ -1,21 +1,37 @@
 {
-  "task_id": "refactor-cli-docs-101",
-  "objective": "Add docstrings to the public functions `version_callback`, `main`, and `run` in `glitchlab/cli.py` to document their CLI responsibilities.",
-  "mode": "maintenance",
-  "risk_level": "low",
-  "plan_steps": [],
-  "files_in_scope": [],
-  "estimated_complexity": "medium",
+  "task_id": "test-cli-smoke-001",
+  "objective": "Add a CLI smoke test that exercises the public `glitchlab` entrypoint enough to confirm the `run` command parser is wired correctly.",
+  "mode": "evolution",
+  "risk_level": "medium",
+  "plan_steps": [
+    {
+      "step_number": 1,
+      "description": "Create a focused CLI smoke test module that invokes the public `glitchlab` entrypoint with a representative `run` command argument list and asserts the parser accepts the invocation far enough to avoid argparse/Click usage errors while avoiding live network access and repository mutation by patching the command handler boundary.",
+      "files": [
+        "tests/test_cli_smoke.py"
+      ],
+      "action": "create",
+      "status": "pending",
+      "outcome": "",
+      "do_not_touch": [
+        "glitchlab/cli.py",
+        "tests/test_cli_doctor.py",
+        "tests/test_cli_compare.py"
+      ],
+      "code_hint": "def test_glitchlab_entrypoint_accepts_run_invocation(...):\n    monkeypatch handler used after parse to avoid real execution\n    result = runner.invoke(app_or_main, [\"run\", \"demo-task\", \"--repo\", str(tmp_path)])\n    assert result.exit_code == 0 or result.exit_code != 2\n    assert \"Usage:\" not in result.output"
+    }
+  ],
+  "files_in_scope": [
+    "tests/test_cli_smoke.py",
+    "tests/test_cli_smoke.py"
+  ],
+  "estimated_complexity": "small",
   "requires_core_change": false,
-  "files_modified": [
-    "glitchlab/cli.py"
-  ],
+  "files_modified": [],
   "files_created": [],
-  "tests_added": [
-    "tests/test_cli_public_docstrings.py"
-  ],
-  "commit_message": "docs(cli): add docstrings to public CLI entrypoints",
-  "implementation_summary": "Added concise docstrings to glitchlab/cli.py public functions version_callback, run, and main to document their CLI responsibilities, then verified the file compiles with py_compile.",
+  "tests_added": [],
+  "commit_message": "",
+  "implementation_summary": "",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -24,53 +40,53 @@
   "version_bump": "",
   "changelog_entry": "",
   "completed_phases": [
-    "implement",
+    "plan",
     "commit"
   ],
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-31T03:51:32.632465+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:20:15.795721+00:00",
+      "task_id": "test-cli-smoke-001",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-cli-docs-101"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/test-cli-smoke-001"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-31T03:51:32.647457+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:20:15.804457+00:00",
+      "task_id": "test-cli-smoke-001",
       "data": {
-        "total_files": 75,
+        "total_files": 77,
         "languages": {
-          ".py": 73
+          ".py": 75
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-31T03:51:32.786355+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:20:15.900307+00:00",
+      "task_id": "test-cli-smoke-001",
       "data": {
         "count": 3
       }
     },
     {
-      "type": "implementation_created",
-      "timestamp": "2026-03-31T03:52:06.443608+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "type": "plan_created",
+      "timestamp": "2026-03-31T04:20:32.745103+00:00",
+      "task_id": "test-cli-smoke-001",
       "data": {
-        "changes": 1,
-        "tests": 0
+        "steps": 1,
+        "risk": "medium"
       }
     },
     {
-      "type": "testgen_created",
-      "timestamp": "2026-03-31T03:52:09.034816+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "type": "implementation_created",
+      "timestamp": "2026-03-31T04:21:40.146459+00:00",
+      "task_id": "test-cli-smoke-001",
       "data": {
-        "file": "tests/test_cli_public_docstrings.py",
-        "description": "Verifies the public CLI functions version_callback, main, and run expose the expected docstrings so their documented responsibilities do not regress."
+        "changes": 0,
+        "tests": 0
       }
     }
   ]

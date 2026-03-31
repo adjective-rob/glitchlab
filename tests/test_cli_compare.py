@@ -1,8 +1,27 @@
 from unittest.mock import patch, MagicMock
+import tempfile
+from pathlib import Path
 from typer.testing import CliRunner
 from glitchlab.cli import app
 
 runner = CliRunner()
+
+
+def test_glitchlab_entrypoint_accepts_run_invocation(tmp_path, monkeypatch):
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+    (repo_dir / ".git").mkdir()
+
+    with tempfile.TemporaryDirectory() as home_dir:
+        monkeypatch.setenv("HOME", home_dir)
+        monkeypatch.setenv("GLITCHLAB_OFFLINE", "1")
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
+        result = runner.invoke(app, ["run", "demo-task", "--repo", str(repo_dir)])
+
+    assert result.exit_code != 2
+    assert "Usage:" not in result.output
 
 FAKE_ENTRIES = [
     {
