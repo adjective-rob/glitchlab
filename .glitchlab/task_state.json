@@ -1,6 +1,6 @@
 {
-  "task_id": "refactor-cli-docs-101",
-  "objective": "Add docstrings to the public functions `version_callback`, `main`, and `run` in `glitchlab/cli.py` to document their CLI responsibilities.",
+  "task_id": "doc-controller-utils-003",
+  "objective": "Add a docstring to `glitchlab/controller_utils.py::calculate_quality_score` describing the returned score structure and inputs.",
   "mode": "maintenance",
   "risk_level": "low",
   "plan_steps": [],
@@ -8,14 +8,14 @@
   "estimated_complexity": "medium",
   "requires_core_change": false,
   "files_modified": [
-    "glitchlab/cli.py"
+    "glitchlab/controller_utils.py"
   ],
   "files_created": [],
   "tests_added": [
-    "tests/test_cli_public_docstrings.py"
+    "tests/test_controller_utils_calculate_quality_score.py"
   ],
-  "commit_message": "docs(cli): add docstrings to public CLI entrypoints",
-  "implementation_summary": "Added concise docstrings to glitchlab/cli.py public functions version_callback, run, and main to document their CLI responsibilities, then verified the file compiles with py_compile.",
+  "commit_message": "docs: clarify calculate_quality_score return structure",
+  "implementation_summary": "Added a docstring update to glitchlab/controller_utils.py::calculate_quality_score describing its inputs and the returned score dictionary fields: score, tokens_used, and debug_attempts. Verified the file compiles with python -m py_compile glitchlab/controller_utils.py.",
   "test_passing": false,
   "debug_attempts": 0,
   "last_error": "",
@@ -30,35 +30,35 @@
   "events": [
     {
       "type": "workspace_created",
-      "timestamp": "2026-03-31T03:51:32.632465+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:24:24.788342+00:00",
+      "task_id": "doc-controller-utils-003",
       "data": {
-        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/refactor-cli-docs-101"
+        "path": "/home/adjective-dev/Desktop/glitchlab-soapbox/.glitchlab/worktrees/doc-controller-utils-003"
       }
     },
     {
       "type": "repo_indexed",
-      "timestamp": "2026-03-31T03:51:32.647457+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:24:24.800508+00:00",
+      "task_id": "doc-controller-utils-003",
       "data": {
-        "total_files": 75,
+        "total_files": 77,
         "languages": {
-          ".py": 73
+          ".py": 75
         }
       }
     },
     {
       "type": "prelude_constraints_loaded",
-      "timestamp": "2026-03-31T03:51:32.786355+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:24:24.901493+00:00",
+      "task_id": "doc-controller-utils-003",
       "data": {
         "count": 3
       }
     },
     {
       "type": "implementation_created",
-      "timestamp": "2026-03-31T03:52:06.443608+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:24:43.638823+00:00",
+      "task_id": "doc-controller-utils-003",
       "data": {
         "changes": 1,
         "tests": 0
@@ -66,11 +66,11 @@
     },
     {
       "type": "testgen_created",
-      "timestamp": "2026-03-31T03:52:09.034816+00:00",
-      "task_id": "refactor-cli-docs-101",
+      "timestamp": "2026-03-31T04:24:46.583637+00:00",
+      "task_id": "doc-controller-utils-003",
       "data": {
-        "file": "tests/test_cli_public_docstrings.py",
-        "description": "Verifies the public CLI functions version_callback, main, and run expose the expected docstrings so their documented responsibilities do not regress."
+        "file": "tests/test_controller_utils_calculate_quality_score.py",
+        "description": "Verifies the public return structure of calculate_quality_score includes the documented score, tokens_used, and debug_attempts fields and that their values are computed correctly from the inputs."
       }
     }
   ]

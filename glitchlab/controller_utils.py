@@ -96,8 +96,10 @@ def calculate_quality_score(
             ``debug_attempts`` count is used to penalize retry loops.
 
     Returns:
-        A dictionary with the final ``score`` and the derived ``tokens_used`` and
-        ``debug_attempts`` values.
+        A dictionary containing three fields: ``score`` for the final capped
+        quality score, ``tokens_used`` for the ``budget_summary`` token total
+        used in scoring, and ``debug_attempts`` for the retry count read from
+        ``state``.
 
     Side Effects:
         None; this helper only reads its inputs and computes a derived summary.
