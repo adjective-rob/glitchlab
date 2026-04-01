@@ -46,7 +46,7 @@ def print_banner(task: Task) -> None:
         f"[bold green]Task:[/] {task.objective[:120]}\n"
         f"[bold]ID:[/] {task.task_id}  |  [bold]Source:[/] {task.source}\n"
         f"[bold]Risk:[/] {task.risk_level}  |  [bold]Mode:[/] {task.mode.upper()}",
-        title="⚡ GLITCHLAB v4.4.0",
+        title="⚡ GLITCHLAB v4.5.0",
         subtitle="Build Weird. Ship Clean.",
         border_style="bright_green",
     ))
