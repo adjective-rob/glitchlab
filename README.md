@@ -126,31 +126,24 @@ The **Controller** is the brainstem. It never writes code directly; it only coor
 
 ---
 
-## **What's New in v4.3.0**
+## **What's New in v4.5.0**
 
-### **Routine Version Bump**
+### **Version Synchronization Update**
 
-GLITCHLAB v4.3.0 is a minor version bump with no breaking changes. All version strings have been synchronized across the codebase.
+GLITCHLAB v4.5.0 is a maintenance release focused on keeping the published version consistent everywhere it is surfaced.
 
-### **Previous Release: Zephyr SBOF Integration (v4.2.0)**
+### **What Landed**
 
-GLITCHLAB v4.2.0 introduced **Zephyr SBOF (Signed Bill of Facts)** — cryptographic signing and attestation for every agent action. Every tool call, plan step, and code mutation is now signed with a tamper-evident signature before it is committed to the event log. This gives you:
+This release synchronizes the version value across the project so package metadata, public exports, and identity checks all report the same release:
 
-* **Cryptographic attestation** — each agent action carries a verifiable signature tied to the agent identity and the exact payload it produced.
-* **Tamper detection** — any post-hoc modification to an action record is immediately detectable by signature verification.
-* **Audit-ready provenance** — the full chain of signed facts can be exported and verified by external tooling, satisfying supply-chain security requirements.
+* Updated package metadata in `pyproject.toml`
+* Updated the public version exports in `glitchlab/__init__.py`
+* Updated the public version export in `glitchlab/identity.py`
+* Updated the version assertion in `tests/test_identity.py`
 
-### **EventBus Architecture Upgrade**
+### **Why It Matters**
 
-The internal EventBus has been upgraded with three new first-class fields on every event:
-
-| Field | Type | Purpose |
-| ----- | ----- | ----- |
-| `run_id` | `UUID` | Uniquely identifies a single end-to-end agent loop execution |
-| `action_id` | `UUID` | Uniquely identifies each discrete action within a run |
-| `metadata` | `dict` | Arbitrary structured context (model, token counts, timestamps, etc.) |
-
-Together these fields enable **perfect deterministic traceability** of agent loops: given any event in the log you can reconstruct the exact sequence of actions that produced it, replay the loop with identical inputs, and diff two runs at the action level. The Controller, all agents, and the workspace tooling emit these fields automatically — no configuration required.
+Keeping these version declarations aligned reduces version drift and makes release reporting more reliable for tooling, imports, and tests.
 
 ---
 
