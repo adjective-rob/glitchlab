@@ -18,18 +18,18 @@ from pydantic import BaseModel, Field
 # ---------------------------------------------------------------------------
 
 class RoutingConfig(BaseModel):
-    planner: str = "openai/gpt-5.5-nano"
-    implementer: str = "openai/gpt-5.5-nano"
-    debugger: str = "openai/gpt-5.5-nano"
-    security: str = "openai/gpt-5.5-nano"
-    release: str = "openai/gpt-5.5-nano"
-    archivist: str = "openai/gpt-5.5-nano"
-    testgen: str = "openai/gpt-5.5-nano"
-    auditor: str = "openai/gpt-5.5-nano"
+    planner: str = "openai/gpt-5.4-mini"
+    implementer: str = "openai/gpt-5.4-mini"
+    debugger: str = "openai/gpt-5.4-mini"
+    security: str = "openai/gpt-5.4-mini"
+    release: str = "openai/gpt-5.4-mini"
+    archivist: str = "openai/gpt-5.4-mini"
+    testgen: str = "openai/gpt-5.4-mini"
+    auditor: str = "openai/gpt-5.4-mini"
 
 class FallbacksConfig(BaseModel):
-    high_tier: str = "openai/gpt-5.5-nano"
-    low_tier: str = "openai/gpt-5.5-nano"
+    high_tier: str = "openai/gpt-5.4-mini"
+    low_tier: str = "openai/gpt-5.4-mini"
 
 class LimitsConfig(BaseModel):
     max_fix_attempts: int = 3
