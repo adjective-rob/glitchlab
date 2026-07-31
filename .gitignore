@@ -256,3 +256,6 @@ tasks_for_claude_code/.glitchlab/task_state.json
 .context/.prelude/
 .honeymoon/
 .zephyrci/
+
+# Local demo scratch notes
+DEMO.md
