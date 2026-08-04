@@ -27,6 +27,18 @@ from honeymoon.signing import HiveSigner
 console = Console()
 
 
+def _esc(text: Any) -> str:
+    """Escape text for safe interpolation into HTML.
+
+    LLM- and user-derived fields (finding titles, analysis, summaries,
+    recommendations) routinely contain angle brackets — code snippets,
+    generics like ``List<String>``, URL templates like ``/api/report/<id>``.
+    Interpolated raw, a stray ``<`` opens a tag the browser never closes and
+    swallows the rest of the document, rendering the report blank.
+    """
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def _load_provenance(repo_path: Path, run_id: str) -> list[dict[str, Any]]:
     """Load signed audit events for a specific run from audit.jsonl."""
     audit_file = repo_path / ".honeymoon" / "logs" / "audit.jsonl"
@@ -480,20 +492,19 @@ def _write_html_report(
 
         evidence_html = ""
         if f.get("evidence"):
-            ev = f["evidence"].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            evidence_html = f'<div class="evidence">{ev}</div>'
+            evidence_html = f'<div class="evidence">{_esc(f["evidence"])}</div>'
 
         analysis_html = ""
         if f.get("analysis"):
             analysis_html = (
                 f'<div class="analysis-label">Analysis</div>\n'
-                f'<div class="analysis">{f["analysis"]}</div>'
+                f'<div class="analysis">{_esc(f["analysis"])}</div>'
             )
 
         findings_html += f'''<div class="finding sev-{sev}">
   <div class="finding-header">
     <span class="finding-number">{i}</span>
-    <span class="finding-title">{f.get("title", f"Finding {i}")}</span>
+    <span class="finding-title">{_esc(f.get("title", f"Finding {i}"))}</span>
     <div class="finding-badges">
       <span class="badge badge-severity {sev_class}">{sev_icon} {sev.upper()}</span>
       <span class="badge badge-confidence">{conf}</span>
@@ -516,7 +527,7 @@ def _write_html_report(
     )
     recs_html = ""
     for rec in findings.get("recommendations", []):
-        recs_html += f"<li>{arrow_svg}{rec}</li>"
+        recs_html += f"<li>{arrow_svg}{_esc(rec)}</li>"
 
     # Build verification HTML
     verification_html = ""
@@ -533,8 +544,8 @@ def _write_html_report(
             if issue.get("description") and issue.get("file") != "system":
                 v_issues += (
                     f'<div class="verifier-issue">'
-                    f'<strong>{issue.get("severity", "info").upper()}</strong>'
-                    f' [{issue.get("file", "?")}] {issue["description"]}'
+                    f'<strong>{_esc(issue.get("severity", "info").upper())}</strong>'
+                    f' [{_esc(issue.get("file", "?"))}] {_esc(issue["description"])}'
                     f'</div>'
                 )
 
@@ -542,7 +553,7 @@ def _write_html_report(
   <span class="verdict-icon">{v_icon}</span>
   <div class="verdict-text">
     <span class="verdict-label">{verdict.upper()}</span>
-    {f"<div>{v_summary}</div>" if v_summary else ""}
+    {f"<div>{_esc(v_summary)}</div>" if v_summary else ""}
   </div>
 </div>
 {f'<div class="verifier-issues">{v_issues}</div>' if v_issues else ""}'''
@@ -690,7 +701,7 @@ def _write_html_report(
   </div>
 
   <div class="meta">
-    <div class="meta-item"><div class="meta-label">Mission</div><div class="meta-value">{mission_name}</div></div>
+    <div class="meta-item"><div class="meta-label">Mission</div><div class="meta-value">{_esc(mission_name)}</div></div>
     <div class="meta-item"><div class="meta-label">Findings</div><div class="meta-value">{len(finding_list)}</div></div>
     <div class="meta-item"><div class="meta-label">Timestamp</div><div class="meta-value mono">{timestamp[:19]}</div></div>
     <div class="meta-item"><div class="meta-label">Run ID</div><div class="meta-value mono">{short_id}</div></div>
@@ -700,12 +711,12 @@ def _write_html_report(
 
   <div class="section">
     <div class="section-title">Objective</div>
-    <div class="summary">{objective}</div>
+    <div class="summary">{_esc(objective)}</div>
   </div>
 
   <div class="section">
     <div class="section-title">Summary</div>
-    <div class="summary">{findings.get("summary", "No summary provided.")}</div>
+    <div class="summary">{_esc(findings.get("summary", "No summary provided."))}</div>
   </div>
 
   {f'<div class="section"><div class="section-title">Findings</div>{findings_html}</div>' if findings_html else ""}
